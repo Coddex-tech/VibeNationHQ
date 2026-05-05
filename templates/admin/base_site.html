@@ -1,0 +1,106 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        {% load admin_interface_tags %}
+        {% get_admin_interface_theme as theme %}
+        
+        {% if theme.logo and theme.logo_visible %}
+            <img src="{{ theme.logo.url }}" alt="Logo" height="40" style="vertical-align: middle;">
+        {% endif %}
+
+        <span style="color: #44b8e5; font-weight: bold; margin-left: 10px; vertical-align: middle;">
+            {{ site_header }}
+        </span>
+    </a>
+</h1>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="stylesheet" type="text/css" href="{% static 'admin_custom.css' %}">
+<link rel="stylesheet" type="text/css" href="{% static 'django_admin_listfilter_dropdown/css/dropdown_filter.css' %}">
+
+<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+<script src="{% static 'admin/js/vendor/jquery/jquery.js' %}"></script>
+<script src="{% static 'admin/js/jquery.init.js' %}"></script>
+<script src="{% static 'django_admin_listfilter_dropdown/js/dropdown_filter.js' %}"></script>
+
+<script>
+    (function ($) {
+        $(document).ready(function () {
+            // Force initialize dropdown logic for dynamic content
+            $('.admin-filter-dropdown').each(function() {
+                // Style the select boxes manually to ensure they match the Boss Portal
+                $(this).find('select').css({
+                    'background-color': '#2a2a2a',
+                    'color': '#44b8e5',
+                    'border': '1px solid #444',
+                    'padding': '6px',
+                    'border-radius': '4px',
+                    'width': '100%',
+                    'margin-top': '5px',
+                    'cursor': 'pointer'
+                });
+            });
+
+            // Ensure the page redirects when a new filter is selected from the box
+            $(document).on('change', '.admin-filter-dropdown select', function() {
+                var url = $(this).val();
+                if (url) {
+                    window.location.href = url;
+                }
+            });
+        });
+    })(django.jQuery);
+</script>
+
+<style>
+    /* 1. Global Link Clean-up */
+    #changelist-filter a,
+    #result_list a,
+    #changelist-filter li a {
+        text-decoration: none !important;
+        border-bottom: none !important;
+    }
+
+    /* 2. Style the Dropdown Containers */
+    #changelist-filter h3 {
+        color: #efefef !important;
+        font-size: 12px !important;
+        margin-top: 15px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    /* 3. This handles the 'All' and active links if JS hasn't fully swapped them to selects */
+    #changelist-filter ul li a {
+        display: block;
+        padding: 6px 12px;
+        margin-bottom: 4px;
+        background: #2a2a2a;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #44b8e5 !important;
+    }
+
+    #changelist-filter ul li.selected a {
+        background: #44b8e5 !important;
+        color: #ffffff !important;
+        font-weight: bold;
+    }
+
+    /* 4. Fix standard dropdown appearance in dark mode */
+    .admin-filter-dropdown select {
+        appearance: none;
+        -webkit-appearance: none;
+        background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2344b8e5%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E');
+        background-repeat: no-repeat;
+        background-position: right 10px top 50%;
+        background-size: 10px auto;
+        padding-right: 30px !important;
+    }
+</style>
+{% endblock %}

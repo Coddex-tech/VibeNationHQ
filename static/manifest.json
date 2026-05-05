@@ -1,0 +1,47 @@
+{
+  "id": "/",
+  "short_name": "VibeNation",
+  "name": "VibeNation",
+  "description": "VibeNation is Nigeria's premier source for breaking news, latest entertainment gist, trending music downloads, and premium video content - all with less data.",
+  "icons": [
+    {
+      "src": "/static/images/vn_icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/vn_icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/vn_icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/static/images/mobile-screenshot.png",
+      "sizes": "473x742",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "VibeNation Mobile"
+    },
+    {
+      "src": "/static/images/desktop-screenshot.png",
+      "sizes": "754x365",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "VibeNation Desktop"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#008080",
+  "theme_color": "#008080",
+  "display": "standalone",
+  "scope": "/"
+}

@@ -1,0 +1,104 @@
+/* =====================
+   1. GLOBAL AD WRAPPER 
+   ===================== */
+
+.ad-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    margin: 35px auto 25px auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+.ad-label {
+    display: block !important;
+    text-align: center !important;
+    margin-bottom: 6px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #666 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    background: transparent !important;
+}
+
+/* LABEL */
+.ad-wrapper .ad-label {
+    display: inline-block !important;
+    margin-bottom: 6px !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #666 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+    background: transparent !important;
+}
+
+
+/* ===============
+   AD BOX BASE
+   =============== */
+
+.ad-box {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: hidden !important;
+}
+
+/* MEDIA DEFAULT */
+.ad-box img,
+.ad-box video {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    object-fit: contain !important;
+}
+
+.responsive-ad-media {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+
+/* ======================
+   INLINE / ARTICLE ADS
+   ====================== */
+
+.article-ad .ad-box,
+.inline-ad .ad-box {
+    max-width: 728px !important;
+    height: 140px !important;
+    background: #0a0a0a !important;
+    border-radius: 12px !important;
+}
+
+
+/* ================
+   SIDEBAR ADS
+   ================ */
+
+.sidebar-ad-wrapper .ad-box {
+    max-width: 300px !important;
+    height: 250px !important;
+    background: #0a0a0a !important;
+    border-radius: 12px !important;
+    margin: 0 auto !important;
+}
+
+/* =============================
+   EXCLUDE HEADER/FOOTER FROM GLOBAL STYLES
+   ============================= */
+
+#header-ad .ad-wrapper,
+#footer-ad .ad-wrapper {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+#header-ad .ad-label,
+#footer-ad .ad-label {
+    display: none !important;
+}

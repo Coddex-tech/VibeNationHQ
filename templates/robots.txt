@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /vibenation-admin-1999/
+Disallow: /admin/
+Disallow: /login/
+Disallow: /logout/
+Disallow: /signup/
+Disallow: /accounts/
+Disallow: /api/
+
+Allow: /
+
+Sitemap: http://127.0.0.1:8000/sitemap.xml

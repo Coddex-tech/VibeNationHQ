@@ -1,0 +1,160 @@
+{% extends 'news_base.html' %}
+{% load news_extras %}
+{% load ads_tags %}
+
+<title>{% block title %}VibeNation{% endblock %}</title>
+
+{% block extra_css %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'news/news_home.css' %}">
+<link rel="stylesheet" href="{% static 'news/cat_grid.css' %}">
+<link rel="stylesheet" href="{% static 'news/news_slider.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="inline-ad">
+  {% show_ad 'In-Article' %}
+</div>
+<div class="news-home-container">
+
+  <section class="top-news-section">
+    <div class="news-layout">
+
+      <div class="left-trending">
+        <h3 class="subheading">Top News</h3>
+
+        {% if sponsored_feature %}
+        <div class="trending-item sponsored-highlight">
+          <a href="{% url 'news:news_details' sponsored_feature.slug %}" class="trending-link">
+            <div class="trending-text">
+              <span class="sponsored-label">PROMOTED BY {{ sponsored_feature.sponsor_name|upper }}</span>
+              <h4 class="sponsored-title">{{ sponsored_feature.title }}</h4>
+            </div>
+            {% if sponsored_feature.thumbnail %}
+            <img loading="lazy" src="{{ sponsored_feature.thumbnail.url }}" alt="Sponsored">
+            {% endif %}
+          </a>
+        </div>
+        {% endif %}
+
+        {% with organic_limit=sponsored_feature|yesno:":4,:5" %}
+        {% for news in top_news|slice:organic_limit %}
+        <div class="trending-item">
+          <a href="{% url 'news:news_details' news.slug %}" class="trending-link">
+            <div class="trending-text">
+              <h4>{{ news.title }}</h4>
+            </div>
+            {% if news.thumbnail %}
+            <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+            {% endif %}
+          </a>
+        </div>
+        {% empty %}
+        {% if not sponsored_feature %}
+        <p>No top news yet.</p>
+        {% endif %}
+        {% endfor %}
+        {% endwith %}
+      </div>
+
+      <div class="center-featured">
+        {% if global_featured %}
+        <a href="{% url 'news:news_details' global_featured.slug %}" class="featured-link">
+          {% if global_featured.thumbnail %}
+          <img loading="lazy" src="{{ global_featured.thumbnail.url }}" alt="{{ global_featured.title }}">
+          {% endif %}
+          <h2 class="featured-headline">{{ global_featured.title }}</h2>
+        </a>
+        {% else %}
+        <div class="no-featured">No featured news available.</div>
+        {% endif %}
+      </div>
+
+      <div class="right-latest">
+        <h3 class="subheading">Latest News</h3>
+        {% for news in latest_news|slice:":5" %}
+        <div class="latest-item">
+          <a href="{% url 'news:news_details' news.slug %}" class="latest-link">
+            {% if news.thumbnail %}
+            <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+            {% endif %}
+            <div class="latest-text">
+              <h4>{{ news.title }}</h4>
+              <small>{{ news.date_published|hybrid_time }}</small>
+            </div>
+          </a>
+        </div>
+        {% empty %}
+        <p>No latest news yet.</p>
+        {% endfor %}
+      </div>
+
+    </div>
+  </section>
+
+  {% if sponsored_feature %}
+  <div style="text-align: center; font-size: 10px; color: #999; letter-spacing: 1px;">ADVERTISEMENT</div>
+  {% endif %}
+</div>
+<!-- ====== END OF 3 TOP NEWS CONTAINER ======= -->
+
+<section class="horizontal-music-scroller">
+  <div class="scroller-header">
+    <h2 class="category-title"><span class="icon-dot" style="background:#ff4757;"></span> Trending Music</h2>
+    <a href="{% url 'music:music_nav' %}" class="view-more">Listen More →</a>
+  </div>
+
+  <div class="music-grid-scroll">
+    {% for song in latest_songs %}
+    <div class="music-card-pill">
+      <a href="{% url 'music:song_detail' song.slug %}">
+        <div class="pill-cover">
+          {% if song.original_cover %}
+          <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+          {% else %}
+          <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+          {% endif %}
+          <div class="play-overlay"><i class="fas fa-play"></i></div>
+        </div>
+        <div class="pill-info">
+          <h4>{{ song.title|truncatechars:20 }}</h4>
+          <p>
+            {% for artist in song.artists.all %}
+            {{ artist.name|truncatechars:15 }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </p>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="inline-ad">
+  {% show_ad 'Inline' %}
+</div>
+
+<!--==== CATEGORY SECTIONS BELOW====-->
+<hr>
+
+{% include 'news/partials/category_rows.html' %}
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Inline' %}
+</div>
+
+
+<!-- === SLIDER SECTION WRAPPER === -->
+<section class="sliders-section">
+  {% include 'news/partials/news_sliders.html' %}
+</section>
+
+{% block script %}
+<script src="{% static 'js/main.js' %}"></script>
+{% endblock %}
+
+{% endblock %}

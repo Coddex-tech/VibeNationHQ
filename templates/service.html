@@ -1,0 +1,71 @@
+{% extends 'main_base.html' %}
+
+{% block title %}Terms of Service | VibeNation{% endblock %}
+
+{% block meta_description %}
+Review VibeNation’s Terms of Service to understand the rules, responsibilities, and usage guidelines for our music and
+entertainment platform.
+{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
+<link rel="stylesheet" href="{% static 'music/service.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <h1>Terms of Service</h1>
+
+  <p class="intro">
+    Welcome to <strong>VibeNation</strong>. By accessing or using our website, you agree to follow these Terms of Service. These terms are designed to protect both you and VibeNation, ensuring a safe, fair, and enjoyable experience. If you do not agree with these terms, please refrain from using our platform.
+  </p>
+
+  <section>
+    <h2>1. Use of Content</h2>
+    <p>
+      All content on VibeNation, including music, text, images, videos, and graphics, is protected by copyright and other intellectual property laws. You may use content for personal purposes only. Reproduction, distribution, or modification without explicit written permission from the copyright owner or VibeNation is strictly prohibited.
+    </p>
+  </section>
+
+  <section>
+    <h2>2. User Responsibilities</h2>
+    <p>
+      As a user, you are expected to engage responsibly and respectfully on our platform. This includes:
+    </p>
+    <ul>
+      <li>Uploading and sharing content that you own or have permission to use.</li>
+      <li>Not posting content that is illegal, offensive, harmful, or infringes on the rights of others.</li>
+      <li>Using VibeNation only for lawful and positive purposes.</li>
+      <li>Protecting your account information and reporting any suspicious activity promptly.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>3. Account & Termination</h2>
+    <p>
+      VibeNation reserves the right to restrict, suspend, or terminate access to users who violate these Terms of Service or engage in harmful or illegal behavior. Our goal is to maintain a safe environment for all users, and we take these measures responsibly to protect the community.
+    </p>
+  </section>
+
+  <section>
+    <h2>4. External Links</h2>
+    <p>
+      Our website may include links to third-party websites for your convenience. VibeNation is not responsible for the content, policies, or practices of these sites. We encourage you to review their terms and privacy policies independently before interacting with them.
+    </p>
+  </section>
+
+  <section>
+    <h2>5. Updates to Terms</h2>
+    <p>
+      We may update these Terms of Service periodically to reflect changes in our platform, legal requirements, or operational practices. Users are encouraged to revisit this page regularly to stay informed about updates. Continued use of VibeNation after changes indicates acceptance of the revised terms.
+    </p>
+  </section>
+
+  <section class="update-info">
+    <p><strong>Last updated:</strong> October 2025</p>
+  </section>
+</div>
+
+{% endblock %}

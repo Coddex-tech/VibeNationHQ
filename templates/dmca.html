@@ -1,0 +1,50 @@
+{% extends 'main_base.html' %}
+
+{% block title %}DMCA Policy | VibeNation{% endblock %}
+
+{% block meta_description %}
+Read VibeNation’s DMCA Policy to learn how to report copyright infringement or request content removal.
+{% endblock %}
+
+{% block extra_css %}
+{% load static %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
+<link rel="stylesheet" href="{% static 'music/service.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="page-content">
+  <h1>DMCA Policy</h1>
+
+  <p class="intro">
+    <strong>VibeNation</strong> respects the intellectual property rights of others and is committed to complying with the Digital Millennium Copyright Act (DMCA). 
+    If you believe that your copyrighted material has been posted or shared on our website without authorization, please follow the procedures below to submit a DMCA takedown notice.
+  </p>
+
+  <section>
+    <h2>How to File a DMCA Complaint</h2>
+    <p>Your notice must include the following information to be processed:</p>
+    <ul>
+      <li>Your full legal name and accurate contact information (email and phone).</li>
+      <li>A clear description or link to the copyrighted work that you claim has been infringed.</li>
+      <li>A statement affirming that you are the copyright owner or authorized to act on behalf of the owner.</li>
+      <li>Your physical or electronic signature.</li>
+    </ul>
+    <p>Send your DMCA notice to: <strong><a href="mailto:support@vibenationhq.com" class="link">support@vibenation.com</a></strong></p>
+  </section>
+
+  <section>
+    <h2>Counter-Notification</h2>
+    <p>
+      If you believe your content was removed or disabled by mistake, you may submit a counter-notice to the same email address above. 
+      Once verified, we may restore the content in accordance with DMCA procedures. All counter-notifications must comply with legal requirements under the DMCA.
+    </p>
+  </section>
+
+  <section class="update-info">
+    <p><strong>Last updated:</strong> November 2025</p>
+  </section>
+</div>
+
+{% endblock %}

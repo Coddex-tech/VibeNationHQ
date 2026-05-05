@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  {% load static %}
+  {% load ads_tags %}
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+
+  <title>{% block title %}VibeNation | Breaking News, Latest Entertainment and Music{% endblock %}</title>
+  <meta name="description"
+    content="{% block meta_description %}VibeNation is Nigeria's premier source for breaking news, latest entertainment gist, trending music downloads, and premium video content.{% endblock %}">
+
+  <link rel="canonical" href="https://vibenationhq.com{{ request.path }}">
+
+  {% block social_meta %}
+  <meta property="og:title" content="VibeNation | Breaking News, Entertainment and Music">
+  <meta property="og:description"
+    content="Get the latest breaking news updates, trending entertainment stories, and premium music on VibeNation.">
+  <meta property="og:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vibenationhq.com{{ request.path }}">
+  <meta property="og:site_name" content="VibeNation">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VibeNation | Latest News, Music and Entertainment">
+  <meta name="twitter:description"
+    content="Stay updated with the latest news hits, trending entertainment, and music on VibeNation.">
+  <meta name="twitter:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
+  {% endblock %}
+
+  <link rel="icon" type="image/png" href="{% static 'images/VibeNation_favicon.png' %}">
+  <link rel="manifest" href="{% static 'manifest.json' %}">
+  <link rel="apple-touch-icon" href="{% static 'images/VibeNation_favicon.png' %}">
+  <meta name="theme-color" content="#008080">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <link rel="stylesheet" href="{% static 'css/style.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/ads_style.css' %}" />
+
+  {% block extra_css %}{% endblock %}
+  {% block structured_data %}{% endblock %}
+
+  <meta name="robots" content="index, follow">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VibeNation">
+</head>
+
+<body>
+  <div id="splash-screen">
+    <img src="{% static 'images/vn_splash-logo-white.png' %}?v=1" class="splash-logo" alt="VibeNation Loading">
+  </div>
+
+  <script>
+    (function() {
+      var s = document.getElementById("splash-screen");
+      if (!s) return;
+
+      // SAFETY KILL SWITCH: 
+      // if Page takes more than 3 seconds, force hide.
+      var forceHide = setTimeout(function() {
+        s.style.opacity = "0";
+        setTimeout(function() { s.style.display = "none"; }, 600);
+      }, 3000);
+
+      // DOMContentLoaded is much faster than "load" 
+      // It fires as soon as the HTML is ready, without waiting for the MP3.
+      window.addEventListener("DOMContentLoaded", function() {
+        setTimeout(function() {
+          clearTimeout(forceHide); // Cancel the 3s timer if we're ready early
+          s.style.opacity = "0";
+          setTimeout(function() { s.style.display = "none"; }, 600);
+        }, 800);
+      });
+    })();
+  </script>
+
+  <div id="header-ad" class="zone-header">
+    {% show_ad 'Header' %}
+    <span id="close-header-ad">✖</span>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <a href="{% url 'news:homepage' %}">
+      <div class="logo">VIBENATION</div>
+    </a>
+    <div class="nav-wrapper">
+      <nav class="nav">
+        <ul style="gap: 40px;">
+          <li class="{% if request.path == '/' %}active{% endif %}">
+            <a href="/">Home</a>
+          </li>
+          <li class="{% if request.path == '/news/' %}active{% endif %}">
+            <a href="{% url 'news:news_home' %}">News</a>
+          </li>
+          <li class="{% if request.path == '/music/' %}active{% endif %}">
+            <a href="{% url 'music:music_nav' %}">Music</a>
+          </li>
+          <!-- <li class="{% if request.path == '/blog/' %}active{% endif %}">
+            <a href="#">Blog</a>
+          </li> -->
+        </ul>
+      </nav>
+    </div>
+
+    <!-- Search Bar -->
+    <form action="{% url 'music:search' %}" method="get" class="navbar-search">
+      <input type="text" name="q" placeholder="Search for songs, artists and news articles..." required />
+      <button type="submit">Search</button>
+    </form>
+  </header>
+
+  {% block categories %}
+
+  {% endblock %}
+
+  <main>
+    <!-- Main -->
+
+    {% block content %} {% endblock %}
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <h3><a href="{% url 'news:homepage' %}">VIBENATION</a></h3>
+    <div class="footer-links">
+      <a href="{% url 'about' %}">About Us</a>
+      <a href="{% url 'promote' %}">Promotion</a>
+      <a href="{% url 'contact'%}">Contact Us</a>
+      <a href="{% url 'privacy' %}">Privacy Policy</a>
+      <a href="{% url 'service' %}">Service</a>
+      <a href="{% url 'disclaimer' %}">Disclaimer</a>
+      <a href="{% url 'dmca' %}">DMCA</a>
+    </div>
+
+    <a href="#" id="backToTop" class="back-to-top">↑<br>Top</a>
+
+
+    <div class="social-icons">
+      <a href="https://www.facebook.com/profile.php?id=61581073267753" target="_blank" class="facebook"
+        title="Follow us on Facebook"><i class="fab fa-facebook-f"></i></a>
+      <a href="#" class="twitter"><i class="fab fa-twitter" title="Follow us on Twitter"></i></a>
+      <a href="#" class="instagram"><i class="fab fa-instagram" title="Follow us on Instagram"></i></a>
+      <a href="#" class="whatsapp"><i class="fab fa-whatsapp" title="Chat with us on WhatsApp"></i></a>
+      <a href="#" class="telegram"><i class="fab fa-telegram" title="Join us on Telegram"></i></a>
+    </div>
+    <p style="text-decoration: none;">&copy; {% now "Y" %} VibeNation. All rights reserved.</p>
+  </footer>
+
+  <!-- Footer Ad -->
+  <div id="footer-ad" class="zone-footer">
+    {% show_ad 'Footer' %}
+    <span id="close-footer-ad">✖</span>
+  </div>
+
+  {% block scripts %}
+  <script src="{% static 'js/backtotop.js' %}"></script>
+  <script src="{% static 'js/sticky-ad.js' %}" defer></script>
+  {% endblock %}
+</body>
+
+</html>

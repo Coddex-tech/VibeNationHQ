@@ -1,0 +1,15 @@
+/* Forces white background and dark text inside admin editor */
+.ck-editor__editable_inline {
+    background-color: black !important;
+    color: white !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+    padding: 10px !important;
+}
+
+.ck-content img {
+    max-width: 100%;
+    height: auto;
+    cursor: move; /* shows it's draggable */
+}
+
