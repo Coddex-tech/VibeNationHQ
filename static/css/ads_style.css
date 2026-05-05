@@ -76,16 +76,84 @@
 }
 
 
-/* ================
-   SIDEBAR ADS
-   ================ */
+/* ================================
+   SIDEBAR ADS (FINAL PRODUCTION FIX)
+   ================================ */
 
-.sidebar-ad-wrapper .ad-box {
+.sidebar-ad-wrapper {
+    width: 100% !important;
     max-width: 300px !important;
+
+    margin: 0 auto !important;
+    padding: 10px 12px !important; /* reduced padding to kill white space */
+
+    text-align: center !important;
+    box-sizing: border-box !important;
+}
+
+/* REMOVE GLOBAL WRAPPER SPACING ONLY HERE */
+.sidebar-ad-wrapper .ad-wrapper {
+    margin: 0 !important;
+}
+
+/* LABEL (clean, outside flow, tight spacing) */
+.sidebar-ad-wrapper .ad-label {
+    display: block !important;
+
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    color: #666 !important;
+
+    text-transform: uppercase !important;
+    letter-spacing: 1.5px !important;
+
+    margin: 0 0 6px 0 !important; /* tighter control */
+
+    line-height: 1 !important;
+
+    pointer-events: none !important;
+}
+
+/* AD BOX */
+.sidebar-ad-wrapper .ad-box {
+    width: 100% !important;
     height: 250px !important;
+
+    margin: 0 !important;
+
     background: #0a0a0a !important;
     border-radius: 12px !important;
-    margin: 0 auto !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    overflow: hidden !important;
+
+    box-sizing: border-box !important;
+}
+
+/* MEDIA FULL COVER */
+.sidebar-ad-wrapper img,
+.sidebar-ad-wrapper video,
+.sidebar-ad-wrapper .responsive-ad-media {
+    width: 100% !important;
+    height: 100% !important;
+
+    object-fit: cover !important;
+
+    display: block !important;
+}
+
+/* WRAPPER FIX */
+.sidebar-ad-wrapper .ad-link,
+.sidebar-ad-wrapper .raw-html-ad {
+    width: 100% !important;
+    height: 100% !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
 }
 
 /* =============================
