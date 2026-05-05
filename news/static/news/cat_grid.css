@@ -1,0 +1,146 @@
+/* ==========================================================
+   📰 CATEGORY NEWS GRID LAYOUT (Polished)
+   ========================================================== */
+.category-news-list {
+  display: grid;
+  gap: 10px;
+  /* Increased slightly for better "breathing" */
+  grid-template-columns: repeat(2, 1fr);
+  /* 2 per row on mobile */
+}
+
+/* === DESKTOP VIEW: 12-Column Math === */
+@media (min-width: 992px) {
+  .category-news-list {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);/* 12 equal slices */
+    width: 100%;
+    gap: 15px;
+  }
+
+  /* FEATURED CARD: Takes up 8 of 12 columns (2/3 of the width) */
+  .category-news-item.featured {
+    grid-column: span 8;
+    grid-row: span 2; /* Stays deep to match the two small cards */
+  }
+
+  /* SMALL CARDS: Take up 4 of 12 columns (1/3 of the width) */
+  .category-news-item:not(.featured) {
+    grid-column: span 4;
+  }
+
+  .category-news-item.featured > a {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .category-news-item.featured img {
+    flex-grow: 1; /* This magic line stretches the image to fill the gap */
+    object-fit: cover; /* Prevents the image from looking distorted */
+    height: 100%; /* Forces it to take up all available space */
+    max-height: 380px;
+  }
+
+  .category-news-item.featured .news-info {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Don't let the text box stretch, only the image */
+    min-height: 120px; /* Ensures enough space for title and date */
+  }
+
+  /* This moves the date to the very bottom */
+  .category-news-item.featured .news-info small:last-child {
+    margin-top: auto;
+    padding-top: 10px;
+    display: block;
+  }
+}
+
+/* === MOBILE LIMITER === */
+@media (max-width: 991px) {
+  .category-news-item:nth-child(n+6) {
+    display: none;
+  }
+}
+
+/* ========================
+   🎴 CARD BASE STYLES
+   ======================== */
+.category-news-item {
+  background: #fff;
+  border-radius: 8px; /* Slightly rounder for modern look */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s ease;
+  border: 1px solid #e0e0e0; /* Softer border than pure teal */
+}
+
+.category-news-item:hover {
+  transform: translateY(-5px);
+  border-color: teal;
+  box-shadow: 0 4px 15px rgba(0, 128, 128, 0.1);
+}
+
+.category-news-item img {
+  width: 100%;
+  aspect-ratio: 16/9; /* Consistent ratio */
+  object-fit: cover;
+  display: block;
+}
+
+/* ===========================
+   FEATURED CARD (FIRST ITEM)
+   =========================== */
+.category-news-item.featured {
+  grid-column: 1 / -1; /* Full width mobile */
+}
+
+@media (min-width: 992px) {
+  .category-news-item.featured {
+    grid-column: span 6; /* Takes up HALF the width (6 of 12) */
+    grid-row: span 2; /* Stretches deep */
+  }
+
+  /* The smaller cards next to it */
+  .category-news-item:not(.featured) {
+    grid-column: span 3; /* 4 cards per row (3x4=12) */
+  }
+}
+
+/* ===================
+   NEWS INFO TEXT
+   ================ */
+.news-info {
+  padding: 10px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.news-info h4 {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  margin: 5px 0;
+  color: #222;
+  /* Truncate all titles to 2 lines for perfect alignment */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;
+}
+
+/* Featured title bigger */
+.category-news-item.featured .news-info h4 {
+  font-size: 1.4rem;
+  -webkit-line-clamp: 3; /* Allow 3 lines for the big one */
+}
+
+.news-info small {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

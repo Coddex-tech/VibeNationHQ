@@ -1,0 +1,84 @@
+{% load news_extras %}
+<!-- === OPINION SLIDER === -->
+<div class="slider-box">
+    <h2 class="slider-title"><span class="icon-dot"></span> Opinion</h2>
+    <div class="slider-wrapper">
+        <button class="nav-btn prev" aria-label="Previous">&#10094;</button>
+        <div class="slider-container opinion-slider">
+            {% for post in opinion %}
+            <div class="slider-card">
+                <a href="{% url 'news:news_details' post.slug %}">
+                    {% if post.thumbnail %}
+                    <img loading="lazy" src="{{ post.thumbnail.url }}" alt="{{ post.title }}">
+                    {% endif %}
+                    <div class="slider-info">
+                        <h4>{{ post.title }}</h4>
+                        <small>
+                            {{ post.date_published|hybrid_time }}
+                        </small>
+                    </div>
+                </a>
+            </div>
+            {% empty %}
+            <p>No opinion posts yet.</p>
+            {% endfor %}
+        </div>
+        <button class="nav-btn next" aria-label="Next">&#10095;</button>
+    </div>
+</div>
+
+<!-- === LIFESTYLE SLIDER === -->
+<div class="slider-box">
+    <h2 class="slider-title"><span class="icon-dot"></span> Lifestyle</h2>
+    <div class="slider-wrapper">
+        <button class="nav-btn prev" aria-label="Previous">&#10094;</button>
+        <div class="slider-container lifestyle-slider">
+            {% for post in lifestyle %}
+            <div class="slider-card">
+                <a href="{% url 'news:news_details' post.slug %}">
+                    {% if post.thumbnail %}
+                    <img loading="lazy" src="{{ post.thumbnail.url }}" alt="{{ post.title }}">
+                    {% endif %}
+                    <div class="slider-info">
+                        <h4>{{ post.title }}</h4>
+                        <small>
+                            {{ post.date_published|hybrid_time }}
+                        </small>
+                    </div>
+                </a>
+            </div>
+            {% empty %}
+            <p>No lifestyle stories yet.</p>
+            {% endfor %}
+        </div>
+        <button class="nav-btn next" aria-label="Next">&#10095;</button>
+    </div>
+</div>
+
+<!-- === EVENT SLIDER === -->
+<div class="slider-box">
+    <h2 class="slider-title"><span class="icon-dot"></span> Events</h2>
+    <div class="slider-wrapper">
+        <button class="nav-btn prev" aria-label="Previous">&#10094;</button>
+        <div class="slider-container blog-slider">
+            {% for post in events %}
+            <div class="slider-card">
+                <a href="{% url 'news:news_details' post.slug %}">
+                    {% if post.thumbnail %}
+                    <img loading="lazy" src="{{ post.thumbnail.url }}" alt="{{ post.title }}">
+                    {% endif %}
+                    <div class="slider-info">
+                        <h4>{{ post.title }}</h4>
+                        <small>
+                            {{ post.date_published|hybrid_time }}
+                        </small>
+                    </div>
+                </a>
+            </div>
+            {% empty %}
+            <p>No education news yet.</p>
+            {% endfor %}
+        </div>
+        <button class="nav-btn next" aria-label="Next">&#10095;</button>
+    </div>
+</div>

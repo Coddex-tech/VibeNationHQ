@@ -1,0 +1,59 @@
+{% extends 'news_base.html' %}
+{% load news_extras %}
+
+<title>{% block title %}Related-tags | VibeNation{% endblock %}</title>
+
+{% block content %}
+<div class="tag-page">
+  <h2>News tagged under "{{ tag.name }}"</h2>
+
+  <div class="tagged-news-grid">
+    {% for item in tagged_news %}
+    <div class="news-card">
+      <a href="{% url 'news_details' item.slug %}">
+        <img loading="lazy" src="{{ item.image.url }}" alt="{{ item.title }}">
+        <h3>{{ item.title }}</h3>
+      </a>
+      <p>
+        {{ news.date_published|hybrid_time }}
+      </p>
+    </div>
+    {% empty %}
+    <p>No news found for this tag.</p>
+    {% endfor %}
+  </div>
+
+  <style>
+    .tag-page {
+      padding: 20px;
+    }
+
+    .tag-page h2 {
+      color: #008080;
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+
+    .tagged-news-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+    }
+
+    .news-card img {
+      width: 100%;
+      border-radius: 10px;
+    }
+
+    .news-card h3 {
+      font-size: 18px;
+      margin-top: 10px;
+      color: #333;
+    }
+
+    .news-card .date {
+      font-size: 14px;
+      color: #777;
+    }
+  </style>
+  {% endblock %}

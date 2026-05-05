@@ -1,0 +1,70 @@
+{% extends 'main_base.html' %}
+
+{% block extra_css %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'music/style.css' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+{% endblock %}
+
+{% block categories %}
+<div class="categories-wrapper">
+    <div class="categories-scroll">
+        <a href="{% url 'news:entertainment' %}"
+            class="category {% if request.path == '/news/category/entertainment/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-clapperboard"></i></div>
+            <p>Entertainments</p>
+        </a>
+
+        <a href="{% url 'news:politics' %}"
+            class="category {% if request.path == '/news/category/politics/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-landmark"></i></div>
+            <p>Politics</p>
+        </a>
+
+        <a href="{% url 'news:lifestyle' %}"
+            class="category {% if request.path == '/news/category/lifestyle/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-spa"></i></div>
+            <p>Lifestyle</p>
+        </a>
+
+        <a href="{% url 'news:technology' %}"
+            class="category {% if request.path == '/news/category/technology/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-microchip"></i></div>
+            <p>Technology</p>
+        </a>
+
+        <a href="{% url 'news:sport' %}" class="category {% if request.path == '/news/category/sport/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-futbol"></i></div>
+            <p>Sport</p>
+        </a>
+
+        <a href="{% url 'news:music-news' %}"
+            class="category {% if request.path == '/news/category/music-news/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-music"></i></div>
+            <p>Music News</p>
+        </a>
+
+        <a href="{% url 'news:event' %}"
+            class="category {% if request.path == '/news/category/event/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-calendar-days"></i></div>
+            <p>Event</p>
+        </a>
+
+        <a href="{% url 'news:education' %}"
+            class="category {% if request.path == '/news/category/education/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-graduation-cap"></i></div>
+            <p>Education</p>
+        </a>
+
+        <a href="{% url 'news:opinion' %}"
+            class="category {% if request.path == '/news/category/opinion/' %}active{% endif %}">
+            <div class="circle"><i class="fa-solid fa-comments"></i></div>
+            <p>Opinion</p>
+        </a>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block content %}
+{% endblock %}

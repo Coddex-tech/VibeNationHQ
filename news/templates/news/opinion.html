@@ -1,0 +1,177 @@
+{% extends 'news_base.html' %}
+{% load news_extras %}
+{% load ads_tags %}
+
+<title>{% block title %}Opinion | VibeNation{% endblock %}</title>
+
+{% block extra_css %}
+{% load static %}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'news/news_home.css' %}">
+<link rel="stylesheet" href="{% static 'news/category_card.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block content %}
+<!-- ==============================
+       GLOBAL TOP SECTION (ONE-TIME)
+       ============================== -->
+<div class="heading-contain">
+  <h1>Opinion</h1>
+</div>
+
+<section class="top-news-section">
+  <div class="news-layout">
+
+    <!-- LEFT COLUMN: Top / Trending News -->
+    <div class="left-trending">
+      <h3 class="subheading">Top Opinion</h3>
+      {% for news in top_opinion %}
+      <div class="trending-item">
+        <a href="{% url 'news:news_details' news.slug %}" class="trending-link">
+          <div class="trending-text">
+            <h4>{{ news.title }}</h4>
+            <!-- <small>
+              {{ news.date_published|hybrid_time }}
+            </small> -->
+          </div>
+          {% if news.thumbnail %}
+          <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+          {% endif %}
+        </a>
+      </div>
+      {% empty %}
+      <p>No trending opinion news yet.</p>
+      {% endfor %}
+    </div>
+
+    <!-- CENTER COLUMN: Featured News -->
+    <div class="center-featured">
+      {% if featured_opinion %}
+      <a href="{% url 'news:news_details' featured_opinion.slug %}" class="featured-link">
+        {% if featured_opinion.thumbnail %}
+        <img loading="lazy" src="{{ featured_opinion.thumbnail.url }}" alt="{{ featured_opinion.title }}">
+        {% endif %}
+        <h2 class="featured-headline">{{ featured_opinion.title }}</h2>
+      </a>
+      {% else %}
+      <div class="no-featured">No featured opinion news available.</div>
+      {% endif %}
+    </div>
+
+    <!-- RIGHT COLUMN: Latest News -->
+    <div class="right-latest">
+      <h3 class="subheading">Latest Opinion</h3>
+      {% for news in latest_opinion %}
+      <div class="latest-item">
+        <a href="{% url 'news:news_details' news.slug %}" class="latest-link">
+          {% if news.thumbnail %}
+          <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+          {% endif %}
+          <div class="latest-text">
+            <h4>{{ news.title }}</h4>
+            <small>
+              {{ news.date_published|hybrid_time }}
+            </small>
+          </div>
+        </a>
+      </div>
+      {% empty %}
+      <p>No latest Opinion news yet.</p>
+      {% endfor %}
+    </div>
+
+  </div>
+</section>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Inline' %}
+</div>
+
+<!-- main category grid section -->
+<section class="category-section">
+  <!-- <h2 class="category-title"><span class="icon-dot"></span> Events</h2> -->
+
+  <div class="category-news-list">
+    {% for news in page_obj %}
+    <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+      <a href="{% url 'news:news_details' news.slug %}">
+        {% if news.thumbnail %}
+        <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+        {% endif %}
+        <div class="news-info">
+          <small style="color: red;">{{ news.category.name }}</small>
+          <h4>{{ news.title }}</h4>
+          <small>
+            {{ news.date_published|hybrid_time }}
+          </small>
+        </div>
+      </a>
+    </div>
+    {% empty %}
+    <p>No Event available yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- PAGINATION STRUCTURE -->
+{% if page_obj.paginator.num_pages > 1 %}
+<div class="pagination">
+  {% if page_obj.has_previous %}
+  <a href="?page={{ page_obj.previous_page_number }}" class="page-link">« Prev</a>
+  {% endif %}
+
+  {% for num in page_obj.paginator.page_range %}
+  {% if num == page_obj.number %}
+  <span class="page-link active">{{ num }}</span>
+  {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %} <a href="?page={{ num }}"
+    class="page-link">{{ num }}</a>
+    {% elif num == 1 %}
+    <a href="?page=1" class="page-link">1</a>
+    {% if page_obj.number > 4 %}<span class="dots">...</span>{% endif %}
+    {% elif num == page_obj.paginator.num_pages %}
+    {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %} <span class="dots">...</span>
+      {% endif %}
+      <a href="?page={{ page_obj.paginator.num_pages }}" class="page-link">{{ page_obj.paginator.num_pages }}</a>
+      {% endif %}
+      {% endfor %}
+
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next »</a>
+      {% endif %}
+</div>
+{% endif %}
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Inline' %}
+</div>
+
+<hr>
+
+<h1 class="mini-featured-title">Discover More Stories</h1>
+
+<section class="mini-featured">
+  {% for item in mini_featured_news %}
+  <a href="{% url 'news:news_details' item.slug %}" class="mini-card">
+    {% if item.thumbnail %}
+    <div class="card-image">
+      <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}" loading="lazy">
+    </div>
+    {% endif %}
+
+    <div class="card-content">
+      <span class="category-tag">{{ item.category.first.name|upper }}</span>
+
+      <div class="card-text-wrapper">
+        <h4>{{ item.title|truncatechars:55 }}</h4>
+        <p>{{ item.content|striptags|truncatewords:12 }}</p>
+      </div>
+
+      <span class="read-link">Read Story →</span>
+    </div>
+  </a>
+  {% endfor %}
+</section>
+{% endblock %}

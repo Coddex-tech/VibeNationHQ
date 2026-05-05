@@ -1,0 +1,43 @@
+{% if ad %}
+<div class="ad-wrapper">
+
+    <!-- LABEL -->
+    <div class="ad-label">ADVERTISEMENT</div>
+
+    <!-- BOX -->
+    <div class="ad-box zone-{{ zone_name|slugify }}">
+
+        {% if ad.html_code %}
+        <div class="raw-html-ad">
+            {{ ad.html_code|safe }}
+        </div>
+
+        {% elif ad.video %}
+        <a href="{% url 'ads:ad_click' ad.id %}" target="_blank" class="ad-link">
+            <video autoplay loop muted playsinline class="responsive-ad-media">
+                <source src="{{ ad.video.url }}" type="video/mp4">
+            </video>
+        </a>
+
+        {% elif ad.image %}
+        <a href="{% url 'ads:ad_click' ad.id %}" target="_blank" class="ad-link">
+            <img loading="lazy" src="{{ ad.image.url }}" alt="{{ ad.title }}" class="responsive-ad-media">
+        </a>
+        {% endif %}
+
+    </div>
+</div>
+
+{% else %}
+<div class="ad-wrapper">
+
+    <div class="ad-label">ADVERTISEMENT</div>
+
+    <div class="ad-box zone-{{ zone_name|slugify }} fallback">
+        <ins class="adsbygoogle" style="display:block" data-ad-client="ca-pub-YOUR_ID" data-ad-slot="YOUR_SLOT"
+            data-ad-format="auto" data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+</div>
+{% endif %}

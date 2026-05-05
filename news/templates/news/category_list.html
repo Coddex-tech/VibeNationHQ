@@ -1,0 +1,72 @@
+{% extends 'main_base.html' %}
+{% load static %}
+{% load ads_tags %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'news/category_list.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="category-page-container">
+
+   <header class="category-header">
+      <h1 class="category-title">Topic: <span>{{ category.name }}</span></h1>
+      <p class="category-count">{{ news_items.paginator.count }} Stories found</p>
+   </header>
+
+   <div class="mid-ad">
+      {% show_ad 'Inline' %}
+   </div>
+
+   <div class="category-main-layout">
+      <main class="category-grid">
+         {% for item in news_items %}
+         <article class="news-card">
+            <a href="{% url 'news:news_details' item.slug %}" class="card-image-link">
+               <div class="card-image-wrapper">
+                  {% if item.thumbnail %}
+                  <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}">
+                  {% else %}
+                  <img loading="lazy" src="{% static 'images/default-news.jpg' %}" alt="VibeNation News">
+                  {% endif %}
+                  <span class="card-badge">{{ category.name }}</span>
+               </div>
+            </a>
+            <div class="card-content">
+               <div class="card-meta">
+                  <span class="card-author">By {{ item.author }}</span>
+                  <span class="card-date">{{ item.date_published|date:"M d, Y" }}</span>
+               </div>
+               <h2 class="card-title">
+                  <a href="{% url 'news:news_details' item.slug %}">{{ item.title }}</a>
+               </h2>
+               <p class="card-excerpt">{{ item.description|truncatewords:20 }}</p>
+            </div>
+         </article>
+         {% empty %}
+         <div class="empty-state">
+            <p>No news stories found in this category yet. Stay tuned!</p>
+         </div>
+         {% endfor %}
+
+         {% if news_items.has_other_pages %}
+         <nav class="pagination">
+            {% if news_items.has_previous %}
+            <a href="?page={{ news_items.previous_page_number }}" class="page-link">&laquo; Prev</a>
+            {% endif %}
+
+            <span class="current-page">Page {{ news_items.number }} of {{ news_items.paginator.num_pages }}</span>
+
+            {% if news_items.has_next %}
+            <a href="?page={{ news_items.next_page_number }}" class="page-link">Next &raquo;</a>
+            {% endif %}
+         </nav>
+         {% endif %}
+      </main>
+
+      <aside class="zone-sidebar">
+         {% include 'news/sidebar_snippet.html' %}
+      </aside>
+   </div>
+</div>
+{% endblock %}

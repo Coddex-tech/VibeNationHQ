@@ -1,0 +1,404 @@
+ /* ==========================================================================
+   VIBENATION DYNAMIC NEWS GRID
+   ========================================================================== */
+.category-news-list {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr; /* List view for mobile */
+}
+
+/* Tablet (2 columns) */
+@media (min-width: 768px) {
+    .category-news-list {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+}
+
+/* Standard Desktop (3 columns) */
+@media (min-width: 1024px) {
+    .category-news-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Large Screens (4 columns) - Prevents cards from being too big */
+@media (min-width: 1440px) {
+    .category-news-list {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 24px;
+    }
+}
+
+/* ========================
+   REFINED CARD STYLES
+   ======================== */
+.category-news-item {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #f0f0f0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden; /* Ensures image doesn't spill out on hover */
+}
+
+.category-news-item a {
+    text-decoration: none;
+    color: inherit;
+    display: flex; 
+    flex-direction: row; /* List on mobile */
+    height: 100%;
+}
+
+@media (min-width: 768px) {
+    .category-news-item a {
+        flex-direction: column; /* Grid on desktop */
+    }
+}
+
+.category-news-item:hover {
+    border-color: #008080;
+    box-shadow: 0 12px 30px rgba(0, 128, 128, 0.1);
+    transform: translateY(-5px);
+}
+
+/* --- IMAGE SECTION --- */
+.category-news-item img {
+    width: 110px; /* Slightly bigger thumb for better visibility */
+    height: 110px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin: 12px;
+    transition: transform 0.6s ease;
+}
+
+@media (min-width: 768px) {
+    .category-news-item img {
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 9;
+        margin: 0;
+        border-radius: 0; /* Let overflow: hidden handle the top corners */
+    }
+}
+
+.category-news-item:hover img {
+    transform: scale(1.08); /* Sophisticated zoom effect */
+}
+
+/* --- TEXT SECTION --- */
+.news-info {
+    padding: 12px 15px 12px 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    flex: 1;
+}
+
+@media (min-width: 768px) {
+    .news-info {
+        padding: 18px 20px;
+        justify-content: flex-start;
+    }
+}
+
+.news-info h4 {
+    font-size: 0.95rem;
+    line-height: 1.4;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: #1a1a1a;
+    transition: color 0.3s ease;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+@media (min-width: 768px) {
+    .news-info h4 {
+        font-size: 1.05rem; /* Balanced size for 3-4 columns */
+        -webkit-line-clamp: 3;
+    }
+}
+
+.category-news-item:hover h4 {
+    color: #008080;
+}
+
+.news-info small {
+    font-size: 0.72rem;
+    color: #888;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Optional: Add a small dot before the date */
+.news-info small::before {
+    content: "•";
+    color: #008080;
+    font-size: 1.2rem;
+}
+
+/* ===========================
+   STYLISH PAGINATION
+   =========================== */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 50px;
+}
+
+.page-link {
+    min-width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%; /* Circular buttons are very modern */
+    background: #f8f9fa;
+    color: #1a1a1a;
+    text-decoration: none;
+    font-weight: 600;
+    border: 1px solid #eee;
+    transition: 0.3s;
+}
+
+.page-link.active {
+    background: #008080;
+    color: white;
+    border-color: #008080;
+}
+
+.page-link:hover:not(.active) {
+    background: #008080;
+    color: white;
+}
+
+/* =======================
+     MINI FEATURED 
+   ======================= */
+.mini-featured-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0d4d4d;
+  letter-spacing: -0.3px;
+  margin: 20px 10px 8px;
+}
+
+/* Horizontal Scroll & Snap */
+.mini-featured {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding: 14px 10px 30px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.mini-featured::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome/Safari */
+}
+
+.mini-card {
+  flex: 0 0 260px; /* Fixed width so cards don't shrink */
+  scroll-snap-align: start;
+  background: #ffffff;
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid #eef2f2;
+}
+
+.mini-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(13, 77, 77, 0.12);
+}
+
+.card-image {
+  width: 100%;
+  height: 140px;
+  background: #f4f7f7;
+  overflow: hidden;
+}
+
+.card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.mini-card:hover .card-image img {
+  transform: scale(1.08);
+}
+
+.card-content {
+  padding: 16px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.category-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: #fb8c00;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.card-text-wrapper {
+  flex-grow: 1; 
+  margin-bottom: 15px;
+}
+
+.card-text-wrapper h4 {
+  margin: 0 0 8px 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #0d4d4d;
+}
+
+.card-text-wrapper p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #556b6b;
+  line-height: 1.5;
+}
+
+.read-link {
+  margin-top: auto;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0d4d4d;
+  padding-top: 12px;
+  border-top: 1px solid #f0f4f4;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: gap 0.2s ease;
+}
+
+.mini-card:hover .read-link {
+  gap: 8px;
+  color: #fb8c00;
+}
+
+.card {
+  flex: 0 0 280px; /* fixed width */
+  height: 180px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 2px 20px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+  scroll-snap-align: start;
+  cursor: pointer;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+}
+
+/* Card titles */
+.card h4 {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #0a3d3d; /* teal-based dark */
+  margin-top: 15px;
+  margin-bottom: 5px;
+  line-height: 1.45;
+  letter-spacing: -0.2px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* limit title to 2 lines */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card hr {
+  border: none;
+  height: 2px;
+  background-color: #00b4b4; /* your teal */
+  width: 45px; /* short and stylish */
+  margin: 4px 0 12px; /* balanced spacing */
+  border-radius: 2px;
+  opacity: 0.9; /* softer tone */
+}
+
+
+/* Card summary */
+.card p {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  color: #333; /* slightly darker for stronger readability */
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 4; /* show max 3 lines */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+ 
+}
+
+
+.card:hover h4 {
+  color: #008b8b; /* lighter teal accent */
+  transition: color 0.3s ease;
+}
+
+h4 p {
+  font-family: "Inter", "Poppins", sans-serif;
+}
+
+/* Optional scrollbar styling */
+.mini-featured::-webkit-scrollbar {
+  height: 6px;
+}
+
+.mini-featured::-webkit-scrollbar-thumb {
+  background: #00b4b4;
+  border-radius: 10px;
+}
+
+.mini-featured::-webkit-scrollbar-track {
+  background: #f2f2f2;
+}
+
+/* Responsive touch */
+@media (max-width: 600px) {
+  .mini-featured-title {
+    font-size: 1.35rem;
+  }
+  
+  .card {
+    flex: 0 0 240px;
+    padding: 16px;
+  }
+
+  .card h4 {
+    font-size: 1rem;
+  }
+
+  .card p {
+    font-size: 0.86rem;
+  }
+}

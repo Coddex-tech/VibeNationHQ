@@ -1,0 +1,262 @@
+{% extends 'news_base.html' %}
+{% load news_extras %}
+{% load static %}
+{% load ads_tags %}
+
+{% block social_meta %}
+<meta property="og:title" content="{{ news.title }}">
+<meta property="og:description" content="{{ news.content|striptags|truncatechars:155 }}">
+<meta property="og:type" content="article">
+<meta property="og:url" content="{{ request.build_absolute_uri }}">
+{% if news.thumbnail %}
+<meta property="og:image" content="https://vibenationhq.com{{ news.thumbnail.url }}">
+{% else %}
+<meta property="og:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
+{% endif %}
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ news.title }}">
+<meta name="twitter:description" content="{{ news.content|striptags|truncatechars:155 }}">
+{% if news.thumbnail %}
+<meta name="twitter:image" content="https://vibenationhq.com{{ news.thumbnail.url }}">
+{% else %}
+<meta name="twitter:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
+{% endif %}
+{% endblock %}
+
+{% block meta_description %}{{ news.title }} – {{ news.content|striptags|truncatechars:150 }} | Read the latest
+entertainment news and updates on VibeNation.{% endblock %}
+
+{% block title %}{{ news.title }} | VibeNation{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'news/news_details.css' %}">
+<link rel="stylesheet" href="{% static 'news/news_comment.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": "{{ news.title|escapejs }}",
+    "image": [
+      {% if news.thumbnail %}
+      "https://vibenationhq.com{{ news.thumbnail.url }}"
+      {% else %}
+      "https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}"
+      {% endif %}
+    ],
+    "author": {
+      "@type": "Person",
+      "name": "{% if news.author.username %}{{ news.author.username|escapejs }}{% elif news.author %}{{ news.author|escapejs }}{% else %}VibeNation Staff{% endif %}"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "VibeNation",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}"
+      }
+    },
+    "datePublished": "{{ news.date_published|date:'c' }}",
+    "dateModified": "{{ news.updated_at|date:'c' }}",
+    "description": "{{ news.content|striptags|truncatechars:160|escapejs }}",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": "https://vibenationhq.com/song/{{ news.slug }}/"
+    },
+    "keywords": "Entertainment, Music News, Nigeria Entertainment, VibeNation",
+    "genre": "Entertainment"
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://vibenationhq.com/"
+      },
+      {% with cat=news.category.first %}
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "{{ cat.name|default:'News'|escapejs }}",
+        "item": "https://vibenationhq.com{% if cat %}{% url 'news:category_news' cat.slug %}{% else %}/news/{% endif %}"
+      },
+      {% endwith %}
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": "{{ news.title|escapejs }}",
+        "item": "https://vibenationhq.com/song/{{ news.slug }}/"
+      }
+    ]
+  }
+]
+</script>
+{% endblock %}
+
+{% block content %}
+
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<div class="news-detail-container">
+  <div class="share-sidebar-rail">
+    <div class="share-icons-group">
+      <a href="https://api.whatsapp.com/send?text={{ news.title }}%20{{ request.build_absolute_uri }}"
+        class="whatsapp"><i class="fab fa-whatsapp"></i></a>
+      <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}" class="twitter"><i
+          class="fab fa-twitter"></i></a>
+      <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" class="facebook"><i
+          class="fab fa-facebook-f"></i></a>
+      <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}" class="telegram"><i
+          class="fab fa-telegram-plane"></i></a>
+    </div>
+  </div>
+
+  <div class="news-detail-content">
+    <h1 class="headline">{{ news.title }}</h1>
+
+    <div class="meta-wrapper">
+      <p class="authors">Posted By <span class="authors_name">{{ news.author }}</span></p>
+      <p class="date">{{ news.date_published|hybrid_time }}</p>
+    </div>
+
+    <div class="main-category-bar">
+      <div class="category-scroll-wrapper">
+        {% for cat in all_categories %}
+        {% if cat.slug %}
+        <a href="{% url 'news:category_news' cat.slug %}" class="main-cat-pill">
+          {{ cat.name }} <span class="pill-count">{{ cat.news_count }}</span>
+        </a>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="news-image-box">
+      <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+      {% if news.image_caption %}<p class="image-caption">{{ news.image_caption }}</p>{% endif %}
+    </div>
+
+    <div class="mobile-ticker">
+      <span class="ticker-label">TRENDING:</span>
+      <marquee behavior="scroll" direction="left">
+        {% for item in trending_news %}
+        <a href="{% url 'news:news_details' item.slug %}">{{ item.title }}</a> •
+        {% endfor %}
+      </marquee>
+    </div>
+
+    <div class="article-body">
+      {{ article_content|safe }}
+    </div>
+
+    <div class="inline-ad">
+      {% show_ad 'Music Inline' %}
+    </div>
+
+    <div class="music-break-box">
+      <h4 class="subheading">🔥 NEW MUSIC ON VIBENATION</h4>
+      <div class="mini-song-grid">
+        {% for song in recent_songs %}
+        <a href="{% url 'music:song_detail' song.slug %}" class="mini-song-card">
+          <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+          <span>
+            {% if song.artists.all %}
+            {% for artist in song.artists.all %}{{ artist.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% else %}VibeNation Artist{% endif %} - {{ song.title }}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="inline-ad">
+      {% show_ad 'Inline' %}
+    </div>
+
+    <div class="article-footer-meta">
+      <div class="related-news">
+        <div class="footer-header">
+          <h3 class="footer-label">You Might Also Like</h3>
+          <div class="footer-line"></div>
+        </div>
+        <div class="related-grid">
+          {% for item in related_news %}
+          <div class="related-grid-item">
+            <a href="{% url 'news:news_details' item.slug %}" class="related-link">
+              <div class="related-img-box">
+                <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}">
+                <span class="read-more-badge">Read Story</span>
+              </div>
+              <div class="related-info">
+                <h4>{{ item.title }}</h4>
+              </div>
+            </a>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="zone-sidebar">
+    {% include 'news/sidebar_snippet.html' %}
+  </aside>
+</div>
+
+<div class="article-ad">
+  {% show_ad 'Music In-Article' %}
+</div>
+
+<!-- ====================== COMMENT SYSTEM ================== -->
+<div class="comments-wrapper">
+  <h3 class="vn-comments-title">Comments</h3>
+
+  <form method="post" class="vn-comment-form">
+    {% csrf_token %}
+    <input type="hidden" name="parent_id" id="parent_id">
+
+    {{ form.as_p }}
+
+    <div class="vn-form-actions" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+      <button type="submit" class="vn-comment-submit">Post</button>
+
+      <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn">
+        ✕ CANCEL REPLY
+      </a>
+    </div>
+  </form>
+
+  <div class="vn-comments-list" id="main-comments-container">
+    {% for comment in comments %}
+    {% include 'news/partials/news_comment.html' with comment=comment %}
+    {% empty %}
+    <div class="no-comments-msg">
+      <p>No comments yet. Be the first to share your thoughts!</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if comments.has_next %}
+  <div class="text-center mt-4" style="text-align: center;">
+    <button id="load-more-comments-btn" data-url="{% url 'news:load_more_comments' news.id %}"
+      class="vn-comment-submit">
+      Load More Comments
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+<script src="{% static 'js/news_comment.js' %}"></script>
+
+{% endblock %}

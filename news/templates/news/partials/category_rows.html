@@ -1,0 +1,225 @@
+{% load news_extras %}
+{% load ads_tags %}
+<section class="category-section">
+    <!-- ===== POLITICS SECTION ===== -->
+    <h2 class="category-title"><span class="icon-dot"></span> Politics</h2>
+
+    <div class="category-news-list">
+        {% for news in politics %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Politics</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No political news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ===== ENTERTAINMENT SECTION ===== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Entertainment</h2>
+
+    <div class="category-news-list">
+        {% for news in entertainment %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Entertainment</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No political news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ==== SPORT SECTION ==== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Sports</h2>
+
+    <div class="category-news-list">
+        {% for news in sport %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Sports</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No sports news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ===== MUSIC NEWS SECTION ===== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Music News</h2>
+
+    <div class="category-news-list">
+        {% for news in music_news %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Music</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No Music news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ===== TECHNOLOGY SECTION ===== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Technology</h2>
+
+    <div class="category-news-list">
+        {% for news in technology %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Technology</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No Technology news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ===== FOREIGN NEWS SECTION ===== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Foreign News</h2>
+
+    <div class="category-news-list">
+        {% for news in events %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red;">Foreign</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No Foreign news available yet.</p>
+        {% endfor %}
+    </div>
+</section>
+
+<hr>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+    {% show_ad 'Inline' %}
+</div>
+
+<!-- ===== EDUCATION SECTION ===== -->
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> Education</h2>
+    <div class="category-news-list">
+        {% for news in education %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    <small style="color: red; font-weight: bold;">Events</small>
+                    <h4>{{ news.title }}</h4>
+                    <small>
+                        {{ news.date_published|hybrid_time }}
+                    </small>
+                </div>
+            </a>
+        </div>
+        {% empty %}
+        <p>No Event available yet.</p>
+        {% endfor %}
+    </div>
+</section>

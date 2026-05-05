@@ -1,0 +1,37 @@
+{% load ads_tags %}
+<div class="sidebar-ad-wrapper">
+    {% show_ad 'Sidebar' %}
+</div>
+
+<div class="sidebar-trending">
+    <h4 class="sidebar-title">MOST READ</h4>
+    <div class="trending-list">
+        {% for item in trending_news %}
+        <div class="trending-item">
+            <a href="{% url 'news:news_details' item.slug %}" class="trending-link">
+                <span class="rank-number">{{ forloop.counter }}</span>
+                <div class="trending-text">
+                    <h4>{{ item.title }}</h4>
+                </div>
+                <div class="trending-img-container">
+                    <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}">
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="sidebar-categories">
+    <h4 class="sidebar-title">EXPLORE TOPICS</h4>
+    <div class="category-tags">
+        {% for cat in all_categories %}
+        {% if cat.slug %}
+        <a href="{% url 'news:category_news' cat.slug %}" class="cat-tag">
+            {{ cat.name }}
+            <span class="cat-count">{{ cat.news_count }}</span>
+        </a>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>

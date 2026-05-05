@@ -1,0 +1,25 @@
+<div class="reply-item">
+  <div class="comment-left">
+    <div class="comment-avatar">{{ reply.name|first }}</div>
+  </div>
+
+  <div class="comment-center">
+    <p class="comment-author">{{ reply.name|upper }}</p>
+
+    {% if reply.parent %}
+    <p class="reply-label">
+      Replying to @{{ reply.parent.name|upper }}
+    </p>
+    {% endif %}
+
+    <p class="comment-text">{{ reply.content }}</p>
+
+    <div class="comment-meta">
+      <span>{{ reply.created_at|timesince }} ago</span>
+      <a href="javascript:void(0)" class="comment-reply-btn" data-comment-id="{{ reply.id }}"
+        data-username="{{ reply.name }}">
+        Reply
+      </a>
+    </div>
+  </div>
+</div>
