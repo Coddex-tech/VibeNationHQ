@@ -1,0 +1,58 @@
+{% extends 'music_base.html' %}
+{% load static %}
+
+<title>{% block title %}Album-Details | VibeNation{% endblock %}</title>
+
+{% block content %}
+
+<h2>Album: <span>{{ album.title }}</span></h2>
+
+{% if album.artist %}
+<h3>Artist: <span>{{ album.artist.name }}</span></h3>
+{% endif %}
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad" style="width:100%; max-width:728px; height:90px; background:#f2f2f2; text-align:center; line-height:90px; margin:30px auto;">
+    ADVERTISEMENT
+</div>
+
+<hr style="border: none; height: 2px; background-color: #000; margin: 10px 0;">
+<h3>Tracklist</h3>
+
+<ol class="album-tracklist">
+  {% for song in songs %}
+  <li>
+    <a href="{% url 'music:song_detail' song.slug %}">
+      {{ song.title }} –
+      {% for artist in song.artists.all %}
+      {{ artist.name }}{% if not forloop.last %}, {% endif %}
+      {% empty %}
+      {{ album.artist.name }}
+      {% endfor %}
+    </a>
+  </li>
+  {% empty %}
+  <p>No songs found in this album.</p>
+  {% endfor %}
+</ol>
+
+<style>
+  li {
+    text-decoration: underline;
+    font-weight: bold;
+    color: black;
+  }
+
+  span {
+    color: teal;
+  }
+
+  li:hover {
+    color: teal;
+  }
+
+  .album-tracklist li {
+    margin-bottom: 10px;
+  }
+</style>
+{% endblock %}

@@ -1,0 +1,345 @@
+{% extends 'music_base.html' %}
+{% load static %}
+{% load ads_tags %}
+
+{% block title %}
+  {% if is_dj %}{{ song.dj_name }}{% else %}{{ song.title }}{% endif %}
+  {% if artists %} - {% for artist in artists %}{{ artist.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %} | VibeNation
+{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/song_detail.css' %}">
+<link rel="stylesheet" href="{% static 'news/news_comment.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+[
+  {
+    "@context": "https://schema.org",
+    "@type": "MusicRecording",
+    "name": "{% if is_dj %}{{ song.dj_name|escapejs }}{% else %}{{ song.title|escapejs }}{% endif %}",
+    "byArtist": [
+      {% if artists %}
+        {% for artist in artists %}
+        {
+          "@type": "MusicGroup",
+          "name": "{{ artist.name|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+      {% else %}
+        {
+          "@type": "MusicGroup",
+          "name": "VibeNation Artist"
+        }
+      {% endif %}
+    ],
+    "url": "https://vibenationhq.com{{ request.path }}",
+    {% if song.release_date %}"datePublished": "{{ song.release_date|date:'c' }}",{% elif song.created_at %}"datePublished": "{{ song.created_at|date:'c' }}",{% endif %}
+    {% if song.duration %}"duration": "{{ song.duration }}",{% endif %}
+    {% if song.genre %}"genre": "{{ song.genre|escapejs }}",{% endif %}
+    {% if song.album %}
+    "inAlbum": {
+      "@type": "MusicAlbum",
+      "name": "{{ song.album.title|escapejs }}"
+    },
+    {% endif %}
+    "image": [
+        {% if is_dj and song.dj_cover %}"https://vibenationhq.com{{ song.dj_cover.url }}"
+        {% elif song.original_cover %}"https://vibenationhq.com{{ song.original_cover.url }}"
+        {% elif song.cover_image %}"https://vibenationhq.com{{ song.cover_image.url }}"
+        {% else %}"https://vibenationhq.com{% static 'images/default_cover.png' %}"{% endif %}
+    ],
+    "publisher": {
+      "@type": "Organization",
+      "name": "VibeNation",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}"
+      }
+    }
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://vibenationhq.com/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Music",
+        "item": "https://vibenationhq.com/music/"
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": "{% if is_dj %}{{ song.dj_name|escapejs }}{% else %}{{ song.title|escapejs }}{% endif %}",
+        "item": "https://vibenationhq.com{{ request.path }}"
+      }
+    ]
+  }
+]
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="vibe-divider"></div>
+
+<div class="song-detail-container">
+  <div class="song-detail-content">
+    <header class="song-header">
+      <h1 class="song-main-title">
+        {% if is_dj %}{{ song.dj_name }}{% else %}{{ song.title }}{% endif %}
+        <span class="artist-sep">-</span>
+        <span class="artist-list">
+          {% for artist in artists %}{{ artist.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        </span>
+      </h1>
+
+      <p class="post-date">
+        <strong>
+          {% if song.release_date %}Posted on {{ song.release_date|date:"F d, Y" }}
+          {% elif song.created_at %}Posted on {{ song.created_at|date:"F d, Y" }}{% endif %}
+        </strong>
+      </p>
+    </header>
+
+    <div class="mid-ad">
+      {% show_ad 'Music In-Article' %}
+    </div>
+
+    <div class="song-cover-wrapper">
+      {% if not is_dj and song.cover_image %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}" class="vibe-cover">
+      {% elif not is_dj and song.original_cover %}
+      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}" class="vibe-cover">
+      {% elif is_dj and song.dj_cover %}
+      <img loading="lazy" src="{{ song.dj_cover.url }}" alt="{{ song.dj_name }}" class="vibe-cover">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover" class="vibe-cover">
+      {% endif %}
+    </div>
+
+    <section class="song-info-meta">
+      {% if song.description %}
+      <div class="song-description">
+        <p>{{ song.description }}</p>
+      </div>
+      {% endif %}
+
+      <div class="metadata-grid">
+        <h4 class="action-call">Listen and Download Below</h4>
+
+        <p class="meta-row">
+          <span>Title:</span>
+          <strong>{% if is_dj %}{{ song.dj_name }}{% else %}{{ song.title }}{% endif %}</strong>
+        </p>
+
+        <p class="meta-row">
+          <span>Artist:</span>
+          <strong>
+            {% if artists %}
+            {% for artist in artists %}{{ artist.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% else %}
+            VibeNation Artist
+            {% endif %}
+          </strong>
+        </p>
+
+        {% if song.genre %}
+        <p class="meta-row"><span>Genre:</span> <strong>{{ song.genre }}</strong></p>
+        {% endif %}
+
+        <p class="meta-row"><span>Duration:</span> <strong>{{ song.duration|default:"N/A" }}</strong></p>
+      </div>
+    </section>
+
+    <div class="audio-player-vibe">
+      {% if not is_dj and song.audio_file %}
+      <audio controls class="vibe-audio">
+        <source src="{{ song.audio_file.url }}" type="audio/mpeg">
+      </audio>
+      {% elif is_dj and song.dj_file %}
+      <audio controls class="vibe-audio">
+        <source src="{{ song.dj_file.url }}" type="audio/mpeg">
+      </audio>
+      {% else %}
+      <p class="no-audio">Audio currently unavailable.</p>
+      {% endif %}
+    </div>
+
+    <div class="download-btn-container">
+      <a href="{% url 'music:download_song' song.slug %}" class="vibe-download-btn" download>
+        Download MP3
+      </a>
+    </div>
+  </div>
+  <aside class="zone-sidebar">
+    {% show_ad 'Music Sidebar' %}
+  </aside>
+</div>
+
+<div class="song-tags">
+  <h3 style="color: teal;">Related topics:</h3>
+  {% if not is_dj %}
+  {% for tag in song.tags.all %}
+  <a href="{% url 'music:songs_by_tag' tag.slug %}" class="tag">{{ tag.name }}</a>
+  {% empty %}
+  <p style="color: teal; text-decoration: none;">No related topic yet.</p>
+  {% endfor %}
+  {% else %}
+  <p style="color: teal; text-decoration: none;">Related to DJ Mixes</p>
+  {% endif %}
+</div>
+
+{% if artists %}
+<div class="artist-section">
+  <h3>{% if is_dj %}DJ Info{% else %}Artist Info{% endif %}</h3>
+  {% for artist in artists %}
+  <div class="artist-bio" style="margin-bottom: 15px;">
+    <h3>{{ artist.name }}</h3>
+    {% if artist.bio %}
+    <p class="paragraphs">{{ artist.bio }}</p>
+    {% else %}
+    <p class="paragraphs">No bio available</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="inline-ad">
+  {% show_ad 'Music In-Article' %}
+</div>
+
+{% if genre_songs %}
+<h2 style="margin-top: 30px;">RELATED SONGS</h2>
+<div class="card-container-grid">
+  {% with section="related_song" %}
+  {% for item in genre_songs %}
+  <a class="card-link" href="{% url 'music:song_detail' item.slug %}">
+    <div class="card-thumb">
+      {% if item.cover_image %}
+      <img loading="lazy" src="{{ item.cover_image.url }}" alt="{{ item.title }}">
+      {% elif item.original_cover %}
+      <img loading="lazy" src="{{ item.original_cover.url }}" alt="{{ item.title }}">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ item.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ item.id }}" class="card-title">
+        {{ item.title }} -
+        {% for artist in item.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+{% endif %}
+
+<div class="inline-ad">
+  {% show_ad 'In-Article' %}
+</div>
+
+{% if trending_songs %}
+<h2 style="margin-top: 30px;">TRENDING SONGS</h2>
+<div class="card-container-grid">
+  {% with section="song_detail_trending" %}
+  {% for item in trending_songs %}
+  <a class="card-link" href="{% url 'music:song_detail' item.slug %}">
+    <div class="card-thumb">
+      {% if item.cover_image %}
+      <img loading="lazy" src="{{ item.cover_image.url }}" alt="{{ item.title }}">
+      {% elif item.original_cover %}
+      <img loading="lazy" src="{{ item.original_cover.url }}" alt="{{ item.title }}">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ item.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ item.id }}" class="card-title">
+        {{ item.title }} -
+        {% for artist in item.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+{% endif %}
+
+<div class="inline-ad">
+  {% show_ad 'Music In-Article' %}
+</div>
+
+<!-- =========== COMMENT SYSTEM ============== -->
+<div class="comments-wrapper">
+  <h3 class="vn-comments-title">Comments</h3>
+
+  <form method="post" class="vn-comment-form">
+    {% csrf_token %}
+    <input type="hidden" name="parent_id" id="parent_id">
+
+    <div class="form-group">
+      {{ form.name.label_tag }}
+      {{ form.name }}
+    </div>
+    <div class="form-group">
+      {{ form.content.label_tag }}
+      {{ form.content }}
+    </div>
+
+    <div class="vn-form-actions">
+      <button type="submit" class="vn-comment-submit">
+        Post
+      </button>
+
+      <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn">
+        ✕ CANCEL REPLY
+      </a>
+    </div>
+  </form>
+
+  <div class="vn-comments-list music-comments-list" id="main-comments-container">
+    {% for comment in music_comments %}
+    {% include 'music/partials/music_comment.html' with comment=comment %}
+    {% empty %}
+    <div class="no-comments-msg">
+      <p>No comments yet. Be the first to share your thoughts!</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if music_comments.count >= 1 %}
+  <div style="margin-top: 20px; text-align: center;">
+    <button id="load-more-comments-btn" data-url="{% url 'music:load_more_music_comments' song.id %}"
+      class="vn-comment-submit">
+      LOAD MORE COMMENTS
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+{% block scripts %}
+<script src="{% static 'js/music_comment.js' %}"></script>
+{% endblock scripts %}
+
+{% endblock %}

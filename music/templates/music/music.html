@@ -1,0 +1,180 @@
+{% extends "music_base.html" %}
+{% load news_extras %}
+{% load static %}
+{% load ads_tags %}
+
+{% block meta_description %}
+VibeNation – Your source for the latest music, DJ mixes, videos, and entertainment updates.
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/news_card_in_homepage.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block title %}Music - VibeNation{% endblock %}
+
+{% block content %}
+
+</section>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<h1>LATEST MUSIC</h1>
+<div class="card-container-grid">
+  {% with section="latest_song" %}
+  {% for song in newest_songs %}
+  <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
+    aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+    <div class="card-thumb" aria-hidden="true">
+      {% if song.cover_image %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+      {% elif song.original_cover %}
+      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+      {% endif %}
+    </div>
+
+    <div class="card-body">
+      <span class="tag-pill">{{ song.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+        {{ song.title }} -
+        {% for artist in song.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+<div class="category-page-btn">
+  <a href="{% url 'music:newest-song' %}" class="cat-link">
+    See Latest
+  </a>
+</div>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<hr style="border: none; height: 2px; background-color: #000; margin: 10px 0;">
+
+<h1>GOSPEL</h1>
+<div class="card-container-grid">
+  {% with section="gospel" %}
+  {% for song in gospels %}
+  <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
+    aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+    <div class="card-thumb" aria-hidden="true">
+      {% if song.original_cover %}
+      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+      {% else %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ song.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+        {{ song.title }} -
+        {% for artist in song.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+<div class="category-page-btn">
+  <a href="{% url 'music:gospel-song' %}" class="cat-link">
+    See Gospel
+  </a>
+</div>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<hr style="border: none; height: 2px; background-color: #000; margin: 10px 0;">
+
+<h1>TRENDING THIS WEEK</h1>
+<div class="card-container-grid">
+  {% with section="trending_song" %}
+  {% for song in trending %}
+  <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
+    aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+    <div class="card-thumb" aria-hidden="true">
+      {% if song.original_cover %}
+      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+      {% else %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ song.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+        {{ song.title }} -
+        {% for artist in song.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+<div class="category-page-btn">
+  <a href="{% url 'music:trending' %}" class="cat-link">
+    See Trending
+  </a>
+</div>
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<hr style="border: none; height: 2px; background-color: #000; margin: 10px 0;">
+
+<h1>DJ MIXTAPE</h1>
+<div class="card-container-grid">
+  {% with section="mixtape" %}
+  {% for song in djs %}
+  <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
+    aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+    <div class="card-thumb" aria-hidden="true">
+      {% if song.dj_cover %}
+      <img loading="lazy" src="{{ song.dj_cover.url }}" alt="{{ song.title }}">
+      {% else %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ song.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+        {{ song.dj_name }} -
+        {% for artist in song.artists.all %}
+        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+<div class="category-page-btn">
+  <a href="{% url 'music:mixtape' %}" class="cat-link">
+    See Mixtape
+  </a>
+</div>
+
+<script src="{% static 'js/lazy_loading.js' %}"></script>
+{% endblock %}

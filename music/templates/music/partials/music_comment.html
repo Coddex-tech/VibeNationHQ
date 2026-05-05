@@ -1,0 +1,27 @@
+<div class="comment-item" id="comment-{{ comment.id }}">
+  <div class="comment-left">
+    <div class="comment-avatar">{{ comment.name|first|upper }}</div>
+  </div>
+  <div class="comment-center">
+    <p class="comment-author">{{ comment.name|upper }}</p>
+    <p class="comment-text">{{ comment.content }}</p>
+
+    <div class="comment-meta">
+      <span>{{ comment.created_at|timesince }} ago</span>
+      <a href="javascript:void(0)" onclick="handleReplyClick('{{ comment.id }}', '{{ comment.name|upper }}')">Reply</a>
+    </div>
+
+    <div class="comment-replies">
+      <div id="reply-container-{{ comment.id }}">
+        {% include 'music/partials/music_reply_list.html' with replies=comment.get_all_replies|slice:":3" %}
+      </div>
+
+      {% if comment.get_all_replies|length > 3 %}
+      <button class="load-more-replies-btn" data-comment-id="{{ comment.id }}"
+        data-url="{% url 'music:load_more_music_replies' comment.id %}">
+        See More Replies
+      </button>
+      {% endif %}
+    </div>
+  </div>
+</div>

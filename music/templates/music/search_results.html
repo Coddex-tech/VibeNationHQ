@@ -1,0 +1,219 @@
+{% extends "main_base.html" %}
+
+<title>{% block title %}Search Result | VibeNation{% endblock %}</title>
+
+{% block extra_css %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
+<link rel="stylesheet" href="{% static 'news/cat_grid.css' %}">
+{% endblock %}
+
+{% block content %}
+<!-- ========== DYNAMIC HEADING ========== -->
+{% if page_obj.object_list and not albums_page_obj.object_list %}
+<h2>Song results for "{{ query }}"</h2>
+
+{% elif albums_page_obj.object_list and not page_obj.object_list %}
+<h2>Album results for "{{ query }}"</h2>
+
+{% elif news_page_obj.object_list and not page_obj.object_list and not albums_page_obj.object_list %}
+<h2>News results for "{{ query }}"</h2>
+
+{% elif page_obj.object_list and albums_page_obj.object_list %}
+<h2>Search results for "{{ query }}"</h2>
+
+{% else %}
+<h2>No results found for "{{ query }}"</h2>
+{% endif %}
+
+<!-- ========== SONGS SECTION ========== -->
+{% if page_obj.object_list %}
+<h3>Songs</h3>
+<div class="card-container-grid">
+{% with section="songs_result" %}
+    {% for song in page_obj %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+        <div class="card-thumb" aria-hidden="true">
+            {% if song.cover_image %}
+            <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+            {% elif song.original_cover %}
+            <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+            {% else %}
+            <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+            {% endif %}
+
+        </div>
+        <div class="card-body">
+            <span class="tag-pill">{{ song.group }}</span>
+            <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+                <p>{{ song.title }} -
+                    {% for artist in song.artists.all %}
+                    {{ artist.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </p>
+            </h2>
+        </div>
+    </a>
+    {% endfor %}
+{% endwith %}
+</div>
+
+<!-- SONG PAGINATION -->
+<div class="pagination">
+    {% if page_obj.has_previous %}
+    <a href="?q={{ query }}&page={{ page_obj.previous_page_number }}&albums_page={{ albums_page_obj.number }}">Prev</a>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+    {% if page_obj.number == num %}
+    <strong>{{ num }}</strong>
+    {% else %}
+    <a href="?q={{ query }}&page={{ num }}&albums_page={{ albums_page_obj.number }}">{{ num }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+    <a href="?q={{ query }}&page={{ page_obj.next_page_number }}&albums_page={{ albums_page_obj.number }}">Next</a>
+    {% endif %}
+</div>
+{% else %}
+<p class="paragraphs">No songs found.</p>
+{% endif %}
+
+<!-- ========== ALBUMS SECTION ========== -->
+{% if albums_page_obj.object_list %}
+<h3>Albums</h3>
+<div class="card-container-grid">
+    {% for album in albums_page_obj %}
+    <a class="card-link" href="{% url 'music:album_detail' album.slug %}">
+
+        <div class="card-thumb">
+            {% if album.cover %}
+            <img loading="lazy" src="{{ album.cover.url }}" alt="{{ album.title }}">
+            {% else %}
+            <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+            {% endif %}
+        </div>
+
+        <div class="card-body">
+            <span class="tag-pill">{{ album.group }}</span>
+            <h2 class="card-title">{{ album.title }} - {% if album.artist %}
+                {{ album.artist.name }} ({{ album.group }})</h2>
+            {% endif %}
+
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+<!-- ALBUM PAGINATION -->
+<div class="pagination">
+    {% if albums_page_obj.has_previous %}
+    <a href="?q={{ query }}&albums_page={{ albums_page_obj.previous_page_number }}&page={{ page_obj.number }}">Prev</a>
+    {% endif %}
+    {% for num in albums_page_obj.paginator.page_range %}
+    {% if albums_page_obj.number == num %}
+    <strong>{{ num }}</strong>
+    {% else %}
+    <a href="?q={{ query }}&albums_page={{ num }}&page={{ page_obj.number }}">{{ num }}</a>
+    {% endif %}
+    {% endfor %}
+    {% if albums_page_obj.has_next %}
+    <a href="?q={{ query }}&albums_page={{ albums_page_obj.next_page_number }}&page={{ page_obj.number }}">Next</a>
+    {% endif %}
+</div>
+{% else %}
+<p class="paragraphs">No albums found.</p>
+{% endif %}
+<hr>
+
+
+<!-- ========== NEWS SECTION ========== -->
+{% if news_page_obj.object_list %}
+<section class="category-section">
+    <h2 class="category-title"><span class="icon-dot"></span> News Results</h2>
+
+    <div class="category-news-list">
+        {% for news in news_page_obj %}
+        <div class="category-news-item {% if forloop.first %}featured{% endif %}">
+            <a href="{% url 'news:news_details' news.slug %}">
+                {% if news.thumbnail %}
+                <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
+                {% endif %}
+                <div class="news-info">
+                    {% if news.category.all %}
+                    <small style="color: red;">
+                        {{ news.category.first.name }}
+                    </small>
+                    {% endif %}
+                    <h4>{{ news.title }}</h4>
+                    <small>{{ news.date_published|timesince }} ago</small>
+                </div>
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination for news -->
+    <div class="pagination">
+        {% if news_page_obj.has_previous %}
+        <a href="?news_page={{ news_page_obj.previous_page_number }}&q={{ query }}">&laquo;</a>
+        {% endif %}
+
+        {% for num in news_page_obj.paginator.page_range %}
+        {% if news_page_obj.number == num %}
+        <span class="current">{{ num }}</span>
+        {% elif num > news_page_obj.number|add:'-3' and num < news_page_obj.number|add:'3' %} <a
+            href="?news_page={{ num }}&q={{ query }}">{{ num }}</a>
+            {% endif %}
+            {% endfor %}
+
+            {% if news_page_obj.has_next %}
+            <a href="?news_page={{ news_page_obj.next_page_number }}&q={{ query }}">&raquo;</a>
+            {% endif %}
+    </div>
+</section>
+{% endif %}
+
+
+<!-- PAGINATION STYLE -->
+<style>
+    .paragraphs:hover {
+        text-decoration: none;
+    }
+
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin: 30px 0;
+    }
+
+    .pagination a,
+    .pagination span {
+        width: 35px;
+        height: 35px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border-radius: 6px;
+        font-weight: bold;
+        font-size: 14px;
+        text-decoration: none;
+        color: teal;
+        border: 1px solid teal;
+        transition: all 0.3s ease;
+    }
+
+    .pagination a:hover {
+        background-color: teal;
+        color: white;
+    }
+
+    .pagination .current {
+        background-color: teal;
+        color: white;
+        border: 1px solid teal;
+    }
+</style>
+{% endblock %}

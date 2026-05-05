@@ -1,0 +1,97 @@
+{% extends 'music_base.html' %}
+{% load static %}
+{% load ads_tags %}
+
+{% block title %}Gospel Songs | VibeNation{% endblock %}
+
+{% block meta_description %}
+Download uplifting gospel songs and spirit-filled worship music from top African and international artists.
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<!-- Mid-Content Ad Placeholder -->
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<h1>GOSPELS</h1>
+
+{% if page_obj %}
+<div class="card-container-grid">
+{% with section="gospel" %}
+  {% for song in page_obj %}
+  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+    <div class="card-thumb" aria-hidden="true">
+      {% if song.cover_image %}
+      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+      {% elif song.original_cover %}
+      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">{{ song.group }}</span>
+      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+        <p>{{ song.title }} -
+          {% for artist in song.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </p>
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+{% endwith %}
+</div>
+
+<div class="pagination">
+  {% if page_obj.has_previous %}
+    <a href="?q={{ title }}&page={{ page_obj.previous_page_number }}">Prev</a>
+  {% endif %}
+
+  {% for num in page_obj.paginator.page_range %}
+    {% if page_obj.number == num %}
+      <strong>{{ num }}</strong>
+    {% else %}
+      <a href="?q={{ title }}&page={{ num }}">{{ num }}</a>
+    {% endif %}
+  {% endfor %}
+
+  {% if page_obj.has_next %}
+    <a href="?q={{ title }}&page={{ page_obj.next_page_number }}">Next</a>
+  {% endif %}
+</div>
+
+{% else %}
+<p>No songs found.</p>
+{% endif %}
+
+{% if artists %}
+<h3>Artists</h3>
+<ul>
+  {% for artist in artists %}
+  <li>{{ artist.name }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<style>
+h1 {
+  background-color: rgb(7, 51, 51);
+  color: white;
+  padding: 2px 5px 2px 5px;
+  width: fit-content;
+}
+
+
+</style>
+
+{% endblock %}

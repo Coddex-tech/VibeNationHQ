@@ -1,0 +1,81 @@
+{% extends 'music_base.html' %}
+
+<title>{% block title %}Related-tags | VibeNation{% endblock %}</title>
+
+{% block extra_css %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<section class="tagged-songs-section">
+    <h2 class="tagged-title">Songs tagged with “{{ tag.name }}”</h2>
+
+    {% if songs %}
+    <div class="song-cards-container">
+    {% with section="songs_tag" %}
+        {% for song in songs %}
+        <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
+            aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+            <!-- Thumbnail (left) -->
+            <div class="card-thumb" aria-hidden="true">
+                {% if song.cover_image %}
+                <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+                {% elif song.original_cover %}
+                <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+                {% else %}
+                <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+                {% endif %}
+            </div>
+
+            <!-- Right content -->
+            <div class="card-body">
+                <!-- Tag pill -->
+                {% if song.group %}
+                <span class="tag-pill">{{ song.group }}</span>
+                {% endif %}
+
+                <!-- Title -->
+                <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+                    <p>{{ song.title }} -
+                        {% for artist in song.artists.all %}
+                        {{ artist.name }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
+                    </p>
+                </h2>
+            </div>
+        </a>
+        {% endfor %}
+    {% endwith %}
+    </div>
+    {% else %}
+    <p>No songs found for this tag.</p>
+    {% endif %}
+
+    <!-- Pagination -->
+    <div class="pagination">
+        {% if songs.has_previous %}
+        <a href="?page={{ songs.previous_page_number }}">Prev</a>
+        {% endif %}
+
+        {% for num in songs.paginator.page_range %}
+        {% if songs.number == num %}
+        <strong>{{ num }}</strong>
+        {% else %}
+        <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if songs.has_next %}
+        <a href="?page={{ songs.next_page_number }}">Next</a>
+        {% endif %}
+    </div>
+
+
+
+
+</section>
+
+{% endblock %}

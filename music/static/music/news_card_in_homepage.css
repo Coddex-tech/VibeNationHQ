@@ -1,0 +1,142 @@
+/* ==========================================================
+   📰 CATEGORY NEWS GRID LAYOUT
+   ========================================================== */
+.category-news-list {
+  display: flex;
+  gap: 12px; /* spacing between cards */
+  overflow-x: auto; /* allow horizontal scroll */
+  padding-bottom: 20px; /* some space for scrollbar */
+  -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+  scroll-behavior: smooth;
+}
+
+/* see more news button */
+.button-container {
+    display: flex;
+    justify-content: center; /* centers horizontally */
+    align-items: center;     /* centers vertically */
+    width: 100%;
+}
+
+.see-more-news-btn {
+    padding: 12px 24px;
+    background-color: teal;
+    color: #fff;
+    font-weight: bold;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.see-more-news-btn:hover {
+    background-color: #006666;
+    transform: translateY(-2px);
+}
+
+
+/* hide scrollbar (optional) */
+.category-news-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* ========================
+   🎴 CARD BASE STYLES
+   ======================== */
+.category-news-item {
+  flex: 0 0 80%; /* each card takes 80% width on mobile */
+  max-width: 250px; 
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.category-news-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ==============
+   CARD IMAGE
+   ============== */
+.category-news-item img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+  max-height: 180px;
+}
+
+/* ========================
+   CARD CONTENT
+   ======================== */
+.news-info {
+  padding: 10px 12px;
+}
+
+.news-info small {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #e63946;
+}
+
+.news-info h4 {
+  font-size: 16px;
+  margin: 0 0 6px;
+  color: #1a1a1a;
+}
+
+/* ======== LOAD MORE CATEGORY STYLE ========== */
+.category-page-btn {
+    text-align: center;
+    margin-top: 10px;
+    margin-bottom: 30px;
+}
+
+.cat-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 20px;
+    background: #f8f9fa;
+    color: #333;
+    text-decoration: none;
+    font-family: sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    border-radius: 50px;
+    border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+    gap: 8px;
+}
+
+.cat-link:hover {
+    background: #008080;
+    color: #ffffff;
+    border-color: #008080;
+}
+
+/* === DESKTOP: normal grid with 3 columns === */
+@media (min-width: 992px) {
+  .category-news-list {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    overflow: visible; /* no scroll on desktop */
+  }
+
+  .category-news-item {
+    flex: initial; /* reset flex for grid */
+    max-width: none;
+  }
+}
+
+@media (max-width: 768px) {
+    h1 {
+      font-size: 1.6rem;
+      margin-left: 15px;
+    }
+}

@@ -1,0 +1,292 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #111;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== MAIN LAYOUT ===== */
+.song-detail-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1200px;
+  gap: 35px;
+  padding: 20px 15px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.song-detail-content {
+  flex: 1;
+  max-width: 800px;
+  width: 100%;
+}
+
+/* ===== VIBE DIVIDER ===== */
+.vibe-divider {
+  height: 4px;
+  background: linear-gradient(to right, #008080, #fdf5e6);
+  margin: 10px 0 20px 0;
+  border-radius: 50px;
+}
+
+/* ===== TYPOGRAPHY & HEADERS ===== */
+.song-main-title {
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  font-weight: 800;
+  color: #004d4d;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.5px;
+}
+
+.artist-sep {
+  color: #008080;
+  padding: 0 8px;
+  opacity: 0.8;
+}
+
+.artist-list {
+  font-weight: 500;
+  color: #444;
+}
+
+.post-date {
+  color: #008080;
+  font-size: 0.95rem;
+  margin-top: 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ===== COVER IMAGE ===== */
+.song-cover-wrapper {
+  margin: 25px 0;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 15px 35px rgba(0, 128, 128, 0.12);
+  background: #eee;
+}
+
+.vibe-cover {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.song-cover-wrapper:hover .vibe-cover {
+  transform: scale(1.02);
+}
+
+/* ===== METADATA GRID ===== */
+.metadata-grid {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 12px;
+  border-left: 6px solid #008080;
+  margin: 30px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.action-call {
+  margin-top: 0;
+  color: #004d4d;
+  font-size: 1.2rem;
+}
+
+.meta-row {
+  margin: 12px 0;
+  font-size: 16px;
+  border-bottom: 1px dashed #eee;
+  padding-bottom: 8px;
+}
+
+.meta-row:last-child {
+  border-bottom: none;
+}
+
+.meta-row span {
+  color: #777;
+  width: 90px;
+  display: inline-block;
+  font-weight: 400;
+}
+
+/* ===== AUDIO PLAYER ===== */
+.audio-player-vibe {
+  margin: 30px 0;
+  width: 100%;
+  padding: 10px;
+  background: #f1f3f4;
+  border-radius: 60px;
+}
+
+.vibe-audio {
+  width: 100%;
+  height: 40px;
+}
+
+/* ===== DOWNLOAD BUTTON (THE PILL) ===== */
+.download-btn-container {
+  text-align: center;
+  margin: 40px 0;
+}
+
+.vibe-download-btn {
+  display: inline-block;
+  background: #008080;
+  color: #fffdf6 !important;
+  padding: 16px 55px;
+  text-decoration: none !important;
+  font-weight: 700;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  border-radius: 100px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 6px 20px rgba(0, 128, 128, 0.25);
+}
+
+.vibe-download-btn:hover {
+  background: #004d4d;
+  transform: translateY(-4px) scale(1.03);
+  box-shadow: 0 10px 25px rgba(0, 128, 128, 0.35);
+}
+
+/* ===== STICKY SIDEBAR ===== */
+.song-detail-sidebar {
+  width: 300px;
+  position: -webkit-sticky;
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+  align-self: flex-start;
+  background: #fdf5e6;
+  border: 1px solid #e9ecef;
+  border-radius: 16px;
+  padding: 20px;
+  flex-shrink: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+.zone-sidebar .ad-container,
+.zone-sidebar [class*="ad-"], 
+.zone-sidebar div:has(img) {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    display: block !important;
+}
+
+/* Forces the image to fill the sidebar width */
+.zone-sidebar img {
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    object-fit: cover !important;
+    border-radius: 12px;
+}
+
+/* ===== MOBILE ADAPTATION ===== */
+@media (max-width: 900px) {
+  .song-detail-container {
+    flex-direction: column;
+    padding: 10px;
+    gap: 20px;
+    width: 100%;
+  }
+
+  .song-detail-content {
+    width: 100%;
+  }
+
+  .song-main-title {
+    text-align: center;
+  }
+
+  .post-date {
+    text-align: center;
+  }
+
+  .vibe-download-btn {
+    width: 100%;
+    padding: 16px 20px;
+  }
+
+  .zone-sidebar {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    min-width: 100% !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .zone-sidebar img {
+    width: 100% !important;
+    max-width: 450px !important;
+    height: auto !important;
+    max-height: 300px;
+    object-fit: contain !important;
+    display: block !important;
+    border-radius: 12px !important;
+  }
+}
+
+
+/* ========= SONG TAG STYLE =========== */
+.song-tags {
+  margin-top: 25px;
+  padding-top: 15px;
+  border-top: 1px solid #ddd;
+}
+
+.song-tags h3 {
+  font-size: 1.1rem;
+  color: #333;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.song-tags .tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.song-tags .tag {
+  display: inline-block;
+  background-color: #e0f7f7;
+  color: #008080;
+  padding: 5px 12px;
+  border-radius: 25px;
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: 0.2s ease;
+}
+
+.song-tags .tag:hover {
+  background-color: #008080;
+  color: #fff;
+}
+
+.song-tags .no-tags {
+  color: #777;
+  font-size: 0.9rem;
+}
