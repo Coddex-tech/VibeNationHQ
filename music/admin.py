@@ -4,6 +4,7 @@ from .models import Artist, Song, DJ, Category, Album, MusicComment
 from unfold.admin import ModelAdmin
 from vibenation.admin_site import admin_site, staff_admin_site
 from vibenation.status_condition import get_status_badge
+from django.utils.safestring import mark_safe
 
 class ArtistAdmin(ModelAdmin):
     list_display = ('name', 'created_at', 'song_count')
@@ -15,15 +16,13 @@ class ArtistAdmin(ModelAdmin):
     song_count.short_description = "Songs"
 
 class SongAdmin(ModelAdmin):
-    list_display = ('title', 'views', 'release_date', 'display_category', 'get_artists', 'download_status', 'cover_preview')
+    list_display = ('title', 'get_artists', 'views', 'release_date', 'display_category', 'download_status', 'cover_preview')
     
     list_display_links = ('title',)
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ('artists',)
     search_fields = ('title', 'artists__name', 'album__title')
     list_filter_submit = True
-    
-    # 3. We use simple filters first to ensure the page loads
     list_filter = ('category', 'genre', 'release_date')
 
     @admin.display(description="Artists")
@@ -39,12 +38,10 @@ class SongAdmin(ModelAdmin):
 
     @admin.display(description="Cover")
     def cover_preview(self, obj):
-        from django.utils.safestring import mark_safe
         if not obj.cover_image:
             return mark_safe('<span style="color:#6b7280; font-size:11px; font-style:italic;">No Cover</span>')
             
         try:
-            # Increased size to 64px for better visibility
             image_url = obj.cover_image.url
             return mark_safe(f'''
                 <img src="{image_url}" 
@@ -55,10 +52,7 @@ class SongAdmin(ModelAdmin):
             return mark_safe('<span style="color:#ef4444; font-size:11px;">Link Error</span>')
 
     @admin.display(description="Download Status", ordering="download")
-    def download_status(self, obj):
-        from django.utils.safestring import mark_safe
-        
-        # Format the number with commas (e.g., 1,200 instead of 1200)
+    def download_status(self, obj):        
         count = f"{obj.download:,}" 
         
         if obj.download > 0:

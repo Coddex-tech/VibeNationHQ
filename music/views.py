@@ -205,7 +205,7 @@ def african_music(request):
 # SONG DETAIL PAGE
 # =======================================================================
 def song_detail(request, slug):
-    # 1. Try Song, then DJ
+    # Try Song, then DJ
     obj = Song.objects.filter(slug=slug).select_related('album').prefetch_related('artists').first()
     is_dj = False
 
@@ -216,7 +216,7 @@ def song_detail(request, slug):
     if not obj:
         raise Http404("Not found")
 
-    # 2. Fetch Related/Trending (These are Song objects)
+    # Fetch Related/Trending (These are Song objects)
     if not is_dj and obj.genre:
         genre_songs = Song.objects.filter(genre=obj.genre).exclude(id=obj.id).prefetch_related('artists')[:12]
     else:
@@ -224,7 +224,7 @@ def song_detail(request, slug):
 
     trending_songs = Song.objects.all().order_by('-views').prefetch_related('artists')[:12]
 
-    # 3. Comment Logic
+    # Comment Logic
     comment_filter = {'parent__isnull': True, 'is_approved': True}
     if not is_dj:
         comment_filter['song'] = obj
@@ -252,7 +252,7 @@ def song_detail(request, slug):
         initial_name = request.COOKIES.get('music_commenter_name', '')
         form = MusicCommentForm(initial={'name': initial_name})
 
-    # 4. View Tracking (Song only as per your model)
+    # 4 View Tracking (Song only as per your model)
     if not is_dj:
         from django.db.models import F
         Song.objects.filter(id=obj.id).update(views=F('views') + 1)
@@ -263,7 +263,7 @@ def song_detail(request, slug):
                 SongView.objects.create(song=obj, ip_address=ip)
         except: pass
 
-    # 5. Context Mapping
+    # Context Mapping
     display_title = obj.dj_name if is_dj else obj.title
     
     context = {
