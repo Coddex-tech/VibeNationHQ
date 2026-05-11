@@ -111,7 +111,6 @@ INSTALLED_APPS = [
     'news',
     'music',
     'ads',
-    'security',
 ]
 
 

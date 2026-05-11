@@ -29,7 +29,6 @@ from django_otp.admin import OTPAdminSite
 from django.contrib.admin.models import LogEntry
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
-from security.otp import verify_backup_code
 
 def dashboard_stats_callback(request, context):
     """
@@ -172,7 +171,7 @@ class MasterAdminSite(UnfoldAdminSite):
             if user.is_authenticated:
                 if not user.is_superuser:
                     logout(request)
-                    messages.error(request, "ACCESS DENIED: Boss Portal Only.")
+                    messages.error(request, "ACCESS DENIED: Boss Portal Only. Kindly use the staff page")
                     return redirect("/vibenation-admin-1999/login/")
                 return redirect("/vibenation-admin-1999/")
         return response
