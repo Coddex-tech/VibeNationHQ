@@ -21,7 +21,7 @@ class Artist(models.Model):
         return self.name
 
 
-class Category(models.Model):
+class Genre(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(unique=True)  # Enter manually in admin
 
@@ -29,24 +29,24 @@ class Category(models.Model):
         return self.name
     
     class Meta:
-        verbose_name = "Category"
-        verbose_name_plural = "Categories"
+        verbose_name = "Genre"
+        verbose_name_plural = "Genres"
 
 
 class Song(models.Model):
     title = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
-    genre = models.CharField(max_length=100, blank=True, null=True)
+    category = models.CharField(max_length=100, blank=True, null=True)
     cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
     original_cover = models.ImageField(upload_to="temp_covers/", blank=True, null=True)
+    genre = models.ForeignKey('Genre', on_delete=models.SET_NULL, null=True, blank=True, related_name="songs")
     group = models.CharField(max_length=50, blank=True, null=True, default='Music')
     release_date = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     download = models.PositiveBigIntegerField(default=0)
     audio_file = models.FileField(upload_to="songs/")
     artists = SortedManyToManyField('Artist', related_name="songs")
-    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True, related_name="songs")
     tags = TaggableManager()
     album = models.ForeignKey('Album', on_delete=models.CASCADE, related_name='songs', null=True, blank=True)
     views = models.PositiveBigIntegerField(default=0)
@@ -116,7 +116,7 @@ class DJ(models.Model):
     dj_cover = models.ImageField(upload_to="djs/")
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="djs")
+    category = models.ForeignKey(Genre, on_delete=models.SET_NULL, null=True, blank=True, related_name="djs")
     duration = models.CharField(max_length=10, blank=True)
 
     def save(self, *args, **kwargs):

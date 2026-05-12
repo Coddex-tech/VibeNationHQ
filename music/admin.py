@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Artist, Song, DJ, Category, Album, MusicComment
+from .models import Artist, Song, DJ, Genre, Album, MusicComment
 from unfold.admin import ModelAdmin
 from vibenation.admin_site import admin_site, staff_admin_site
 from vibenation.status_condition import get_status_badge
@@ -16,7 +16,7 @@ class ArtistAdmin(ModelAdmin):
     song_count.short_description = "Songs"
 
 class SongAdmin(ModelAdmin):
-    list_display = ('title', 'get_artists', 'views', 'release_date', 'display_category', 'download_status', 'cover_preview')
+    list_display = ('title', 'get_artists', 'views', 'release_date', 'genre__name', 'download_status', 'cover_preview')
     
     list_display_links = ('title',)
     prepopulated_fields = {"slug": ("title",)}
@@ -119,7 +119,7 @@ registrations = [
     (Artist, ArtistAdmin), 
     (Song, SongAdmin), 
     (DJ, DJAdmin),
-    (Category, ModelAdmin), 
+    (Genre, ModelAdmin), 
     (Album, ModelAdmin), 
     (MusicComment, MusicCommentAdmin)
 ]

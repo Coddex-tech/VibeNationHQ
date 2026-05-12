@@ -36,9 +36,9 @@ def music(request):
     # Fetch all songs with artists prefetched to avoid duplication
     all_songs = Song.objects.prefetch_related('artists').distinct()
     all_djs = DJ.objects.all()[:21]
-    gospels = Song.objects.filter(category__name="Gospel")[:21]
+    gospels = Song.objects.filter(genre__name="Gospel")[:21]
 
-    # 5 newest songs
+    # newest songs
     newest_songs = all_songs.order_by('-release_date')[:21]
 
     # Trending songs based on views
@@ -91,7 +91,7 @@ def latest_music(request):
 # =======================================================================
 def gospel(request):
     all_gospels = Song.objects.filter(
-        category__name="Gospel"
+        genre__name="Gospel"
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_gospels, 10)  
@@ -99,7 +99,6 @@ def gospel(request):
     page_obj = paginator.get_page(page_number)
 
     context = {
-        # "newest_gospels": newest_gospels,
         "page_obj": page_obj,
     }
     return render(request, "music/gospel_music.html", context)
@@ -184,7 +183,7 @@ def album_detail(request, slug):
 # =======================================================================
 def african_music(request):
     all_africas = Song.objects.filter(
-        category__name="African_Songs"
+        category__name="Africa"
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_africas, 15)
@@ -216,7 +215,7 @@ def song_detail(request, slug):
     if not obj:
         raise Http404("Not found")
 
-    # Fetch Related/Trending (These are Song objects)
+    # Fetch Related/Trending (These are Song     objects)
     if not is_dj and obj.genre:
         genre_songs = Song.objects.filter(genre=obj.genre).exclude(id=obj.id).prefetch_related('artists')[:12]
     else:
