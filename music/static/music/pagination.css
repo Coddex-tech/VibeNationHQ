@@ -8,13 +8,13 @@
 .pagination strong {
   margin: 0 5px;
   padding: 6px 12px;
-  border: 1px solid teal;
+  border: 1px solid var(--main-button);
   border-radius: 4px;
   text-decoration: none;
   color: teal;
 }
 
 .pagination strong {
-  background: teal;
-  color: white;
+  background: var(--main-button);
+  color: var(--primary-text-colour);
 }

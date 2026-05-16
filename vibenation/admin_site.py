@@ -7,6 +7,7 @@ from django.contrib.auth import logout
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils.safestring import mark_safe
+from django.utils.html import format_html, escape
 from django.db.models import Count, Sum
 from news.models import News, NewsComment
 from music.models import Song, DJ, MusicComment
@@ -26,7 +27,7 @@ from unfold.sites import UnfoldAdminSite
 from django_otp.admin import OTPAdminSite
 
 # Security
-from django.contrib.admin.models import LogEntry
+from django.contrib.admin.models import LogEntry, DELETION
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
@@ -161,6 +162,13 @@ class MasterAdminSite(UnfoldAdminSite):
         context["site_title"] = self.site_title
         return context
 
+    def get_urls(self):
+        from django.urls import path, include
+        urls = super().get_urls()
+        # This "injects" the standard auth URLs into your custom namespace
+        # so that 'auth_user_changelist' becomes valid within the Boss Portal
+        return urls
+
     def has_permission(self, request):
         return request.user.is_active and request.user.is_superuser
 
@@ -189,8 +197,6 @@ class StaffAdminSite(UnfoldAdminSite):
         context["site_title"] = self.site_title
         return context
     
-    def has_permission(self, request):
-        return request.user.is_active and request.user.is_staff and not request.user.is_superuser
 
     def has_permission(self, request):
         return request.user.is_active and request.user.is_staff and not request.user.is_superuser
@@ -206,6 +212,140 @@ class StaffAdminSite(UnfoldAdminSite):
                     return redirect("/vibe-crew-login-2026/login/")
                 return redirect("/vibe-crew-login-2026/")
         return response
+
+@admin.register(LogEntry)
+class LogEntryAdmin(UnfoldModelAdmin):
+    date_hierarchy = 'action_time'
+    list_filter_submit = True 
+    
+    # Prevents N+1 database queries
+    list_select_related = ["user", "content_type"]
+    
+    list_filter = ['user', 'content_type', 'action_flag']    
+    search_fields = ['object_repr', 'change_message']
+    
+    list_display = [
+        'content_type',
+        'user',
+        'action_time',
+        'object_link',
+        'action_flag_styled', 
+        'nice_change_message'
+    ]
+
+    # Permission Overrides
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+    def has_delete_permission(self, request, obj=None): return request.user.is_superuser
+    
+    def action_flag_styled(self, obj):
+        """Creates a colored badge for the action type"""
+        if obj.action_flag == 1: # Added
+            return format_html('<span class="bg-green-600 text-white px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">{}</span>', "Add")
+        
+        if obj.action_flag == 2: # Changed
+            return format_html('<span class="bg-blue-600 text-white px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">{}</span>', "Mod")
+        
+        if obj.action_flag == 3: # Deleted
+            return format_html('<span class="bg-red-600 text-white px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">{}</span>', "Del")
+            
+        return format_html('<span class="bg-gray-600 text-white px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">{}</span>', "???")
+        
+    action_flag_styled.short_description = "Type"
+
+    def object_link(self, obj):
+        if obj.action_flag == DELETION:
+            return obj.object_repr
+        try:
+            ct = obj.content_type
+            # DYNAMIC NAMESPACE: This ensures the link stays in the portal the Boss is using
+            app_label = ct.app_label
+            model_name = ct.model
+            
+            # We try to reverse the URL based on the current admin namespace
+            url = reverse(f"admin:{app_label}_{model_name}_change", args=[obj.object_id])
+            return mark_safe(f'<a href="{url}" class="font-bold text-primary-600 hover:text-primary-700">{escape(obj.object_repr)}</a>')
+        except Exception:
+            return obj.object_repr
+    object_link.short_description = "Item"
+
+    def log_deletion(self, request, object, object_repr):
+        """
+        CRITICAL: This stops the loop. 
+        When you delete logs, it will NOT create new 'Deleted LogEntry' rows.
+        """
+        return None
+
+    # ----- ACTION COMMANDS -------
+    actions = ['clear_all_logs', 'silent_delete_selected']
+
+    @admin.action(description="☢️ Emergency: Clear ALL System Logs")
+    def clear_all_logs(self, request, queryset):
+        if not request.user.is_superuser:
+            return
+        # This deletes them without triggering individual signals
+        LogEntry.objects.all().delete()
+        self.message_user(request, "System logs have been completely purged.")
+
+    @admin.action(description="🗑️ Delete selected logs (Silent)")
+    def silent_delete_selected(self, request, queryset):
+        rows_deleted = queryset.delete()
+        self.message_user(request, f"Successfully purged {rows_deleted[0]} log entries.")
+
+    # REMOVE the standard Django delete action
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
+
+    # Keep these just in case of single-item deletes
+    def log_deletion(self, request, object, object_repr):
+        return None
+    def log_addition(self, request, object, message):
+        return None
+    def log_change(self, request, object, message):
+        return None
+
+    def nice_change_message(self, obj):
+        if obj.action_flag == 3: 
+            return mark_safe('<span class="text-red-500 font-semibold">Purged from database</span>')
+        
+        if not obj.change_message: 
+            return mark_safe('<span class="opacity-50 italic text-slate-500">Direct edit (No metadata)</span>')
+        
+        try:
+            # Parse the JSON log data
+            change_data = json.loads(obj.change_message)
+            messages = []
+            
+            for item in change_data:
+                # Check for Additions
+                if 'added' in item:
+                    return mark_safe('<span class="text-green-500 font-medium">Initial Entry</span>')
+                
+                # Check for Changes
+                if 'changed' in item:
+                    fields = item['changed'].get('fields', [])
+                    clean_fields = [f.replace('_', ' ').title() for f in fields]
+                    if clean_fields:
+                        messages.append(f"Updated: {', '.join(clean_fields)}")
+                
+                if 'deleted' in item:
+                    messages.append(f"Deleted: {item['deleted'].get('name', 'item')}")
+
+            # If parsed but found no specific fields
+            if not messages:
+                return "Modified"
+
+            joined_msg = " | ".join(messages)
+            return mark_safe(f'<span class="text-xs font-medium text-slate-300">{joined_msg}</span>')
+            
+        except Exception:
+            raw_msg = obj.change_message.replace('[', '').replace(']', '').replace('{', '').replace('}', '').replace('"', '').replace('changed: fields:', 'Updated: ')
+            return mark_safe(f'<span class="text-xs text-slate-400">{raw_msg}</span>')
+
+    nice_change_message.short_description = "Change Log"
 
 # TOTP Devices with QR Code
 class TOTPDeviceAdmin(UnfoldModelAdmin):
@@ -324,12 +464,19 @@ def safe_register(sites, model, admin_class=None):
 # --- APPLY REGISTRATIONS ---
 
 all_sites = [admin_site, staff_admin_site]
+all_portals = [admin.site, admin_site, staff_admin_site] # Include default admin
 
-# AUTH MODELS
 safe_register(all_sites, User, MyUserAdmin)
 safe_register(all_sites, Group, MyGroupAdmin)
-safe_register(all_sites, LogEntry)
 
-# OTP MODELS (IMPORTANT: MUST BE IN BOTH SITES)
+# --- REGISTER OTP & OTHER MODELS ---
 safe_register(all_sites, StaticDevice, StaticDeviceAdmin)
 safe_register(all_sites, TOTPDevice, TOTPDeviceAdmin)
+
+# --- REGISTER LOGENTRY LAST ---
+for portal in all_portals:
+    try:
+        portal.unregister(LogEntry)
+    except admin.sites.NotRegistered:
+        pass
+    portal.register(LogEntry, LogEntryAdmin)

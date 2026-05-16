@@ -30,13 +30,13 @@ def get_client_ip(request):
     return ip
 
 # ==================================================================
-# HOMEPAGE
+# MUSIC HOMEPAGE
 # ==================================================================
 def music(request):
     # Fetch all songs with artists prefetched to avoid duplication
     all_songs = Song.objects.prefetch_related('artists').distinct()
     all_djs = DJ.objects.all()[:21]
-    gospels = Song.objects.filter(genre__name="Gospel")[:21]
+    gospels = Song.objects.filter(genres__name="Gospel")[:21]
 
     # newest songs
     newest_songs = all_songs.order_by('-release_date')[:21]
@@ -91,7 +91,7 @@ def latest_music(request):
 # =======================================================================
 def gospel(request):
     all_gospels = Song.objects.filter(
-        genre__name="Gospel"
+        genres__name="Gospel"
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_gospels, 10)  
@@ -215,9 +215,9 @@ def song_detail(request, slug):
     if not obj:
         raise Http404("Not found")
 
-    # Fetch Related/Trending (These are Song     objects)
-    if not is_dj and obj.genre:
-        genre_songs = Song.objects.filter(genre=obj.genre).exclude(id=obj.id).prefetch_related('artists')[:12]
+    # Fetch Related/Trending (These are Song objects)
+    if not is_dj and obj.genres:
+        genre_songs = Song.objects.filter(genres__in=obj.genres.all()).exclude(id=obj.id).prefetch_related('artists', 'genres')[:12]
     else:
         genre_songs = Song.objects.all().order_by('-release_date').prefetch_related('artists')[:12]
 
@@ -460,17 +460,11 @@ def songs_by_tag(request, tag_slug):
 def about(request):
     return render(request, "about.html")
 
-
 def contact(request):
     return render(request, "contact.html")
 
-
-def disclaimer(request):
-    return render(request, "disclaimer.html")
-
 def service(request):
     return render(request, "service.html")
-
 
 def privacy(request):
     return render(request, "privacy.html")
@@ -478,6 +472,5 @@ def privacy(request):
 def dmca(request):
     return render(request, "dmca.html")
 
-
-def promote(request):
-    return render(request, "promote.html")
+def advertise(request):
+    return render(request, "advertise.html")

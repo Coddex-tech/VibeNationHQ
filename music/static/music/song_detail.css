@@ -37,7 +37,7 @@ body {
 /* ===== VIBE DIVIDER ===== */
 .vibe-divider {
   height: 4px;
-  background: linear-gradient(to right, #008080, #fdf5e6);
+  background: linear-gradient(to right, var(--main-button), #fdf5e6);
   margin: 10px 0 20px 0;
   border-radius: 50px;
 }
@@ -52,7 +52,7 @@ body {
 }
 
 .artist-sep {
-  color: #008080;
+  color: var(--main-button);
   padding: 0 8px;
   opacity: 0.8;
 }
@@ -63,7 +63,7 @@ body {
 }
 
 .post-date {
-  color: #008080;
+  color: var(--main-button);
   font-size: 0.95rem;
   margin-top: 0;
   text-transform: uppercase;
@@ -76,7 +76,7 @@ body {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 15px 35px rgba(0, 128, 128, 0.12);
-  background: #eee;
+  background: var(--primary-text-colour);
 }
 
 .vibe-cover {
@@ -93,10 +93,10 @@ body {
 
 /* ===== METADATA GRID ===== */
 .metadata-grid {
-  background: #ffffff;
+  background: var(--primary-text-colour);
   padding: 25px;
   border-radius: 12px;
-  border-left: 6px solid #008080;
+  border-left: 6px solid var(--main-button);
   margin: 30px 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
@@ -147,8 +147,8 @@ body {
 
 .vibe-download-btn {
   display: inline-block;
-  background: #008080;
-  color: #fffdf6 !important;
+  background: var(--main-button);
+  color: var(--primary-text-colour) !important;
   padding: 16px 55px;
   text-decoration: none !important;
   font-weight: 700;
@@ -161,7 +161,7 @@ body {
 }
 
 .vibe-download-btn:hover {
-  background: #004d4d;
+  background: var(--main-button-hover);
   transform: translateY(-4px) scale(1.03);
   box-shadow: 0 10px 25px rgba(0, 128, 128, 0.35);
 }
@@ -273,7 +273,7 @@ body {
 .song-tags .tag {
   display: inline-block;
   background-color: #e0f7f7;
-  color: #008080;
+  color: var(--main-button);
   padding: 5px 12px;
   border-radius: 25px;
   font-size: 0.9rem;
@@ -282,7 +282,7 @@ body {
 }
 
 .song-tags .tag:hover {
-  background-color: #008080;
+  background-color: var(--main-button);
   color: #fff;
 }
 

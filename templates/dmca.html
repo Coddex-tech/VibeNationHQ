@@ -1,50 +1,98 @@
 {% extends 'main_base.html' %}
+{% load static %}
 
-{% block title %}DMCA Policy | VibeNation{% endblock %}
+{% block title %}DMCA Policy & Legal Disclaimer | VibeNationHQ Integrity Standards{% endblock %}
 
 {% block meta_description %}
-Read VibeNation’s DMCA Policy to learn how to report copyright infringement or request content removal.
+Official DMCA copyright infringement procedures and legal disclaimers for VibeNationHQ. We uphold the highest standards of intellectual property and news accuracy.
 {% endblock %}
 
 {% block extra_css %}
-{% load static %}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
-<link rel="stylesheet" href="{% static 'music/service.css' %}">
+<link rel="stylesheet" href="{% static 'css/vibenation_pages.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="page-content">
-  <h1>DMCA Policy</h1>
+<div class="page-container">
+    <!-- Premium Legal Hero -->
+    <div class="hero-section">
+        <h1>Legal <span>Notice</span></h1>
+        <p>Copyright Integrity, DMCA Compliance, and Content Disclaimers.</p>
+    </div>
 
-  <p class="intro">
-    <strong>VibeNation</strong> respects the intellectual property rights of others and is committed to complying with the Digital Millennium Copyright Act (DMCA). 
-    If you believe that your copyrighted material has been posted or shared on our website without authorization, please follow the procedures below to submit a DMCA takedown notice.
-  </p>
+    <div class="rich-text">
+        <section class="legal-intro">
+            <h2>Our Commitment to Intellectual Property</h2>
+            <p>
+                At <strong>VibeNationHQ</strong>, we take intellectual property and copyright laws with the utmost seriousness. As a high-fidelity platform designed to amplify African culture, we ensure that all content—from breaking news analysis to music discovery—respects the rights of creators and copyright holders globally. We operate in full compliance with the Digital Millennium Copyright Act (DMCA) and international copyright standards.
+            </p>
+        </section>
 
-  <section>
-    <h2>How to File a DMCA Complaint</h2>
-    <p>Your notice must include the following information to be processed:</p>
-    <ul>
-      <li>Your full legal name and accurate contact information (email and phone).</li>
-      <li>A clear description or link to the copyrighted work that you claim has been infringed.</li>
-      <li>A statement affirming that you are the copyright owner or authorized to act on behalf of the owner.</li>
-      <li>Your physical or electronic signature.</li>
-    </ul>
-    <p>Send your DMCA notice to: <strong><a href="mailto:support@vibenationhq.com" class="link">support@vibenation.com</a></strong></p>
-  </section>
+        <!-- DMCA Procedures -->
+        <section class="dmca-procedure">
+            <h2>DMCA Takedown Protocol</h2>
+            <p>
+                If you are a copyright owner or an authorized agent and believe that any content hosted on our custom engine infringes upon your copyrights, you may submit a formal notification. To ensure a professional and rapid response, your notice must include the following "Lexus" standard of detail:
+            </p>
+            <ul>
+                <li><strong>Identification:</strong> A clear description of the copyrighted work claimed to have been infringed.</li>
+                <li><strong>Location:</strong> The exact URL or path on VibeNationHQ where the material is located.</li>
+                <li><strong>Contact Information:</strong> Your full legal name, address, telephone number, and professional email address.</li>
+                <li><strong>Good Faith Statement:</strong> A statement that you have a good faith belief that use of the material is not authorized by the copyright owner.</li>
+            </ul>
 
-  <section>
-    <h2>Counter-Notification</h2>
-    <p>
-      If you believe your content was removed or disabled by mistake, you may submit a counter-notice to the same email address above. 
-      Once verified, we may restore the content in accordance with DMCA procedures. All counter-notifications must comply with legal requirements under the DMCA.
-    </p>
-  </section>
+            <div class="feature-card">
+                <div class="card-icon">⚖️</div>
+                <h4>Submit a Takedown Notice</h4>
+                <p>All verified DMCA notices are reviewed by our legal desk within 24-48 business hours.</p>
+                <p><strong>Official Channel:</strong> <a href="mailto:support@vibenationhq.com" class="link">support@vibenationhq.com</a></p>
+            </div>
+        </section>
 
-  <section class="update-info">
-    <p><strong>Last updated:</strong> November 2025</p>
-  </section>
+        <!-- Comprehensive Disclaimer -->
+        <section class="general-disclaimer">
+            <h2>General Disclaimer of Liability</h2>
+            <p>
+                The information provided by VibeNationHQ is for general entertainment, news, and promotional purposes only. While our "Chief Editor" and technical team strive for <strong>"Takumi" precision</strong> in every article and mix, the platform provides content "as is."
+            </p>
+
+            <div class="content-grid">
+                <div class="feature-card">
+                    <h4>News Accuracy</h4>
+                    <p>
+                        We follow our strict formula: <strong>Raw Facts + Analysis.</strong> However, the nature of "Breaking News" means updates happen rapidly. VibeNationHQ does not guarantee 100% real-time accuracy and encourages users to verify facts independently.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <h4>Promotional Downloads</h4>
+                    <p>
+                        Music files provided on this platform are for promotional use only. VibeNationHQ does not claim ownership of third-party media unless explicitly stated. Downloads are at the user's discretion and risk.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <h4>Third-Party Links</h4>
+                    <p>
+                        Our platform may contain links to external sites. VibeNationHQ holds no responsibility for the content, privacy policies, or practices of third-party websites. Use them at your own risk.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section class="limitation-of-liability">
+            <h2>Limitation of Liability</h2>
+            <p>
+                In no event shall VibeNationHQ, its founders, or contributors be liable for any direct or indirect loss arising from the use of our technical engine or content. By using this platform, you acknowledge and accept this limitation as part of our Terms of Service.
+            </p>
+        </section>
+
+        <!-- Final Legal Footer -->
+        <div class="cta-group">
+            <h3>Integrity. Accuracy. Excellence.</h3>
+            <p>We are committed to maintaining a safe and professional environment for all users.</p>
+            <div style="margin-top: 30px;">
+                <p><strong>Last Updated:</strong> May 2026</p>
+            </div>
+        </div>
+    </div>
 </div>
-
 {% endblock %}

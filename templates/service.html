@@ -1,71 +1,92 @@
 {% extends 'main_base.html' %}
 
-{% block title %}Terms of Service | VibeNation{% endblock %}
+{% block title %}Terms of Service | VibeNationHQ Corporate Governance{% endblock %}
 
 {% block meta_description %}
-Review VibeNation’s Terms of Service to understand the rules, responsibilities, and usage guidelines for our music and
-entertainment platform.
+The official terms of service for VibeNationHQ. Understand the legal framework governing our news, music discovery, and high-fidelity media platform.
 {% endblock %}
 
 {% block extra_css %}
 {% load static %}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
-<link rel="stylesheet" href="{% static 'music/service.css' %}">
+<link rel="stylesheet" href="{% static 'css/vibenation_pages.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="page-content">
-  <h1>Terms of Service</h1>
+<div class="page-container">
+    <!-- Premium Governance Hero -->
+    <div class="hero-section">
+        <h1>Terms of <span>Service</span></h1>
+        <p>The constitutional framework of the VibeNationHQ digital ecosystem.</p>
+    </div>
 
-  <p class="intro">
-    Welcome to <strong>VibeNation</strong>. By accessing or using our website, you agree to follow these Terms of Service. These terms are designed to protect both you and VibeNation, ensuring a safe, fair, and enjoyable experience. If you do not agree with these terms, please refrain from using our platform.
-  </p>
+    <div class="rich-text">
+        <section class="terms-intro">
+            <h2>1. Acceptance of Terms</h2>
+            <p>
+                By accessing <strong>VibeNationHQ</strong>, you are entering a binding agreement with Africa’s premier high-fidelity media platform. Our ecosystem is custom-engineered to provide elite News, Music, and Culture analysis. Use of this platform constitutes your unconditional agreement to the "Lexus" standards of conduct and legal compliance outlined herein.
+            </p>
+        </section>
 
-  <section>
-    <h2>1. Use of Content</h2>
-    <p>
-      All content on VibeNation, including music, text, images, videos, and graphics, is protected by copyright and other intellectual property laws. You may use content for personal purposes only. Reproduction, distribution, or modification without explicit written permission from the copyright owner or VibeNation is strictly prohibited.
-    </p>
-  </section>
+        <!-- Core Governance Grid -->
+        <div class="content-grid">
+            <div class="feature-card">
+                <div class="card-icon">🔐</div>
+                <h4>Intellectual Property</h4>
+                <p>
+                    Every line of custom Django code, every "VibeNation Analysis" report, and all visual assets are the exclusive property of VibeNationHQ. Unauthorized scraping, commercial redistribution, or "spinning" of our original content is a violation of international law.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="card-icon">⚖️</div>
+                <h4>Editorial Integrity</h4>
+                <p>
+                    VibeNationHQ provides news based on our <strong>Raw Fact + Analysis</strong> formula. While we strive for "Takumi" precision, our content is provided for informational purposes. Users are responsible for how they interpret and act upon the insights provided by our Editorial Desk.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="card-icon">🚫</div>
+                <h4>Platform Security</h4>
+                <p>
+                    Attempting to bypass our security protocols, reverse-engineer our custom engine, or inject malicious scripts into our "Read-Only" engagement system will result in an immediate and permanent IP ban and potential legal action.
+                </p>
+            </div>
+        </div>
 
-  <section>
-    <h2>2. User Responsibilities</h2>
-    <p>
-      As a user, you are expected to engage responsibly and respectfully on our platform. This includes:
-    </p>
-    <ul>
-      <li>Uploading and sharing content that you own or have permission to use.</li>
-      <li>Not posting content that is illegal, offensive, harmful, or infringes on the rights of others.</li>
-      <li>Using VibeNation only for lawful and positive purposes.</li>
-      <li>Protecting your account information and reporting any suspicious activity promptly.</li>
-    </ul>
-  </section>
+        <section class="usage-license">
+            <h2>2. Permitted Use & Licensing</h2>
+            <p>
+                VibeNationHQ grants you a limited, non-exclusive license to access our high-fidelity content for personal, non-commercial entertainment. 
+            </p>
+            <ul>
+                <li><strong>News Consumption:</strong> You may share our headlines and analysis via social media, provided clear attribution and a direct link to VibeNationHQ are maintained.</li>
+                <li><strong>Music Downloads:</strong> Promotional downloads are intended for personal use only. Public performance or commercial sale of media downloaded from our platform is prohibited.</li>
+            </ul>
+        </section>
 
-  <section>
-    <h2>3. Account & Termination</h2>
-    <p>
-      VibeNation reserves the right to restrict, suspend, or terminate access to users who violate these Terms of Service or engage in harmful or illegal behavior. Our goal is to maintain a safe environment for all users, and we take these measures responsibly to protect the community.
-    </p>
-  </section>
+        <section class="disclaimer-liability">
+            <h2>3. Limitation of Liability</h2>
+            <p>
+                VibeNationHQ operates as a high-performance digital engine, but we do not warrant that the platform will be uninterrupted or error-free. We are not liable for any direct or indirect damages resulting from your use of the service, including but not limited to data loss or the temporary unavailability of our music discovery portals.
+            </p>
+        </section>
 
-  <section>
-    <h2>4. External Links</h2>
-    <p>
-      Our website may include links to third-party websites for your convenience. VibeNation is not responsible for the content, policies, or practices of these sites. We encourage you to review their terms and privacy policies independently before interacting with them.
-    </p>
-  </section>
+        <section class="modifications">
+            <h2>4. Service Evolution</h2>
+            <p>
+                As a dynamic tech-driven media house, VibeNationHQ reserves the right to modify, suspend, or upgrade any part of our service—including our "Lexus" design and feature set—at any time without prior notice to ensure we remain at the cutting edge of African media technology.
+            </p>
+        </section>
 
-  <section>
-    <h2>5. Updates to Terms</h2>
-    <p>
-      We may update these Terms of Service periodically to reflect changes in our platform, legal requirements, or operational practices. Users are encouraged to revisit this page regularly to stay informed about updates. Continued use of VibeNation after changes indicates acceptance of the revised terms.
-    </p>
-  </section>
-
-  <section class="update-info">
-    <p><strong>Last updated:</strong> October 2025</p>
-  </section>
+        <!-- Final Governance Footer -->
+        <div class="cta-group">
+            <h3>Excellence Through Integrity.</h3>
+            <p>Thank you for respecting the craftsmanship behind the VibeNationHQ movement.</p>
+            <div style="margin-top: 30px;">
+                <a href="mailto:legal@vibenationhq.com" class="btn-premium">Contact Legal Desk</a>
+            </div>
+            <p style="margin-top: 20px; font-size: 0.9rem; opacity: 0.8;"><strong>Effective Date:</strong> May 13, 2026</p>
+        </div>
+    </div>
 </div>
-
 {% endblock %}

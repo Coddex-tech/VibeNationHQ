@@ -33,6 +33,7 @@
 
 
 <!-- ANALYTICS CHART -->
+ {% if request.user.is_superuser %}
 <div class="rounded-2xl border border-white/10 bg-[#1e1b2e] p-6 shadow-lg mb-6">
 
     <div class="flex items-center justify-between mb-5">
@@ -51,7 +52,7 @@
     </div>
 
 </div>
-
+{% endif %}
 
 <!-- CHART.JS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

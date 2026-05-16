@@ -30,7 +30,7 @@
 
 hr {
     height: 3px;
-    background-color: teal;
+    background-color: var(--main-button);
     border: none;
     border-radius: 6px;
     margin: 20px 0;
@@ -60,7 +60,7 @@ hr {
 
 .horizontal-music-scroller {
     padding: 25px 0;
-    background: linear-gradient(to right, #fdf5e6, #ffffff);
+    background: linear-gradient(to right, #fdf5e6, var(--primary-text-colour));
     margin: 30px 0;
     border-top: 1px solid #eee;
     border-bottom: 1px solid #eee;
@@ -135,7 +135,7 @@ hr {
 }
 
 .play-overlay i {
-    color: #fff;
+    color: var(--primary-text-colour);
     font-size: 2.2rem;
     filter: drop-shadow(0 2px 10px rgba(0,0,0,0.3));
 }
@@ -157,7 +157,7 @@ hr {
 .pill-info h4 {
     font-size: 0.95rem;
     margin: 5px 0 2px;
-    color: #222;
+    color: var(--text-main);
     font-weight: 700;
     /* Prevent long titles from breaking the layout */
     white-space: nowrap;
@@ -167,7 +167,7 @@ hr {
 
 .pill-info p {
     font-size: 0.8rem;
-    color: #777;
+    color: var(--text-muted);
     margin: 0;
     /* Clean single-line artist list */
     display: block;
@@ -180,7 +180,7 @@ hr {
 /* Link Style for "Listen More" */
 .view-more {
     font-size: 0.85rem;
-    color: #008080; /* Teal theme color */
+    color: var(--main-button); /* Teal theme color */
     font-weight: 700;
     text-decoration: none;
     transition: color 0.2s;
@@ -232,7 +232,7 @@ hr {
 .subheading {
     font-size: 18px;
     font-weight: bold;
-    color: #008b8b;
+    color: var(--main-button);
     margin: 0 0 10px 0;
 }
 
@@ -241,8 +241,8 @@ hr {
    =============================== */
 
 .trending-item, .latest-item {
-    background: #fff;
-    border: 1px solid teal;
+    background: var(--primary-text-colour);
+    border: 1px solid var(--main-button);
     border-radius: 5px;
     padding: 8px;
     margin-bottom: 8px;
@@ -251,7 +251,7 @@ hr {
 
 .trending-item:hover, .latest-item:hover {
     background: #f0fafa;
-    border-color: #008b8b;
+    border-color: var(--main-button);
 }
 
 .trending-item:last-child, .latest-item:last-child {
@@ -305,13 +305,13 @@ hr {
    =============================== */
 
 .sponsored-highlight {
-    background: linear-gradient(90deg, rgba(212, 175, 55, 0.08) 0%, #ffffff 100%) !important;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.08) 0%, var(--primary-text-colour) 100%) !important;
     border: 1px solid #d4af37 !important;
     border-left: 4px solid #d4af37 !important;
 }
 
 .sponsored-highlight:hover {
-    background: linear-gradient(90deg, rgba(212, 175, 55, 0.15) 0%, #f0fafa 100%) !important;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.15) 0%, var(--primary-text-colour) 100%) !important;
     cursor: pointer;
 }
 
@@ -326,13 +326,13 @@ hr {
 }
 
 .sponsored-title {
-    color: #000 !important;
+    color: var(--dark-bg) !important;
     font-weight: 700 !important;
 }
 
 .ad-disclaimer {
     font-size: 9px;
-    color: #bbb;
+    color: var(--background-colour);
     text-align: center;
     letter-spacing: 2px;
     margin-top: 10px;
@@ -391,7 +391,7 @@ hr {
     z-index: 3;
     padding: 25px;
     margin: 0;
-    color: #ffffff;
+    color: var(--primary-text-colour);
     font-size: 26px;
     font-weight: 800;
     line-height: 1.2;

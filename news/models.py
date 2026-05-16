@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from django.utils.text import slugify
 from sortedm2m.fields import SortedManyToManyField
@@ -48,7 +49,7 @@ class Category(models.Model):
 
 class News(models.Model):
     title = models.CharField(max_length=255)
-    slug = models.SlugField(unique=True, blank=True)
+    slug = models.SlugField(unique=True, blank=True, max_length=255)
     category = SortedManyToManyField(Category, related_name='news')
     thumbnail = models.ImageField(upload_to='news_thumbnails/', blank=True, null=True)
     image_caption = models.CharField(max_length=255, blank=True)
@@ -56,9 +57,13 @@ class News(models.Model):
     sponsor_name = models.CharField(max_length=100, blank=True, null=True)
     expires_at = models.DateTimeField(blank=True, null=True, help_text="Set an expiry date for this sponsored post.")
     is_featured = models.BooleanField(default=False)
-    description = models.CharField(max_length=255, blank=True)
     content = CKEditor5Field('Content', config_name='default') # CKEditor
-    author = models.CharField(max_length=100, default='VibeNation')
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
     date_published = models.DateTimeField(default=timezone.now, help_text="You can set a future date to schedule this post.")
     updated_at = models.DateTimeField(auto_now=True)
     views = models.PositiveIntegerField(default=0)

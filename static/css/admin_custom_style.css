@@ -1,0 +1,37 @@
+:root {
+    /* CKEditor 5 Dark Theme Variables */
+    --ck-color-base-foreground: #1a1a1a;
+    --ck-color-base-background: #0f172a; /* Matches Unfold dark blue/black */
+    --ck-color-base-border: #334155;
+    --ck-color-text: #f8fafc; /* White/Off-white text */
+    
+    /* Toolbar colors */
+    --ck-color-toolbar-background: #1e293b;
+    --ck-color-toolbar-border: #334155;
+    
+    /* Button colors */
+    --ck-color-button-default-hover-background: #334155;
+    --ck-color-button-default-active-background: #475569;
+    --ck-color-button-on-background: #334155;
+    --ck-color-button-on-color: #ffffff;
+}
+
+/* Force the editing area to be dark with white text */
+.ck-editor__main .ck-content {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+}
+
+/* Fix the toolbar icons to be visible */
+.ck.ck-toolbar {
+    background: #1e293b !important;
+    border: 1px solid #334155 !important;
+}
+
+.ck.ck-icon, .ck.ck-button {
+    color: #cbd5e1 !important;
+}
+
+.ck.ck-list {
+    background: #1e293b !important;
+}

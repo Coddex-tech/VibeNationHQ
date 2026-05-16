@@ -1,7 +1,7 @@
 /* === SLIDER SECTION === */
 .sliders-section {
   padding: 20px 10px;
-  background: #fff;
+  background: var(--primary-text-colour);
 }
 
 .slider-box {
@@ -14,13 +14,13 @@
   margin-bottom: 12px;
   display: flex;
   align-items: center;
-  color: #008080;
+  color: var(--main-button);
 }
 
 .slider-title .icon-dot {
   width: 10px;
   height: 10px;
-  background: #008080;
+  background: var(--main-button);
   border-radius: 50%;
   margin-right: 8px;
 }
@@ -38,7 +38,7 @@
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  background: rgba(0, 128, 128, 0.8);
+  background: var(--main-button);
   color: #fff;
   border: none;
   border-radius: 50%;
@@ -52,7 +52,7 @@
 }
 
 .nav-btn:hover {
-  background: #006d6d;
+  background: var(--main-button-hover);
 }
 
 .nav-btn.prev {
@@ -86,7 +86,7 @@
 /* === SLIDER CARD === */
 .slider-card {
   flex: 0 0 220px;
-  background: #f9f9f9;
+  background: var(--light-grey);
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);

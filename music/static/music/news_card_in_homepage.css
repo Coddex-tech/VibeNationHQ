@@ -1,5 +1,5 @@
 /* ==========================================================
-   📰 CATEGORY NEWS GRID LAYOUT
+   CATEGORY NEWS GRID LAYOUT
    ========================================================== */
 .category-news-list {
   display: flex;
@@ -20,8 +20,8 @@
 
 .see-more-news-btn {
     padding: 12px 24px;
-    background-color: teal;
-    color: #fff;
+    background-color: var(--main-button);
+    color: var(--primary-text-colour);
     font-weight: bold;
     border-radius: 6px;
     text-decoration: none;
@@ -40,12 +40,12 @@
 }
 
 /* ========================
-   🎴 CARD BASE STYLES
+   CARD BASE STYLES
    ======================== */
 .category-news-item {
   flex: 0 0 80%; /* each card takes 80% width on mobile */
   max-width: 250px; 
-  background: #fff;
+  background: var(--primary-text-colour);
   border-radius: 8px;
   overflow: hidden;
   display: flex;
@@ -114,9 +114,9 @@
 }
 
 .cat-link:hover {
-    background: #008080;
-    color: #ffffff;
-    border-color: #008080;
+    background: var(--main-button);
+    color: var(--primary-text-colour);
+    border-color: var(--main-button);
 }
 
 /* === DESKTOP: normal grid with 3 columns === */

@@ -3,7 +3,7 @@
 /* ================================================= */
 .comments-wrapper {
   font-family: "Inter", "Poppins", sans-serif;
-  width: 33%;
+  width: 70%;
   max-width: 520px;
   min-width: 320px;
   margin-right: auto;
@@ -17,7 +17,7 @@ p:hover {
 .vn-comments-title {
   font-size: 18px;
   font-weight: 700;
-  color: teal;
+  color: var(--main-button);
   margin-bottom: 12px;
 }
 
@@ -51,7 +51,7 @@ p:hover {
   margin-top: 8px;
   background: linear-gradient(135deg, #1dbf73, #14a3a3);
   border: none;
-  color: #fff;
+  color: var(--primary-text-colour);
   padding: 8px 18px;
   border-radius: 6px;
   cursor: pointer;
@@ -83,7 +83,7 @@ p:hover {
   height: 36px;
   border-radius: 50%;
   background: linear-gradient(135deg, #1dbf73, #14a3a3);
-  color: #fff;
+  color: var(--primary-text-colour);
   font-weight: 600;
   font-size: 14px;
   display: flex;
@@ -212,7 +212,7 @@ p:hover {
     height: 14px;
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 50%;
-    border-top-color: #fff;
+    border-top-color: var(--primary-text-colour);
     animation: spin 0.8s linear infinite;
     margin-right: 8px;
 }

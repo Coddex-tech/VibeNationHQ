@@ -1,79 +1,16 @@
-import json
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from django.contrib import admin
 from django import forms
-from django.contrib.admin.models import LogEntry, DELETION
 from django.utils.html import format_html, escape
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from vibenation.status_condition import get_status_badge
-
+import json
 # Models
 from .models import News, Category, NewsComment
-
-# Unfold & Third Party
-from unfold.admin import ModelAdmin
 # Standard filters used to prevent E115 System Check errors
 from django_ckeditor_5.widgets import CKEditor5Widget
 from vibenation.admin_site import admin_site, staff_admin_site
-
-@admin.register(LogEntry)
-class LogEntryAdmin(ModelAdmin):
-    date_hierarchy = 'action_time'
-    list_filter_submit = True 
-    
-    # Restored to standard strings to bypass E115 error
-    list_filter = [
-        'user',
-        'content_type',
-        'action_flag', 
-    ]    
-    
-    search_fields = ['object_repr', 'change_message']
-    list_display = [
-        'action_time',
-        'user',
-        'content_type',
-        'object_link',
-        'action_flag_',
-        'nice_change_message'
-    ]
-
-    def has_delete_permission(self, request, obj=None): return True
-    def has_add_permission(self, request): return False
-    def has_change_permission(self, request, obj=None): return False
-    def has_module_permission(self, request): return request.user.is_superuser
-    def has_view_permission(self, request, obj=None): return request.user.is_superuser
-
-    def nice_change_message(self, obj):
-        if obj.action_flag == 3: return "Item Deleted"
-        if not obj.change_message: return "No changes made"
-        try:
-            change_data = json.loads(obj.change_message)
-            messages = []
-            for item in change_data:
-                if 'added' in item: return "Initial creation"
-                if 'changed' in item:
-                    fields = item['changed'].get('fields', [])
-                    messages.append(f"Edited: {', '.join(fields)}")
-            return " | ".join(messages)
-        except:
-            return obj.change_message
-    nice_change_message.short_description = "What was changed"
-
-    def action_flag_(self, obj):
-        flags = {1: "Added", 2: "Changed", 3: "Deleted"}
-        return flags.get(obj.action_flag)
-
-    def object_link(self, obj):
-        if obj.action_flag == DELETION:
-            return obj.object_repr
-        try:
-            ct = obj.content_type
-            url = reverse(f'admin:{ct.app_label}_{ct.model}_change', args=[obj.object_id])
-            return mark_safe(f'<a href="{url}" class="text-primary-600 font-semibold underline">{escape(obj.object_repr)}</a>')
-        except:
-            return obj.object_repr
-    object_link.short_description = "Object"
 
 class NewsAdminForm(forms.ModelForm):
     content = forms.CharField(widget=CKEditor5Widget(config_name='default'))
@@ -81,9 +18,9 @@ class NewsAdminForm(forms.ModelForm):
         model = News
         fields = '__all__'
 
-class NewsAdmin(ModelAdmin):
+class NewsAdmin(UnfoldModelAdmin):
     form = NewsAdminForm
-    list_display = ('go_to_live', 'title', 'get_categories', 'date_published', 'views', 'author', 'thumbnail_preview')
+    list_display = ('go_to_live', 'title', 'get_categories', 'date_published', 'views', 'get_author_name', 'thumbnail_preview')
     list_display_links = ('title',)
     search_fields = ('title', 'category__name', 'author')
     prepopulated_fields = {'slug': ('title',)}
@@ -112,23 +49,112 @@ class NewsAdmin(ModelAdmin):
     thumbnail_preview.short_description = 'Image'
 
     def get_readonly_fields(self, request, obj=None):
-        return ('views',) if not request.user.is_superuser else ()
+        return ('views', 'is_sponsored', 'sponsor_name', 'expires_at') if not request.user.is_superuser else ()
+    # To disable author
+    def get_readonly_fields(self, request, obj=None):
+        return ('author', 'views')
+
+    def save_model(self, request, obj, form, change):
+        # If the article is new (no author yet), set the current logged-in user
+        if not obj.author:
+            obj.author = request.user
+        super().save_model(request, obj, form, change)
+
+    @admin.display(description='Author')
+    def get_author_name(self, obj):
+        # Pulls the full name if available, otherwise the username
+        if obj.author:
+            return obj.author.get_full_name() or obj.author.username
+        return "Unknown"
+
+    # ------- ACTION COMMANDS ---------
+    actions = ['make_published', 'make_draft', 'set_as_featured']
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
+    @admin.action(description="🚀 Publish selected articles")
+    def make_published(self, request, queryset):
+        queryset.update(is_published=True)
+        self.message_user(request, "Selected articles are now live on VibeNation.")
+
+    @admin.action(description="📁 Move to Drafts")
+    def make_draft(self, request, queryset):
+        queryset.update(is_published=False)
+        self.message_user(request, "Selected articles have been hidden.")
+
+    @admin.action(description="🌟 Set as Featured")
+    def set_as_featured(self, request, queryset):
+        queryset.update(is_featured=True)
+        self.message_user(request, "Articles moved to Featured section.")
+
+    
+
+    fieldsets = (
+        ("Main Content", {
+            "fields": ("title", "slug", "author", "category", "tags", "content"),
+        }),
+        ("Media & SEO", {
+            "fields": ("thumbnail", "image_caption"),
+        }),
+        ("Status & Visibility", {
+            "fields": ("is_featured", "date_published", "views", "is_published"),
+        }),
+        ("Sponsorship Details", {
+            "classes": ("tab-sponsored",),
+            "fields": ("is_sponsored", "sponsor_name", "expires_at"),
+        }),
+    )
 
     class Media:
-        js = ('js/site_admin.js',)
+        js = ("js/admin_custom_style.js",)
+        css = {
+            "all": ("css/admin_custom_style.css",)
+        }
 
-class CategoryAdmin(ModelAdmin):
+class CategoryAdmin(UnfoldModelAdmin):
     list_display = ('name',)
     def get_readonly_fields(self, request, obj=None):
         return ('name', 'slug') if not request.user.is_superuser else ()
 
-class NewsCommentAdmin(ModelAdmin):
+class NewsCommentAdmin(UnfoldModelAdmin):
     list_display = ('name', 'news', 'parent', 'content', 'created_at', 'status_badge')
     list_filter_submit = True
     list_filter = ('news', 'created_at')
+    # list_display_links = ('title',)
+
+    def get_readonly_fields(self, request, obj=None):
+        return ('news', 'name', 'content', 'parent') if not request.user.is_superuser else ()
 
     def status_badge(self, obj):
         return get_status_badge(obj.is_approved, true_label="Approved", false_label="Pending")
+
+    # ------- ACTION COMMANDS ---------
+
+    actions = ['approve', 'pending']
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
+    @admin.action(description="🚀 Approve selected comments")
+    def approve(self, request, queryset):
+        queryset.update(is_approved=True)
+        self.message_user(request, "Selected comments are now approved on VibeNation.")
+
+    @admin.action(description="📁 Move selected comments to draft")
+    def pending(self, request, queryset):
+        queryset.update(is_approved=False)
+        self.message_user(request, "Selected comments have been hidden.")
     
 
 all_portals = [admin.site, admin_site, staff_admin_site]

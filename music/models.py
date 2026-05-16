@@ -34,13 +34,13 @@ class Genre(models.Model):
 
 
 class Song(models.Model):
-    title = models.CharField(max_length=200)
+    title = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
     category = models.CharField(max_length=100, blank=True, null=True)
     cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
     original_cover = models.ImageField(upload_to="temp_covers/", blank=True, null=True)
-    genre = models.ForeignKey('Genre', on_delete=models.SET_NULL, null=True, blank=True, related_name="songs")
+    genres = SortedManyToManyField('Genre', blank=True, related_name="songs")
     group = models.CharField(max_length=50, blank=True, null=True, default='Music')
     release_date = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

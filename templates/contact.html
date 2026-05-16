@@ -1,77 +1,96 @@
 {% extends 'main_base.html' %}
 {% load static %}
 
-{% block title %}Contact Us | VibeNation{% endblock %}
+{% block title %}Contact Us | VibeNationHQ Corporate & Editorial Communications{% endblock %}
 
 {% block meta_description %}
-Get in touch with VibeNation — contact our team for music uploads, business inquiries, or general support.
+Connect with VibeNationHQ. Reach our News Desk, Music Department, or Advertising team for premium partnerships and inquiries.
 {% endblock %}
 
 {% block extra_css %}
 {% load static %}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
-<link rel="stylesheet" href="{% static 'music/service.css' %}">
+<link rel="stylesheet" href="{% static 'css/vibenation_pages.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="page-content">
-  <h1>Contact Us</h1>
+<div class="page-container">
+    <!-- Premium Hero Section -->
+    <div class="hero-section">
+        <h1>Connect With VibeNation<span>HQ</span></h1>
+        <p>Your direct line to Africa's high-fidelity news and culture engine.</p>
+    </div>
 
-  <h4 class="intro">
-    At <strong>VibeNation</strong>, we value meaningful connections with our audience, artists, contributors, and partners. Whether you want to provide feedback, promote your work, inquire about partnerships, or simply reach out — we are here to listen and respond responsibly.
-  </h4>
+    <div class="rich-text">
+        <section class="contact-intro">
+            <h2>Professional Communication</h2>
+            <p>
+                At <strong>VibeNationHQ</strong>, we believe in open, high-integrity communication. Whether you are a whistleblower with a news tip, an artist seeking a global stage, or a brand looking for premium placement, our specialized desks are ready to engage with you. We prioritize inquiries that align with our "Lexus" standard of excellence.
+            </p>
+        </section>
 
-  <section>
-    <h2>For Fans & Readers</h2>
-    <p>
-      Have questions, suggestions, or feedback regarding our music, news, or blog content? Your input helps us improve your experience on VibeNation. We encourage you to share your thoughts respectfully, and we will respond promptly.
-    </p>
-  </section>
+        <!-- Main Communication Grid -->
+        <div class="content-grid">
+            <!-- News & Editorial Desk -->
+            <div class="feature-card">
+                <div class="card-icon">🗞️</div>
+                <h4>Editorial & News Desk</h4>
+                <p>
+                    Have a breaking story, a press release, or an industry tip? Our Chief Editor reviews all submissions for accuracy and impact. We are looking for "Raw Facts" that we can transform into "VibeNation Analysis."
+                </p>
+                <p><strong>Direct Desk:</strong> <a href="mailto:newsroom@vibenationhq.com" class="link">newsroom@vibenationhq.com</a></p>
+            </div>
 
-  <section>
-    <h2>For Artists & DJs</h2>
-    <p>
-      Are you an artist or DJ looking to showcase your music? VibeNation provides a trusted platform to promote singles, albums, or mixtapes. Send your tracks, press kits, or promotional material for review, and we will consider featuring your work responsibly and fairly.
-    </p>
-  </section>
+            <!-- Music & Artist Relations -->
+            <div class="feature-card">
+                <div class="card-icon">🎵</div>
+                <h4>Music & A&R Department</h4>
+                <p>
+                    Artists and DJs: Submit your high-fidelity MP3s, high-resolution cover arts, and professional press kits for featured placement on our trending charts and music hub.
+                </p>
+                <div style="margin-top: 15px;">
+                    <a href="https://wa.me/2347089313768" class="btn-premium" style="font-size: 0.85rem; padding: 10px 18px;">Submit via WhatsApp</a>
+                </div>
+            </div>
 
-  <section>
-    <h2>For Writers & Contributors</h2>
-    <p>
-      If you are a journalist, blogger, or content creator with original stories, reviews, or cultural insights, we welcome contributions that add value to our community. Please submit your content with accurate information and proper sourcing.
-    </p>
-  </section>
+            <!-- Technical & Support -->
+            <div class="feature-card">
+                <div class="card-icon">🛠️</div>
+                <h4>Technical Support</h4>
+                <p>
+                    Encountering an issue on our custom engine? Our technical team is dedicated to maintaining a seamless user experience. Report bugs or platform glitches here.
+                </p>
+                <p><strong>Support:</strong> <a href="mailto:support@vibenationhq.com" class="link">support@vibenationhq.com</a></p>
+            </div>
+        </div>
 
-  <section>
-    <h2>For Advertisers & Partners</h2>
-    <p>
-      VibeNation provides professional opportunities to promote your brand, event, or product. From banner ads and sponsored content to custom partnerships, we ensure your message reaches our audience responsibly and effectively.
-    </p>
-  </section>
+        <!-- Partnership & Advertising Section -->
+        <section class="corporate-contact">
+            <h2>Corporate Partnerships</h2>
+            <p>
+                VibeNationHQ provides a unique ecosystem for brand storytelling. We move beyond traditional banners to offer integrated media campaigns that resonate with the "New Wave" of African consumers. From sponsored analysis to high-impact takeovers, let’s build your brand’s legacy.
+            </p>
+            
+            <div class="cta-group">
+                <h3>Advertise With Us</h3>
+                <p>For Pepsi-level brand integrations, event coverage, and premium media campaigns.</p>
+                <div style="margin-top: 25px;">
+                    <a href="mailto:ads@vibenationhq.com" class="btn-premium">Request 2026 Rate Card</a>
+                </div>
+            </div>
+        </section>
 
-  <section>
-    <h2>How to Reach Us</h2>
-    <p>📧 Email: <a href="mailto:contact@vibenation.com" class="link">contact@vibenationhq.com</a></p>
-    <p>💬 WhatsApp: <a href="https://wa.me/2347089313768" target="_blank" class="link">+234 708 931 3768</a></p>
-    <p>🌍 Social Media: 
-      <a href="#" target="_blank" class="link">Facebook</a> | 
-      <a href="#" target="_blank" class="link">Instagram</a> | 
-      <a href="#" target="_blank" class="link">Twitter</a> | 
-      <a href="https://wa.me/2347089313768" target="_blank" class="link">WhatsApp</a>
-    </p>
-  </section>
-
-  <section>
-    <h4>Our Commitment</h4>
-    <p>
-      We take every message seriously and strive to respond as quickly as possible. Your communication helps us grow and improve the VibeNation experience responsibly for everyone.
-    </p>
-    <p>
-      At <strong>VibeNation</strong>, we believe open communication is the heartbeat of our community. Let’s connect and keep the vibe alive.
-    </p>
-  </section>
+        <!-- Social Connections -->
+        <section class="social-hq">
+            <h2>Follow the Movement</h2>
+            <p>Stay updated with our latest "VibeNation Analysis" and breaking updates across our official social channels.</p>
+            <div class="social-links" style="margin-top: 20px;">
+                <a href="#" class="link">Facebook</a> | 
+                <a href="#" class="link">Instagram</a> | 
+                <a href="#" class="link">X (Twitter)</a> | 
+                <a href="https://wa.me/2347089313768" class="link">WhatsApp Channel</a>
+            </div>
+        </section>
+    </div>
 </div>
-
-
 {% endblock %}

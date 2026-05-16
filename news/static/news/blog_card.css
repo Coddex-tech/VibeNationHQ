@@ -14,7 +14,7 @@
   align-items: center;
   justify-content: space-between;
   width: 320px;
-  background: #fff;
+  background: var(--primary-text-colour);
   border: 1px solid #f1f1f1;
   border-radius: 6px;
   padding: 10px;

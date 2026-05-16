@@ -108,6 +108,12 @@ entertainment news and updates on VibeNation.{% endblock %}
   {% show_ad 'Music Inline' %}
 </div>
 
+{% if news.is_sponsored %}
+<div class="sponsored-tag">
+  <span class="badge">Sponsored Content</span>
+</div>
+{% endif %}
+
 <div class="news-detail-container">
   <div class="share-sidebar-rail">
     <div class="share-icons-group">
@@ -126,7 +132,8 @@ entertainment news and updates on VibeNation.{% endblock %}
     <h1 class="headline">{{ news.title }}</h1>
 
     <div class="meta-wrapper">
-      <p class="authors">Posted By <span class="authors_name">{{ news.author }}</span></p>
+      <p class="authors">Posted By <span class="authors_name">{{ news.author.get_full_name|default:news.author.username
+          }}</span></p>
       <p class="date">{{ news.date_published|hybrid_time }}</p>
     </div>
 
@@ -160,8 +167,60 @@ entertainment news and updates on VibeNation.{% endblock %}
       {{ article_content|safe }}
     </div>
 
+    <div class="news-tags">
+      <h3 style="color: teal;">Related topics:</h3>
+      {% for tag in news.tags.all %}
+      <a href="{% url 'music:songs_by_tag' tag.slug %}" class="tag">{{ tag.name }}</a>
+      {% empty %}
+      <p style="color: teal; text-decoration: none;">No related topic yet.</p>
+      {% endfor %}
+    </div>
+
     <div class="inline-ad">
       {% show_ad 'Music Inline' %}
+    </div>
+
+    <!-- ====================== COMMENT SYSTEM ================== -->
+    <div class="comments-wrapper">
+      <h3 class="vn-comments-title">Comments</h3>
+
+      <form method="post" class="vn-comment-form">
+        {% csrf_token %}
+        <input type="hidden" name="parent_id" id="parent_id">
+
+        {{ form.as_p }}
+
+        <div class="vn-form-actions" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+          <button type="submit" class="vn-comment-submit">Post</button>
+
+          <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn">
+            ✕ CANCEL REPLY
+          </a>
+        </div>
+      </form>
+
+      <div class="vn-comments-list" id="main-comments-container">
+        {% for comment in comments %}
+        {% include 'news/partials/news_comment.html' with comment=comment %}
+        {% empty %}
+        <div class="no-comments-msg">
+          <p>No comments yet. Be the first to share your thoughts!</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if comments.has_next %}
+      <div class="text-center mt-4" style="text-align: center;">
+        <button id="load-more-comments-btn" data-url="{% url 'news:load_more_comments' news.id %}"
+          class="vn-comment-submit">
+          Load More Comments
+        </button>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="article-ad">
+      {% show_ad 'Music In-Article' %}
     </div>
 
     <div class="music-break-box">
@@ -169,7 +228,14 @@ entertainment news and updates on VibeNation.{% endblock %}
       <div class="mini-song-grid">
         {% for song in recent_songs %}
         <a href="{% url 'music:song_detail' song.slug %}" class="mini-song-card">
+          {% if song.original_cover %}
+          <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
+          {% elif song.cover_image %}
           <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
+          {% else %}
+          <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover" class="vibe-cover">
+          {% endif %}
+
           <span>
             {% if song.artists.all %}
             {% for artist in song.artists.all %}{{ artist.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
@@ -212,49 +278,6 @@ entertainment news and updates on VibeNation.{% endblock %}
   <aside class="zone-sidebar">
     {% include 'news/sidebar_snippet.html' %}
   </aside>
-</div>
-
-<div class="article-ad">
-  {% show_ad 'Music In-Article' %}
-</div>
-
-<!-- ====================== COMMENT SYSTEM ================== -->
-<div class="comments-wrapper">
-  <h3 class="vn-comments-title">Comments</h3>
-
-  <form method="post" class="vn-comment-form">
-    {% csrf_token %}
-    <input type="hidden" name="parent_id" id="parent_id">
-
-    {{ form.as_p }}
-
-    <div class="vn-form-actions" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-      <button type="submit" class="vn-comment-submit">Post</button>
-
-      <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn">
-        ✕ CANCEL REPLY
-      </a>
-    </div>
-  </form>
-
-  <div class="vn-comments-list" id="main-comments-container">
-    {% for comment in comments %}
-    {% include 'news/partials/news_comment.html' with comment=comment %}
-    {% empty %}
-    <div class="no-comments-msg">
-      <p>No comments yet. Be the first to share your thoughts!</p>
-    </div>
-    {% endfor %}
-  </div>
-
-  {% if comments.has_next %}
-  <div class="text-center mt-4" style="text-align: center;">
-    <button id="load-more-comments-btn" data-url="{% url 'news:load_more_comments' news.id %}"
-      class="vn-comment-submit">
-      Load More Comments
-    </button>
-  </div>
-  {% endif %}
 </div>
 
 <script src="{% static 'js/news_comment.js' %}"></script>

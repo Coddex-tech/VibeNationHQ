@@ -56,10 +56,9 @@ urlpatterns = [
     path("about/", views.about, name="about"),
     path("contact/", views.contact, name="contact"),
     path("privacy/", views.privacy, name="privacy"),
-    path("disclaimer/", views.disclaimer, name="disclaimer"),
     path("service/", views.service, name="service"),
     path("dmca/", views.dmca, name="dmca"),
-    path("promote/", views.promote, name="promote"),
+    path("advertise-with-us/", views.advertise, name="advertise"),
     path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
 ]
 

@@ -22,7 +22,7 @@
 }
 
 .category-title span {
-    color: #008080;
+    color: var(--main-button);
 }
 
 .category-count {
@@ -49,7 +49,7 @@
 
 /* --- News Card Component --- */
 .news-card {
-    background: #fff;
+    background: var(--primary-text-colour);
     border: 1px solid #eee;
     border-radius: 12px;
     overflow: hidden;
@@ -61,7 +61,7 @@
 .news-card:hover {
     transform: translateY(-8px);
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
-    border-color: #008080;
+    border-color: var(--main-button);
 }
 
 .card-image-wrapper {
@@ -85,8 +85,8 @@
     position: absolute;
     top: 15px;
     left: 15px;
-    background: #008080;
-    color: white;
+    background: var(--main-button);
+    color: var(--primary-text-colour);
     padding: 6px 12px;
     font-size: 0.75rem;
     font-weight: 800;
@@ -121,7 +121,7 @@
 }
 
 .card-title a:hover {
-    color: #008080;
+    color: var(--main-button);
 }
 
 .card-excerpt {
@@ -156,7 +156,7 @@
 
 .page-link {
     background: #1a1a1a;
-    color: white;
+    color: var(--primary-text-colour);
     padding: 10px 25px;
     border-radius: 8px;
     text-decoration: none;
@@ -165,7 +165,7 @@
 }
 
 .page-link:hover {
-    background: #008080;
+    background: var(--main-button);
 }
 
 /* --- Empty State --- */

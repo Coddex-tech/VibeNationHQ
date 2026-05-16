@@ -1,95 +1,89 @@
 {% extends "main_base.html" %}
+{% load static %}
 
-{% block title %}About VibeNation | VibeNation{% endblock %}
+{% block title %}About VibeNationHQ | VibeNation{% endblock %}
 
 {% block meta_description %}
-Learn more about VibeNation — Africa’s #1 platform for the latest music, entertainment news, lifestyle, and cultural
+Learn more about VibeNation — Africa’s #1 platform From breaking news and entertainment to high-fidelity music discovery, learn how we are redefining African media.
 stories.
 {% endblock %}
 
 {% block extra_css %}
-{% load static %}
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="{% static 'css/bottom_page.css' %}">
-<link rel="stylesheet" href="{% static 'music/service.css' %}">
+<link rel="stylesheet" href="{% static 'css/vibenation_pages.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="page-content">
-
-  <h1>About <span>VibeNation</span></h1>
-  <h4>Welcome to VibeNation — the heartbeat of African music, entertainment, and culture.</h4>
-
-  <p>
-    VibeNation was founded with one purpose — to create a space where music, stories, and culture connect seamlessly.
-    We are more than a platform; we’re a community built for music lovers, artists, and fans who live for good vibes
-    and meaningful content. Our goal is simple: to amplify African creativity and share it with the world.
-  </p>
-
-  <h3>What We Do</h3>
-
-  <div class="about-sections">
-    <div class="about-box">
-      <h4>🎵 Music Hub</h4>
-      <p>
-        Discover and download the latest songs, albums, DJ mixes, and gospel hits. From Afrobeats and Amapiano to
-        Hip-Hop
-        and Highlife, VibeNation is your daily destination for trending African and international sounds.
-      </p>
+<div class="page-container">
+    <!-- Premium Brand Hero -->
+    <div class="hero-section">
+        <h1>Inside VibeNation<span>HQ</span></h1>
+        <p class="hero-subtitle">High-Fidelity Journalism. Custom-Built Technology. African Excellence.</p>
     </div>
 
-    <div class="about-box">
-      <h4>📰 News & Entertainment</h4>
-      <p>
-        Stay up-to-date with the latest entertainment news, celebrity gists, and viral updates shaping the industry.
-        We bring you real stories that spark conversation and keep you informed.
-      </p>
+    <div class="rich-text">
+        <!-- The Visionary Hook -->
+        <section class="brand-story">
+            <h2>The VibeNationHQ Architecture</h2>
+            <p>
+                VibeNationHQ was founded not just as a website, but as a response to the need for high-integrity, tech-driven media in Africa. In an era of "spinning" stories, we built a <strong>Truth-First Engine</strong>. Our platform is a custom-coded ecosystem designed from the ground up to deliver news at the speed of thought while maintaining the polished "Lexus" experience our readers deserve.
+            </p>
+        </section>
+
+        <!-- Our Three Pillars: News, Music, Entertainment -->
+        <div class="content-grid">
+            <div class="feature-card">
+                <div class="card-icon">📰</div>
+                <h4>Primary: News & Analysis</h4>
+                <p>
+                    Our editorial team follows a strict formula: <strong>Raw Facts + VibeNation Analysis = Original Content.</strong> We don't just report what happened; we explain why it matters to the industry. From political shifts impacting the creative economy to tech trends in Lagos, we provide the news that powers conversations.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="card-icon">🎵</div>
+                <h4>Secondary: Music Discovery</h4>
+                <p>
+                    Afrobeats is the world’s heartbeat, and we are its primary rhythm. VibeNationHQ serves as a high-fidelity hub for music downloads, artist spotlights, and DJ mixes. We provide rising stars and legends alike a premium stage to showcase their "Takumi" craftsmanship to a global audience.
+                </p>
+            </div>
+            <div class="feature-card">
+                <div class="card-icon">🎬</div>
+                <h4>Lifestyle & Entertainment</h4>
+                <p>
+                    From the AMVCA red carpets to behind-the-scenes glimpses into the lives of cultural icons, our entertainment desk captures the glamour and the grit. We bridge the gap between celebrity culture and the fans through verified, high-quality reporting.
+                </p>
+            </div>
+        </div>
+
+        <!-- The Technical Edge (Your USP) -->
+        <section class="tech-foundation">
+            <h2>Built by Craftsmanship, Not Templates</h2>
+            <p>
+                What separates VibeNationHQ from the crowd is our foundation. While others rely on generic, bloated templates, our <strong>Technical Founder</strong> has engineered a lean, high-performance Django platform. This means faster load times for our users, better security for our data, and a seamless interface that keeps the focus where it belongs: on the content.
+            </p>
+            <ul>
+                <li><strong>Optimized for Mobile:</strong> Designed for the Nigerian digital landscape, ensuring high speed even on low-bandwidth networks.</li>
+                <li><strong>Read-Only Integrity:</strong> A unique comment and engagement system designed to eliminate spam and prioritize real human voices.</li>
+                <li><strong>SEO Dominance:</strong> Custom metadata architecture that ensures our stories rank first on global search engines.</li>
+            </ul>
+        </section>
+
+        <!-- Our Mission -->
+        <section class="mission-statement">
+            <h2>Our Global Mission</h2>
+            <p>
+                Our mission is to celebrate African creativity and connect it to the world. We strive to empower creators, entertain fans, and showcase the beauty of African music and culture through a trusted, dynamic platform. We are building the most reliable source for news, lifestyle, and cultural updates on the continent.
+            </p>
+        </section>
+
+        <!-- Final Brand Promise -->
+        <div class="cta-group">
+            <h3>VibeNationHQ — Discover. Download. Read. Vibe.</h3>
+            <p>We are the pulse of the nation. Join us as we document the evolution of African excellence.</p>
+            <div style="margin-top: 30px;">
+                <a href="mailto:contact@vibenationhq.com" class="btn-premium">Partner With Us</a>
+            </div>
+        </div>
     </div>
-
-    <div class="about-box">
-      <h4>📝 Blog & Lifestyle</h4>
-      <p>
-        Explore inspiring stories, artist spotlights, and lifestyle articles that celebrate African creativity and
-        everyday culture. Whether it’s trends, fashion, or behind-the-scenes insights — we keep the vibe alive.
-      </p>
-    </div>
-
-    <div class="about-box">
-      <h4>💼 Promotion & Advertising</h4>
-      <p>
-        Artists, DJs, event organizers, and brands can promote their music, concerts, and businesses with us.
-        VibeNation offers wide reach, affordable packages, and professional visibility to help you grow.
-      </p>
-    </div>
-  </div>
-
-  <h3>Our Mission</h3>
-  <p>
-    Our mission is to celebrate African creativity and connect it to the world. We strive to empower creators,
-    entertain fans, and showcase the beauty of African music and culture through a trusted, dynamic platform.
-  </p>
-
-  <ul>
-    <li>Promote both rising and established artists across Africa.</li>
-    <li>Deliver authentic and engaging entertainment content.</li>
-    <li>Provide fans with a reliable source for music, lifestyle, and cultural updates.</li>
-  </ul>
-
-  <h3>Why Choose VibeNation?</h3>
-  <ul>
-    <li><strong>All-in-One Experience:</strong> Music, news, and lifestyle in one modern platform.</li>
-    <li><strong>Consistent Updates:</strong> Fresh content and new releases every day.</li>
-    <li><strong>Credibility & Quality:</strong> Secure downloads, verified stories, and professional presentation.</li>
-    <li><strong>Community & Culture:</strong> A creative movement celebrating African sound and expression.</li>
-  </ul>
-
-  <h3>Our Promise</h3>
-  <p>
-    At VibeNation, we don’t just share content — we build connections. Whether you’re here to vibe to new music,
-    discover entertainment stories, or promote your brand, every visit is designed to inspire and engage you.
-  </p>
-
-  <p><strong>VibeNation</strong> — Discover. Download. Read. Vibe.</p>
 </div>
-
 {% endblock %}

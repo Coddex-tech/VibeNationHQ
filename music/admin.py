@@ -16,14 +16,14 @@ class ArtistAdmin(ModelAdmin):
     song_count.short_description = "Songs"
 
 class SongAdmin(ModelAdmin):
-    list_display = ('title', 'get_artists', 'views', 'release_date', 'genre__name', 'download_status', 'cover_preview')
+    list_display = ('title', 'get_artists', 'views', 'release_date', 'get_genres', 'download_status', 'cover_preview')
     
     list_display_links = ('title',)
     prepopulated_fields = {"slug": ("title",)}
-    filter_horizontal = ('artists',)
+    filter_horizontal = ('artists', 'genres')
     search_fields = ('title', 'artists__name', 'album__title')
     list_filter_submit = True
-    list_filter = ('category', 'genre', 'release_date')
+    list_filter = ('category', 'genres', 'release_date')
 
     @admin.display(description="Artists")
     def get_artists(self, obj):
@@ -32,24 +32,43 @@ class SongAdmin(ModelAdmin):
             return ", ".join([artist.name for artist in obj.artists.all()])
         return "-"
 
+    @admin.display(description="Genres")
+    def get_genres(self, obj):
+        if obj.pk:
+            return ", ".join([genres.name for genres in obj.genres.all()])
+        return "-"
+
     @admin.display(description="Category", ordering="category")
     def display_category(self, obj):
         return obj.category.name if obj.category else "-"
 
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
     @admin.display(description="Cover")
     def cover_preview(self, obj):
-        if not obj.cover_image:
-            return mark_safe('<span style="color:#6b7280; font-size:11px; font-style:italic;">No Cover</span>')
-            
-        try:
-            image_url = obj.cover_image.url
-            return mark_safe(f'''
-                <img src="{image_url}" 
-                     style="width:64px; height:64px; border-radius:8px; object-fit:cover; 
-                            border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);" />
-            ''')
-        except Exception:
-            return mark_safe('<span style="color:#ef4444; font-size:11px;">Link Error</span>')
+        if obj.original_cover:
+            img_url = obj.original_cover.url
+        elif obj.cover_image:
+            img_url = obj.cover_image.url
+        else:
+            # 3. Final Fallback: Styled text badge
+            return format_html(
+                '<span class="flex items-center justify-center w-12 h-12 rounded bg-gray-100 text-gray-400 text-[10px] font-bold uppercase border border-gray-200">No Cover</span>'
+            )
+
+        # Render the image preview if found
+        return format_html(
+            '<img src="{}" class="w-12 h-12 object-cover rounded border border-gray-200 shadow-sm" alt="Cover" />',
+            img_url
+        )
+
+    cover_preview.short_description = "Preview"
 
     @admin.display(description="Download Status", ordering="download")
     def download_status(self, obj):        
@@ -89,6 +108,14 @@ class DJAdmin(ModelAdmin):
             return ", ".join([artist.name for artist in obj.artists.all()])
         return "-"
 
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
     @admin.display(description="Cover")
     def dj_cover_preview(self, obj):
         if obj.dj_cover:
@@ -100,19 +127,48 @@ class AlbumAdmin(ModelAdmin):
     list_display = ('title', 'artist', 'release_date')
     search_fields = ('title', 'artist__name')
 
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
 class MusicCommentAdmin(ModelAdmin):
     list_display = ('name', 'song', 'parent', 'created_at', 'status_badge')
     list_filter_submit = True
     list_filter = ('is_approved', 'created_at')
     search_fields = ('name', 'content', 'song__title')
 
+    def get_readonly_fields(self, request, obj=None):
+        return ('song', 'dj', 'parent', 'name', 'content') if not request.user.is_superuser else ()
+
     def status_badge(self, obj):
         return get_status_badge(obj.is_approved, true_label="Approved", false_label="Pending")
 
-    status_badge.short_description = "Approval Status"
-
-    # This makes the column name look nice in the table header
     status_badge.short_description = "Status"
+
+    # ------ ACTION COMMANDS --------
+    actions = ['approve', 'pending']
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # This ONLY removes the delete option for staff
+        if not request.user.is_superuser:
+            if 'delete_selected' in actions:
+                del actions['delete_selected']
+        return actions
+
+    @admin.action(description="🚀 Approve selected comments")
+    def approve(self, request, queryset):
+        queryset.update(is_approved=True)
+        self.message_user(request, "Selected comments are now approved on VibeNation.")
+
+    @admin.action(description="📁 Pend selected comments")
+    def pending(self, request, queryset):
+        queryset.update(is_approved=False)
+        self.message_user(request, "Selected comments have been hidden.")
     
 all_portals = [admin.site, admin_site, staff_admin_site]
 registrations = [

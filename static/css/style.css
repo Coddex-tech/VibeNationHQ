@@ -1,3 +1,17 @@
+:root {
+    --main-colour: rgb(7, 51, 51);
+    --main-button: #008080;
+    --main-button-hover: #006666;
+    --background-colour: #cacaca;
+    --primary-text-colour: #fff; /* primary text or background */
+    --heading-font: 'Inter', sans-serif;
+    --body-font: 'Roboto', sans-serif;
+    --dark-bg: #111111;
+    --light-grey: #f8f9fa;
+    --text-main: #222222;
+    --text-muted: #666666;
+}
+
 /* General Styles */
 body {
     margin: 0;
@@ -37,7 +51,7 @@ body {
     padding: 6px 12px;
     border-radius: 5px;
     border: none;
-    background-color: #008080;
+    background-color: var(--main-button);
     color: #fff;
     cursor: pointer;
     font-size: 14px;
@@ -84,7 +98,7 @@ a {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgb(7, 51, 51);
+    background: var(--main-colour);
     color: #fff;
     padding: 10px 15px;
     flex-wrap: wrap;
@@ -100,7 +114,6 @@ a {
     font-weight: bold;
     letter-spacing: 3px;
     font-family: impact;
-    text-decoration: underline rgb(7, 51, 51);
     color: #fff;
     transition: color 0.3s ease;
 }
@@ -132,7 +145,7 @@ a {
 .nav a {
     font-family: "Inter", "Poppins", sans-serif;
     font-weight: 600;
-    color: #fff;
+    color: var(--primary-text-colour);
     position: relative;
     font-size: clamp(12px, 3vw, 16px);
     padding: 5px 0;
@@ -146,7 +159,7 @@ a {
     bottom: -4px;
     width: 0;
     height: 3px;
-    background: teal;
+    background: var(--main-button);
     transition: width 0.3s ease;
 }
 
@@ -212,7 +225,7 @@ a {
 }
 
 .category:hover .circle {
-    background: #008080;
+    background: var(--main-button);
     color: #fff;
     box-shadow: 0 6px 15px rgba(0, 128, 128, 0.3), 0 0 10px rgba(0, 128, 128, 0.2);
     transform: scale(1.2);
@@ -228,19 +241,19 @@ a {
 
 .category:hover p {
     transform: translateY(-3px);
-    color: #008080;
+    color: var(--main-button);
 }
 
 /* Active category */
 .category.active .circle {
-    background: #008080;
+    background: var(--main-button);
     color: #fff;
     box-shadow: 0 6px 15px rgba(0, 128, 128, 0.3), 0 0 10px rgba(0, 128, 128, 0.2);
     transform: scale(1.2);
 }
 
 .category.active p {
-    color: #008080;
+    color: var(--main-button);
     font-weight: bold;
     transform: translateY(-3px);
 }
@@ -270,7 +283,7 @@ main {
 
 /* Footer */
 footer {
-    background-color: rgb(7, 51, 51);
+    background-color: var(--main-colour);
     color: #f1f1f1;
     padding: 20px 25px;
     padding-bottom: 100px;
@@ -285,7 +298,7 @@ footer h3 a {
 }
 
 footer h3 a:hover {
-    color: #fff;
+    color: var(--primary-text-colour);
 }
 
 footer .footer-links {
@@ -304,7 +317,7 @@ footer .footer-links a {
 }
 
 footer .footer-links a:hover {
-    color: #fff;
+    color: var(--primary-text-colour);
     text-decoration: underline;
 }
 
@@ -355,7 +368,7 @@ p {
     position: fixed;
     bottom: 100px;
     right: 25px;
-    background-color: teal;
+    background-color: var(--main-button);
     color: black;
     text-decoration: none;
     font-size: 18px;
@@ -539,7 +552,7 @@ p {
 .sidebar-ad-wrapper, 
 .sidebar-trending, 
 .sidebar-categories {
-    background: #ffffff;
+    background: var(--primary-text-colour);
     border: 1px solid #eaeaea;
     border-radius: 12px;
     padding: 20px;
@@ -555,7 +568,7 @@ p {
 .sidebar-title {
     font-size: 0.85rem;
     font-weight: 900;
-    color: #008080; /* Your Primary Teal */
+    color: var(--main-button); /* Your Primary Teal */
     letter-spacing: 1.2px;
     margin-bottom: 20px;
     border-bottom: 2px solid #f8f8f8;
@@ -622,12 +635,12 @@ p {
 
 /* --- HOVER EFFECTS --- */
 .trending-link:hover .rank-number {
-    color: #008080;
+    color: var(--main-button);
     transform: translateY(-2px);
 }
 
 .trending-link:hover .trending-text h4 {
-    color: #008080 !important;
+    color: var(--main-button) !important;
 }
 
 .trending-link:hover .trending-img-container img {
@@ -658,22 +671,22 @@ p {
 
 .cat-count {
     font-size: 0.7rem;
-    color: #008080;
+    color: var(--main-button);
     background: rgba(0, 128, 128, 0.1);
     padding: 2px 6px;
     border-radius: 10px;
 }
 
 .cat-tag:hover {
-    background: #008080;
+    background: var(--main-button);
     color: white;
-    border-color: #008080;
+    border-color: var(--main-button);
     transform: translateY(-2px);
 }
 
 .cat-tag:hover .cat-count {
     background: white;
-    color: #008080;
+    color: var(--main-button);
 }
 
 /* TARGET ALL IMAGE FOR PLACEHOLDER LOGO */
@@ -714,7 +727,7 @@ img.loaded {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: #008080; /* Your Brand Teal */
+    background-color: var(--main-button); /* Your Brand Teal */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -811,7 +824,7 @@ img.loaded {
         max-width: 100% !important;
         margin: 0 0 20px 0 !important;
         padding: 20px 15px !important;
-        background: #ffffff !important;
+        background: var(--background-colour) !important;
         border: 1px solid #eaeaea !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05) !important;

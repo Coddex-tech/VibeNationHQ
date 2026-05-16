@@ -157,8 +157,15 @@
           </strong>
         </p>
 
-        {% if song.genre %}
-        <p class="meta-row"><span>Genre:</span> <strong>{{ song.genre }}</strong></p>
+        {% if song.genres.all %}
+        <p class="meta-row">
+          <span>Genre:</span>
+          <strong>
+            {% for genre in song.genres.all %}
+              {{ genre.name }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </strong>
+        </p>
         {% endif %}
 
         <p class="meta-row"><span>Duration:</span> <strong>{{ song.duration|default:"N/A" }}</strong></p>
