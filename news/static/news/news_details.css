@@ -19,12 +19,24 @@
 /* ======================
     STICKY SHARE RAIL
    ====================== */
+
 .share-sidebar-rail {
     width: 60px;
     flex-shrink: 0;
-    position: -webkit-sticky;
+
     position: sticky;
+    position: -webkit-sticky;
+
     top: 120px;
+
+    align-self: flex-start;
+
+    /* IMPORTANT */
+    height: fit-content;
+
+    /* THIS STOPS IT FROM STICKING FOREVER */
+    max-height: calc(100vh - 140px);
+
     z-index: 10;
 }
 
@@ -101,18 +113,72 @@
 
 .meta-wrapper {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 15px;
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    margin-bottom: 25px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
+    padding: 14px 16px;
+    margin-bottom: 28px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 14px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+    font-size: 0.92rem;
 }
 
-.authors_name {
-    color: var(--main-button);
-    font-weight: 700;
+.meta-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.meta-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: rgba(0, 0, 0, 0.6);
+    font-weight: 600;
+}
+
+.author-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.author-chip:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.profile-picture {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    color: rgba(0, 0, 0, 0.65);
+}
+
+.author-name {
+    font-weight: 800;
+    color: rgba(0, 0, 0, 0.88);
+}
+
+.meta-right {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.55);
+    padding-left: 10px;
+    white-space: nowrap;
+}
+
+/* optional: subtle structure alignment help */
+.meta-wrapper {
+    gap: 10px;
 }
 
 /* ==========================
@@ -493,6 +559,49 @@
 }
 
 @media (max-width: 768px) {
+    .meta-wrapper {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 14px;
+        border-radius: 12px;
+    }
+
+    .meta-left {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .meta-label {
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+    }
+
+    .author-chip {
+        padding: 5px 10px;
+        gap: 6px;
+        width: fit-content;
+    }
+
+    .profile-picture {
+        font-size: 16px;
+        width: 20px;
+        height: 20px;
+    }
+
+    .author-name {
+        font-weight: 750;
+        font-size: 0.85rem;
+    }
+
+    .meta-right {
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: rgba(0, 0, 0, 0.5);
+        padding-left: 0;
+    }
+
     .related-grid {
         grid-template-columns: 1fr;
         gap: 30px;

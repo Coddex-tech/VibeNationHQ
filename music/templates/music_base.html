@@ -9,46 +9,57 @@
 {% block categories %}
 <div class="categories-wrapper">
   <div class="categories-scroll">
-    <a href="{% url 'music:newest-song' %}" 
+
+    <a href="{% url 'music:newest-song' %}"
        class="category {% if request.path == '/music/newest-song/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-music"></i></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">music_note</span>
+      </div>
       <p>Latest Music</p>
     </a>
 
-    <a href="{% url 'music:gospel-song' %}" 
+    <a href="{% url 'music:gospel-song' %}"
        class="category {% if request.path == '/music/gospel-song/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-book-bible"></i> <!-- Gospel icon --></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">church</span>
+      </div>
       <p>Gospel</p>
     </a>
 
-    <a href="{% url 'music:trending' %}" 
+    <a href="{% url 'music:trending' %}"
        class="category {% if request.path == '/music/trending/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-fire"></i></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">local_fire_department</span>
+      </div>
       <p>Trending</p>
     </a>
 
-    <a href="{% url 'music:albums' %}" 
+    <a href="{% url 'music:albums' %}"
        class="category {% if request.path == '/music/albums/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-compact-disc"></i></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">album</span>
+      </div>
       <p>Albums</p>
     </a>
 
-    <a href="{% url 'music:mixtape' %}" 
+    <a href="{% url 'music:mixtape' %}"
        class="category {% if request.path == '/music/mixtape/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-headphones"></i></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">headphones</span>
+      </div>
       <p>DJ Mix</p>
     </a>
 
-    <a href="{% url 'music:african-song' %}" 
+    <a href="{% url 'music:african-song' %}"
        class="category {% if request.path == '/music/africa/' %}active{% endif %}">
-      <div class="circle"><i class="fa-solid fa-earth-africa"></i></div>
+      <div class="circle">
+        <span class="material-symbols-outlined">public</span>
+      </div>
       <p>African Music</p>
     </a>
+
   </div>
 </div>
-
-
-
 
 {% endblock %}
 

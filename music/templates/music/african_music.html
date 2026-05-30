@@ -32,13 +32,7 @@ Discover the best of African music — Afrobeat, Amapiano, Highlife, and more fr
     aria-labelledby="song-title-{{ section }}-{{ song.id }}">
     <!-- Thumbnail (left) -->
     <div class="card-thumb" aria-hidden="true">
-      {% if song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
-      {% elif song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
-      {% endif %}
+      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
 
     <!-- Right content -->

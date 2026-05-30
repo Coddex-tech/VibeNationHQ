@@ -28,13 +28,7 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
   {% for song in trending_now %}
   <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
     <div class="card-thumb" aria-hidden="true">
-      {% if song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
-      {% elif song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
-      {% endif %}
+      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
       <span class="tag-pill">{{ song.group }}</span>
@@ -63,13 +57,7 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
   {% for song in trending_week %}
   <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
     <div class="card-thumb" aria-hidden="true">
-      {% if song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
-      {% elif song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
-      {% endif %}
+      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
       <span class="tag-pill">{{ song.group }}</span>
@@ -99,13 +87,7 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
   {% for song in trending_month %}
   <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
     <div class="card-thumb" aria-hidden="true">
-      {% if song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
-      {% elif song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
-      {% endif %}
+      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
       <span class="tag-pill">{{ song.group }}</span>
@@ -134,13 +116,7 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
   {% for song in trending_songs %}
   <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
     <div class="card-thumb" aria-hidden="true">
-      {% if song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}">
-      {% elif song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
-      {% endif %}
+      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
       <span class="tag-pill">{{ song.group }}</span>

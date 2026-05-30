@@ -40,6 +40,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
 
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
@@ -60,24 +61,24 @@
   </div>
 
   <script>
-    (function() {
+    (function () {
       var s = document.getElementById("splash-screen");
       if (!s) return;
 
       // SAFETY KILL SWITCH: 
       // if Page takes more than 3 seconds, force hide.
-      var forceHide = setTimeout(function() {
+      var forceHide = setTimeout(function () {
         s.style.opacity = "0";
-        setTimeout(function() { s.style.display = "none"; }, 600);
+        setTimeout(function () { s.style.display = "none"; }, 600);
       }, 3000);
 
       // DOMContentLoaded is much faster than "load" 
       // It fires as soon as the HTML is ready, without waiting for the MP3.
-      window.addEventListener("DOMContentLoaded", function() {
-        setTimeout(function() {
+      window.addEventListener("DOMContentLoaded", function () {
+        setTimeout(function () {
           clearTimeout(forceHide); // Cancel the 3s timer if we're ready early
           s.style.opacity = "0";
-          setTimeout(function() { s.style.display = "none"; }, 600);
+          setTimeout(function () { s.style.display = "none"; }, 600);
         }, 800);
       });
     })();
@@ -93,6 +94,7 @@
     <a href="{% url 'news:homepage' %}">
       <div class="logo">VIBENATION</div>
     </a>
+
     <div class="nav-wrapper">
       <nav class="nav">
         <ul style="gap: 40px;">
@@ -145,9 +147,8 @@
 
 
     <div class="social-icons">
-      <a href="https://www.facebook.com/profile.php?id=61581073267753" target="_blank" class="facebook"
-        title="Follow us on Facebook"><i class="fab fa-facebook-f"></i></a>
-      <a href="#" class="twitter"><i class="fab fa-twitter" title="Follow us on Twitter"></i></a>
+      <a href="#" target="_blank" class="facebook" title="Follow us on Facebook"><i class="fab fa-facebook-f"></i></a>
+      <a href="#" class="twitter"><i class="fa-brands fa-x-twitter" title="Follow us on X (Twitter)"></i></a>
       <a href="#" class="instagram"><i class="fab fa-instagram" title="Follow us on Instagram"></i></a>
       <a href="#" class="whatsapp"><i class="fab fa-whatsapp" title="Chat with us on WhatsApp"></i></a>
       <a href="#" class="telegram"><i class="fab fa-telegram" title="Join us on Telegram"></i></a>
@@ -161,9 +162,9 @@
     <span id="close-footer-ad">✖</span>
   </div>
 
-  {% block scripts %}
-  <script src="{% static 'js/backtotop.js' %}"></script>
+  <script src="{% static 'js/backtotop.js' %}" defer></script>
   <script src="{% static 'js/sticky-ad.js' %}" defer></script>
+  {% block scripts %}
   {% endblock %}
 </body>
 

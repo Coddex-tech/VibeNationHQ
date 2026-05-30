@@ -127,7 +127,6 @@ a {
     display: flex;
     margin: 0;
     padding: 0;
-    gap: 40px;
 }
 
 .nav ul {
@@ -150,6 +149,7 @@ a {
     font-size: clamp(12px, 3vw, 16px);
     padding: 5px 0;
     text-decoration: none;
+
 }
 
 .nav a::after {
@@ -161,12 +161,16 @@ a {
     height: 3px;
     background: var(--main-button);
     transition: width 0.3s ease;
+    height: 2px;
+    border-radius: 2px;
 }
 
 .nav li.active a,
 .nav a:hover {
     color: teal;
 }
+
+
 
 .nav li.active a::after,
 .nav a:hover::after {
@@ -182,13 +186,13 @@ a {
 /* Categories */
 .categories-wrapper {
     overflow-x: auto;
-    padding: 15px 0;
+    padding: 20px 0;
 }
 
 .categories-scroll {
     display: flex;
-    gap: clamp(15px, 3vw, 30px);
-    padding: 0 15px;
+    gap: 30px;
+    padding: 0 20px;
 }
 
 .categories-scroll::-webkit-scrollbar {
@@ -196,66 +200,96 @@ a {
 }
 
 .categories-scroll {
-    -ms-overflow-style: none;
     scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .category {
     flex: 0 0 auto;
-    text-align: center;
-    transition: transform 0.3s ease, color 0.3s ease;
-    cursor: pointer;
-}
 
-.category:hover {
-    transform: translateY(-5px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    text-decoration: none;
+    text-align: center;
+
+    min-width: 95px;
 }
 
 .circle {
-    width: clamp(50px, 8vw, 80px);
-    height: clamp(50px, 8vw, 80px);
-    border-radius: 50%;
-    background: linear-gradient(145deg, #f0f0f0, #d9d9d9);
+    width: 68px;
+    height: 68px;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: clamp(16px, 4vw, 24px);
-    margin: auto;
-    transition: transform 0.4s ease, background 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
+
+    border-radius: 18px;
+
+    background: #fff;
+
+    border: 1px solid rgba(0, 0, 0, 0.08);
+
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.05);
+
+    transition:
+        transform .25s ease,
+        box-shadow .25s ease,
+        border-color .25s ease,
+        background .25s ease;
 }
 
-.category:hover .circle {
-    background: var(--main-button);
-    color: #fff;
-    box-shadow: 0 6px 15px rgba(0, 128, 128, 0.3), 0 0 10px rgba(0, 128, 128, 0.2);
-    transform: scale(1.2);
+.circle .material-symbols-outlined {
+    font-size: 32px;
+    line-height: 1;
+    color: #666;
+
+    transition: color .25s ease;
 }
 
 .category p {
-    font-family: "Inter", "Poppins", sans-serif;
-    margin-top: 6px;
-    font-size: clamp(10px, 2.5vw, 14px);
-    font-weight: bold;
-    transition: transform 0.4s ease, color 0.4s ease;
+    margin-top: 10px;
+
+    font-family: Inter, sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+
+    color: #444;
+
+    transition: color .25s ease;
 }
 
-.category:hover p {
+.category:hover .circle {
     transform: translateY(-3px);
+
+    border-color: rgba(0, 128, 128, .25);
+
+    box-shadow:
+        0 8px 20px rgba(0, 0, 0, .08);
+}
+
+.category:hover .material-symbols-outlined {
     color: var(--main-button);
 }
 
-/* Active category */
+.category:hover p {
+    color: var(--main-button);
+}
+
+/* ACTIVE CATEGORY */
 .category.active .circle {
-    background: var(--main-button);
-    color: #fff;
-    box-shadow: 0 6px 15px rgba(0, 128, 128, 0.3), 0 0 10px rgba(0, 128, 128, 0.2);
-    transform: scale(1.2);
+    border-color: var(--main-button);
+    background: rgba(0, 128, 128, 0.08);
+}
+
+.category.active .material-symbols-outlined {
+    color: var(--main-button);
 }
 
 .category.active p {
     color: var(--main-button);
-    font-weight: bold;
-    transform: translateY(-3px);
 }
 
 /* Main */
@@ -322,40 +356,66 @@ footer .footer-links a:hover {
 }
 
 footer .social-icons {
-    margin: 15px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 20px 0;
 }
 
 footer .social-icons a {
-    color: #f1f1f1;
-    font-size: clamp(18px, 5vw, 30px);
-    margin-right: 15px;
-    transition: color 0.3s ease;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #f5f5f5;
+    font-size: 18px;
+    text-decoration: none;
+    transition:
+        transform 0.25s ease,
+        background-color 0.25s ease,
+        border-color 0.25s ease,
+        color 0.25s ease;
+        box-shadow: 0.25s ease;
 }
 
+footer .social-icons a:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+}
+
+/* Brand colors on hover */
 footer .social-icons a.facebook:hover {
-    color: #0562ad;
+    background: #1877f2;
+    border-color: #1877f2;
+    color: #fff;
 }
 
 footer .social-icons a.twitter:hover {
-    color: #1da1f2;
+    background: #000000;
+    border-color: #000000;
+    color: #fff;
 }
 
 footer .social-icons a.instagram:hover {
-    color: #741b60;
+    background: #e4405f;
+    border-color: #e4405f;
+    color: #fff;
 }
 
 footer .social-icons a.whatsapp:hover {
-    color: green;
+    background: #25d366;
+    border-color: #25d366;
+    color: #fff;
 }
 
 footer .social-icons a.telegram:hover {
-    color: #0088cc;
-}
-
-footer p {
-    font-family: "Inter", "Poppins", sans-serif;
-    margin-top: 15px;
-    font-size: clamp(12px, 2.5vw, 14px);
+    background: #0088cc;
+    border-color: #0088cc;
+    color: #fff;
 }
 
 p {
@@ -363,7 +423,6 @@ p {
 }
 
 /* backtotop.css */
-
 .back-to-top {
     position: fixed;
     bottom: 100px;
@@ -382,8 +441,7 @@ p {
     border-radius: 50%;
     box-shadow: 0 4px 10px rgba(0, 128, 128, 0.3);
     transition: all 0.3s ease;
-    display: none;
-    /* Hidden by default */
+    display: none; /* Hidden by default */
     z-index: 999;
 
 }
@@ -395,32 +453,38 @@ p {
 }
 
 
-/* =============================
-   1. HEADER AD (ISOLATED + CLEAN)
-   ============================= */
+/* =============
+    HEADER AD
+   ============= */
 
 #header-ad.zone-header {
     width: 100% !important;
-    height: 90px !important;
+    max-height: 90px !important;
     background: #f2f2f2 !important;
     position: relative !important;
     overflow: hidden !important;
     display: block !important;
-    max-height: 90px !important;
     opacity: 1 !important;
-    transition: max-height 0.5s ease, opacity 0.4s ease !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transition: max-height 0.55s ease, opacity 0.4s ease !important;
 }
 
 /* CLOSED STATE */
 #header-ad.zone-header.closed {
     max-height: 0 !important;
     opacity: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     pointer-events: none !important;
 }
 
-/* FORCE HEADER LAYOUT (PREVENT ARTICLE STYLES LEAKING) */
+
+/* FORCE HEADER LAYOUT */
 #header-ad .ad-wrapper,
-#header-ad .ad-box {
+#header-ad .ad-box,
+#header-ad .ad-link,
+#header-ad .raw-html-ad {
     width: 100% !important;
     max-width: 100% !important;
     height: 90px !important;
@@ -430,6 +494,11 @@ p {
     overflow: hidden !important;
 }
 
+/* HIDE LABEL */
+#header-ad .ad-label {
+    display: none !important;
+}
+
 /* MEDIA */
 #header-ad img,
 #header-ad video,
@@ -437,6 +506,7 @@ p {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
+    object-position: center !important;
     display: block !important;
 }
 
@@ -462,9 +532,9 @@ p {
 }
 
 
-/* =============================
-   2. FOOTER AD (ISOLATED + CLEAN)
-   ============================= */
+/* ===========
+    FOOTER AD
+   =========== */
 
 #footer-ad.zone-footer {
     width: 100% !important;
@@ -476,9 +546,9 @@ p {
     overflow: hidden !important;
     display: block !important;
     z-index: 9999 !important;
-    transform: translateY(0) !important;
     opacity: 1 !important;
-    transition: transform 0.5s ease, opacity 0.4s ease !important;
+    transform: translateY(0) !important;
+    transition: transform 0.55s ease, opacity 0.4s ease !important;
 }
 
 /* CLOSED STATE */
@@ -488,9 +558,12 @@ p {
     pointer-events: none !important;
 }
 
-/* FORCE FOOTER LAYOUT (STOP AD SYSTEM COLLAPSE) */
+
+/* FORCE FOOTER LAYOUT */
 #footer-ad .ad-wrapper,
-#footer-ad .ad-box {
+#footer-ad .ad-box,
+#footer-ad .ad-link,
+#footer-ad .raw-html-ad {
     width: 100% !important;
     max-width: 100% !important;
     height: 90px !important;
@@ -500,6 +573,11 @@ p {
     overflow: hidden !important;
 }
 
+/* HIDE LABEL */
+#footer-ad .ad-label {
+    display: none !important;
+}
+
 /* MEDIA */
 #footer-ad img,
 #footer-ad video,
@@ -507,6 +585,7 @@ p {
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
+    object-position: center !important;
     display: block !important;
 }
 
@@ -531,9 +610,9 @@ p {
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
-/* =============================
-   VIBENATION MASTER SIDEBAR
-   ============================= */
+/* =================
+    MASTER SIDEBAR
+   ================= */
 .zone-sidebar {
     width: 330px;
     flex-shrink: 0;
@@ -795,6 +874,58 @@ img.loaded {
         width: 100%;
     }
 
+    .categories-wrapper {
+        position: relative;
+        overflow-x: auto;
+    }
+
+    .categories-wrapper::after {
+        content: "";
+
+        position: absolute;
+        top: 0;
+        right: 0;
+
+        width: 48px;
+        height: 100%;
+
+        pointer-events: none;
+        z-index: 2;
+
+        background: linear-gradient(
+            to right,
+            rgba(245, 245, 245, 0),
+            rgba(245, 245, 245, 0.65),
+            rgba(245, 245, 245, 1)
+        );
+    }
+
+    .categories-scroll {
+        gap: 14px;
+        padding: 0 12px;
+    }
+
+    .category {
+        min-width: 62px;
+    }
+
+    .circle {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+    }
+
+    .circle .material-symbols-outlined {
+        font-size: 22px;
+    }
+
+    .category p {
+        margin-top: 6px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
     .news-detail-container, 
     .category-page-container {
         display: block !important; 
@@ -911,5 +1042,15 @@ img.loaded {
     #back-to-top, .Top {
         right: 15px !important;
         bottom: 85px !important;
+    }
+
+    footer .social-icons {
+        gap: 10px;
+    }
+
+    footer .social-icons a {
+        width: 38px;
+        height: 38px;
+        font-size: 16px;
     }
 }

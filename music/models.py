@@ -1,5 +1,5 @@
 import os
-from .utils import clean_mp3_tags
+from .utils.clean_tags import clean_mp3_tags
 from django.db import models
 from django.utils.text import slugify
 from taggit_autosuggest.managers import TaggableManager

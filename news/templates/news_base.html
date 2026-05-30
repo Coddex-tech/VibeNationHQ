@@ -9,58 +9,79 @@
 {% block categories %}
 <div class="categories-wrapper">
     <div class="categories-scroll">
+
         <a href="{% url 'news:entertainment' %}"
             class="category {% if request.path == '/news/category/entertainment/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-clapperboard"></i></div>
-            <p>Entertainments</p>
+            <div class="circle">
+                <span class="material-symbols-outlined">movie</span>
+            </div>
+            <p>Entertainment</p>
         </a>
 
         <a href="{% url 'news:politics' %}"
             class="category {% if request.path == '/news/category/politics/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-landmark"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">account_balance</span>
+            </div>
             <p>Politics</p>
         </a>
 
         <a href="{% url 'news:lifestyle' %}"
             class="category {% if request.path == '/news/category/lifestyle/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-spa"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">spa</span>
+            </div>
             <p>Lifestyle</p>
         </a>
 
         <a href="{% url 'news:technology' %}"
             class="category {% if request.path == '/news/category/technology/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-microchip"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">memory</span>
+            </div>
             <p>Technology</p>
         </a>
 
-        <a href="{% url 'news:sport' %}" class="category {% if request.path == '/news/category/sport/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-futbol"></i></div>
+        <a href="{% url 'news:sport' %}"
+            class="category {% if request.path == '/news/category/sport/' %}active{% endif %}">
+            <div class="circle">
+                <span class="material-symbols-outlined">sports_soccer</span>
+            </div>
             <p>Sport</p>
         </a>
 
         <a href="{% url 'news:music-news' %}"
             class="category {% if request.path == '/news/category/music-news/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-music"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">music_note</span>
+            </div>
             <p>Music News</p>
         </a>
 
         <a href="{% url 'news:event' %}"
             class="category {% if request.path == '/news/category/event/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-calendar-days"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">event</span>
+            </div>
             <p>Event</p>
         </a>
 
         <a href="{% url 'news:education' %}"
             class="category {% if request.path == '/news/category/education/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-graduation-cap"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">school</span>
+            </div>
             <p>Education</p>
         </a>
 
         <a href="{% url 'news:opinion' %}"
             class="category {% if request.path == '/news/category/opinion/' %}active{% endif %}">
-            <div class="circle"><i class="fa-solid fa-comments"></i></div>
+            <div class="circle">
+                <span class="material-symbols-outlined">forum</span>
+            </div>
             <p>Opinion</p>
         </a>
+
     </div>
 </div>
 

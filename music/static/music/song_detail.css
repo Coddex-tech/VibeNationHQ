@@ -15,6 +15,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+p {
+  font-size: 1.3rem;
+}
+
 /* ===== MAIN LAYOUT ===== */
 .song-detail-container {
   display: flex;
@@ -168,38 +172,86 @@ body {
 
 /* ===== STICKY SIDEBAR ===== */
 .song-detail-sidebar {
-  width: 300px;
-  position: -webkit-sticky;
-  position: sticky;
-  top: 100px;
-  height: fit-content;
-  align-self: flex-start;
-  background: #fdf5e6;
-  border: 1px solid #e9ecef;
-  border-radius: 16px;
-  padding: 20px;
-  flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    width: 300px;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 100px;
+    height: fit-content;
+    align-self: flex-start;
+    background: #fdf5e6;
+    border: 1px solid #e9ecef;
+    border-radius: 10px;
+    padding: 20px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
 }
 
-.zone-sidebar .ad-container,
-.zone-sidebar [class*="ad-"], 
-.zone-sidebar div:has(img) {
+/* RESET WRAPPERS */
+.zone-sidebar .ad-wrapper,
+.zone-sidebar .ad-link,
+.zone-sidebar .raw-html-ad {
     width: 100% !important;
     max-width: 100% !important;
-    padding: 0 !important;
     margin: 0 !important;
+    padding: 0 !important;
     display: block !important;
 }
 
-/* Forces the image to fill the sidebar width */
-.zone-sidebar img {
+/* ===== PROFESSIONAL SIDEBAR SIZE ===== */
+.zone-sidebar .ad-box {
     width: 100% !important;
-    height: auto !important;
+    max-width: 300px !important;
+    height: 600px !important;
+    margin: 0 auto !important;
+    overflow: hidden !important;
+    border-radius: 12px !important;
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #111 !important;
+}
+
+/* ===== FIX LABEL CENTERING (IMPORTANT FIX) ===== */
+.zone-sidebar .ad-label {
+    width: 100% !important;
+    text-align: center !important;
+    display: block !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 1.5px !important;
+    color: #777 !important;
+    margin: 0 0 10px 0 !important;
+    text-transform: uppercase !important;
+}
+
+/* ===== AD LINK / HTML WRAPPER ===== */
+.zone-sidebar .ad-link,
+.zone-sidebar .raw-html-ad {
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* ===== IMAGE / VIDEO / RESPONSIVE AD) ===== */
+.zone-sidebar img,
+.zone-sidebar video,
+.zone-sidebar .responsive-ad-media {
+    width: 100% !important;
+    height: 100% !important;
     display: block !important;
     object-fit: cover !important;
-    border-radius: 12px;
+    object-position: center !important;
 }
+
+/* OPTIONAL SAFETY FOR ROUNDED MEDIA INSIDE BOX */
+.zone-sidebar img,
+.zone-sidebar video {
+    border-radius: 12px !important;
+}
+
 
 /* ===== MOBILE ADAPTATION ===== */
 @media (max-width: 900px) {
@@ -210,6 +262,10 @@ body {
     width: 100%;
   }
 
+  p {
+  font-size: 1.1rem;
+  }
+  
   .song-detail-content {
     width: 100%;
   }
@@ -225,6 +281,10 @@ body {
   .vibe-download-btn {
     width: 100%;
     padding: 16px 20px;
+  }
+
+  .zone-sidebar .ad-box {
+    height: 250px !important;
   }
 
   .zone-sidebar {
@@ -247,6 +307,10 @@ body {
     display: block !important;
     border-radius: 12px !important;
   }
+}
+
+.zone-sidebar .ad-box * {
+    box-sizing: border-box !important;
 }
 
 

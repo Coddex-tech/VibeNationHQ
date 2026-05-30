@@ -58,12 +58,7 @@ class News(models.Model):
     expires_at = models.DateTimeField(blank=True, null=True, help_text="Set an expiry date for this sponsored post.")
     is_featured = models.BooleanField(default=False)
     content = CKEditor5Field('Content', config_name='default') # CKEditor
-    author = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True
-    )
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     date_published = models.DateTimeField(default=timezone.now, help_text="You can set a future date to schedule this post.")
     updated_at = models.DateTimeField(auto_now=True)
     views = models.PositiveIntegerField(default=0)
@@ -159,7 +154,7 @@ class NewsComment(models.Model):
                 collect(reply)
 
         collect(self)
-        return sorted(all_replies, key=lambda r: r.created_at)
+        return sorted(all_replies, key=lambda r: (r.created_at, r.id))
 
     @property
     def replying_to(self):

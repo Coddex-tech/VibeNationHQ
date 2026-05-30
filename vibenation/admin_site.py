@@ -150,7 +150,7 @@ class MyUserAdmin(BaseUserAdmin, UnfoldModelAdmin):
 class MyGroupAdmin(BaseGroupAdmin, UnfoldModelAdmin):
     filter_horizontal = ("permissions",)
 
-class MasterAdminSite(UnfoldAdminSite):
+class MasterAdminSite(UnfoldAdminSite, OTPAdminSite):
     site_header = "VibeNationHQ Boss Portal"
     site_title = "Master Portal"
     login_template = "admin/login.html"

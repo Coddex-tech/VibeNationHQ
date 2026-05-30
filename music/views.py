@@ -2,7 +2,8 @@ from django.db.models import Q, Count, F, Exists, OuterRef
 from django.http import FileResponse, Http404
 from django.core.paginator import Paginator
 from django.conf import settings
-from .utils import clean_mp3_tags
+from .utils.get_media import get_primary_media, attach_media
+from .utils.clean_tags import clean_mp3_tags
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Song, DJ, Album, Artist, MusicComment, SongView
 from django.contrib.contenttypes.models import ContentType
@@ -19,7 +20,7 @@ from django.http import JsonResponse
 
 
 
-# === Helper Function ===
+# === Helper Functions ===
 def get_client_ip(request):
     """Get the visitor’s IP address."""
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -28,6 +29,7 @@ def get_client_ip(request):
     else:
         ip = request.META.get('REMOTE_ADDR')
     return ip
+# ------ END OF HELPER FUNCTION ------
 
 # ==================================================================
 # MUSIC HOMEPAGE
@@ -53,6 +55,12 @@ def music(request):
         # Cache for 30 minutes (1800 seconds)
         cache.set('trending_now', list(trending_now), 1800) # 7 days in seconds
 
+    # ATTACHING MEDIA WITH HELPER FUNCTION
+    newest_songs = attach_media(newest_songs)
+    gospels = attach_media(gospels)
+    trending = attach_media(trending_now)
+    all_djs = attach_media(all_djs)
+
     context = {
         "newest_songs": newest_songs,
         "gospels": gospels,
@@ -77,9 +85,10 @@ def latest_music(request):
     paginator = Paginator(newest_songs, 20)  
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+
+    page_obj = attach_media(page_obj)    
     
     context = {
-        "newest_songs": newest_songs,
         "page_obj": page_obj,
     }
     return render(request, "music/latest_music.html", context)
@@ -98,6 +107,7 @@ def gospel(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    page_obj = attach_media(page_obj)
     context = {
         "page_obj": page_obj,
     }
@@ -115,6 +125,8 @@ def mixtape(request):
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
 
+    page_obj = attach_media(page_obj)
+    
     context = {
         "page_obj": page_obj,
     }
@@ -127,11 +139,13 @@ def mixtape(request):
 # =======================================================================
 def trending_song(request):
     now = timezone.now()
-    
+
     def get_trending(cache_key, days, limit=21):
         data = cache.get(cache_key)
+
         if not data:
             time_threshold = now - timedelta(days=days)
+
             data = list(
                 Song.objects.annotate(
                     recent_views=Count(
@@ -139,19 +153,30 @@ def trending_song(request):
                         filter=Q(song_views__timestamp__gte=time_threshold)
                     )
                 )
-                .prefetch_related('artists') # CRITICAL: Prevents N+1 in the template
+                .prefetch_related('artists')
                 .order_by('-recent_views')[:limit]
             )
-            # Use 600s for daily, 1800s for weekly/monthly
-            cache_duration = 600 if days == 1 else 1800
+
+            # Attach unified media
+            data = attach_media(data)
+
+            # Cache processed objects
+            cache_duration = 800 if days == 1 else 1800
             cache.set(cache_key, data, cache_duration)
+
         return data
+
+    trending_songs = Song.objects.prefetch_related(
+        'artists'
+    ).order_by('-views')[:40]
+
+    trending_songs = attach_media(trending_songs)
 
     context = {
         'trending_now': get_trending('trending_now', 1),
         'trending_week': get_trending('trending_week', 7),
         'trending_month': get_trending('trending_month', 30),
-        'trending_songs': Song.objects.prefetch_related('artists').order_by('-views')[:40],
+        'trending_songs': trending_songs,
     }
     return render(request, "music/trending.html", context)
 # -----------------------------------------------------------------------
@@ -183,12 +208,14 @@ def album_detail(request, slug):
 # =======================================================================
 def african_music(request):
     all_africas = Song.objects.filter(
-        category__name="Africa"
+        category="Africa"
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_africas, 15)
     page_number = request.GET.get("page")
     page_obj = paginator.get_page(page_number)
+
+    page_obj = attach_media(page_obj)
 
     context = {
         "page_obj": page_obj,
@@ -267,6 +294,7 @@ def song_detail(request, slug):
     
     context = {
         'song': obj,
+        "media": get_primary_media(obj), # For the thumbnail
         'artists': obj.artists.all(),  # Properly extracts the DJ/Artist objects
         'music_comments': music_comments,
         'form': form,
@@ -277,16 +305,14 @@ def song_detail(request, slug):
     }
     return render(request, 'music/song_detail.html', context)
 
-COMMENTS_PER_LOAD = 10
+COMMENTS_PER_LOAD = 5
 REPLIES_PER_LOAD = 3
 
-# --- 1. LOAD MAIN COMMENTS ---
+# --- LOAD MAIN COMMENTS ---
 def load_more_music_comments(request, song_id):
     offset = int(request.GET.get('offset', 0))
     song = get_object_or_404(Song, id=song_id)
 
-    # CRITICAL: We only pull parents (parent__isnull=True)
-    # This keeps Amoto out of the main list and nested inside Victor
     all_parents = MusicComment.objects.filter(
         song=song, 
         parent__isnull=True, 
@@ -297,7 +323,6 @@ def load_more_music_comments(request, song_id):
     
     html_output = ""
     for comment in next_batch:
-        # We render each "Victor" using the partial
         html_output += render_to_string(
             'music/partials/music_comment.html', 
             {'comment': comment}, 
@@ -310,7 +335,7 @@ def load_more_music_comments(request, song_id):
     })
 
 
-# --- 2. LOAD NESTED REPLIES ---
+# --- LOAD NESTED REPLIES ---
 def load_more_music_replies(request, comment_id):
     offset = int(request.GET.get('offset', 0))
     comment = get_object_or_404(MusicComment, id=comment_id)
@@ -376,6 +401,8 @@ def search(request):
     # Artist results
     artists = Artist.objects.filter(name__icontains=query)[:10]
 
+    songs_page = attach_media(songs_page)
+
     context = {
         'query': query,
         'page_obj': songs_page,
@@ -426,7 +453,6 @@ def download_song(request, slug):
         response.closed_callback = cleanup # Custom attribute or use a middleware/wrapper
         
         #  Increment count
-        from django.db.models import F
         Song.objects.filter(id=song.id).update(download=F('download') + 1)
         
         return response

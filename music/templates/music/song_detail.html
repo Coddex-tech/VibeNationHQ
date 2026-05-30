@@ -18,6 +18,22 @@
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
 {% endblock %}
 
+{% block social_meta %}
+<meta property="og:title" content="{% if is_dj %}{{ song.dj_name }}{% else %}{{ song.title }}{% endif %}">
+<meta property="og:description" content="{{ song.description|striptags|truncatechars:155 }}">
+<meta property="og:type" content="song">
+<meta property="og:url" content="{{ request.build_absolute_uri }}">
+{% if not is_dj and song.cover_image %}
+<meta property="og:image" content="https://vibenationhq.com{{ song.cover_image.url }}">
+{% elif not is_dj and song.original_cover %}
+<meta property="og:image" content="https://vibenationhq.com{{ song.original_cover.url }}">
+{% elif is_dj and song.dj_cover %}
+<meta property="og:image" content="https://vibenationhq.com{{ song.dj_cover.url }}">
+{% else %}
+<meta property="og:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
+{% endif %}
+{% endblock %}
+
 {% block structured_data %}
 <script type="application/ld+json">
 [
@@ -58,7 +74,7 @@
     ],
     "publisher": {
       "@type": "Organization",
-      "name": "VibeNation",
+      "name": "VibeNationHQ",
       "logo": {
         "@type": "ImageObject",
         "url": "https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}"
@@ -120,15 +136,7 @@
     </div>
 
     <div class="song-cover-wrapper">
-      {% if not is_dj and song.cover_image %}
-      <img loading="lazy" src="{{ song.cover_image.url }}" alt="{{ song.title }}" class="vibe-cover">
-      {% elif not is_dj and song.original_cover %}
-      <img loading="lazy" src="{{ song.original_cover.url }}" alt="{{ song.title }}" class="vibe-cover">
-      {% elif is_dj and song.dj_cover %}
-      <img loading="lazy" src="{{ song.dj_cover.url }}" alt="{{ song.dj_name }}" class="vibe-cover">
-      {% else %}
-      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover" class="vibe-cover">
-      {% endif %}
+      <img loading="lazy" src="{{ media.url }}" alt="{{ song.title }}" class="vibe-cover">
     </div>
 
     <section class="song-info-meta">
@@ -212,7 +220,7 @@
 
 {% if artists %}
 <div class="artist-section">
-  <h3>{% if is_dj %}DJ Info{% else %}Artist Info{% endif %}</h3>
+  <h3>{% if is_dj %}DJ Artist Info{% else %}Artist Info{% endif %}</h3>
   {% for artist in artists %}
   <div class="artist-bio" style="margin-bottom: 15px;">
     <h3>{{ artist.name }}</h3>

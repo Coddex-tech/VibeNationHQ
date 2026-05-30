@@ -1,3 +1,4 @@
+{% load news_extras %}
 <div class="comment-item" id="comment-{{ comment.id }}">
   <div class="comment-left">
     <div class="comment-avatar">{{ comment.name|first|upper }}</div>
@@ -7,9 +8,17 @@
     <p class="comment-text">{{ comment.content }}</p>
 
     <div class="comment-meta">
-      <span>{{ comment.created_at|timesince }} ago</span>
+      <span>{{ comment.created_at|hybrid_time }}</span>
       <a href="javascript:void(0)" onclick="handleReplyClick('{{ comment.id }}', '{{ comment.name|upper }}')">Reply</a>
     </div>
+
+    {% with total_replies=comment.get_all_replies|length %}
+    {% if total_replies > 0 %}
+    <div class="reply-count">
+      {{ total_replies }} Repl{{ total_replies|pluralize:"y,ies" }}
+    </div>
+    {% endif %}
+    {% endwith %}
 
     <div class="comment-replies">
       <div id="reply-container-{{ comment.id }}">

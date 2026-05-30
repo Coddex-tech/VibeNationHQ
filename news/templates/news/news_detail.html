@@ -132,10 +132,28 @@ entertainment news and updates on VibeNation.{% endblock %}
     <h1 class="headline">{{ news.title }}</h1>
 
     <div class="meta-wrapper">
-      <p class="authors">Posted By <span class="authors_name">{{ news.author.get_full_name|default:news.author.username
-          }}</span></p>
-      <p class="date">{{ news.date_published|hybrid_time }}</p>
+
+  <div class="meta-left">
+    <span class="meta-label">Posted by</span>
+
+    <div class="author-chip">
+      <span class="material-symbols-outlined profile-picture">
+        account_circle
+      </span>
+
+      <span class="author-name">
+        {{ news.author.get_full_name|default:news.author.username }}
+      </span>
     </div>
+  </div>
+
+  <div class="meta-right">
+    <span class="meta-date">
+      {{ news.date_published|hybrid_time }}
+    </span>
+  </div>
+
+</div>
 
     <div class="main-category-bar">
       <div class="category-scroll-wrapper">
@@ -280,6 +298,8 @@ entertainment news and updates on VibeNation.{% endblock %}
   </aside>
 </div>
 
+{% block scripts %}
 <script src="{% static 'js/news_comment.js' %}"></script>
+{% endblock %}
 
 {% endblock %}

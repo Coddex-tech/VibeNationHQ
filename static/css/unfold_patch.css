@@ -1,0 +1,131 @@
+/* static/css/unfold_patch.css */
+
+/* ==========================================================================
+   1. MOBILE SCREEN LAYOUT RESET (Screens smaller than 1024px)
+   ========================================================================== */
+@media (max-width: 1023px) {
+    /* Step 1: Force root viewports to stick closely to physical phone boundaries */
+    html, body {
+        max-width: 100vw !important;
+        overflow-x: hidden !important;
+    }
+
+    /* Step 2: Fix margins ONLY on the specific content module wrappers.
+       This target safely bypasses nav bars, sidebar drawers, and profile dropouts. */
+    main#content, 
+    #content-start, 
+    .unfold-content-wrapper,
+    div.unfold-content {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        /* Pulls content tightly outward to look clean on compact displays */
+        padding-left: 0.12rem !important;
+        padding-right: 0.12rem !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Step 3: Prevent inner form clusters and textareas from pushing the page horizontally */
+    form, .form-row, .field-box, .module, fieldset, .unfold-form-row,
+    div[id*="-group"], .aligned, .fieldset {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 0.08rem !important;
+        padding-right: 0.08rem !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ==========================================================================
+       CKEDITOR CONTAINER ENGINE RESPONSIVE WRAPPING
+       ========================================================================== */
+    .django-ckeditor-widget, .cke, .cke_inner, .cke_reset, .cke_editor,
+    table[class*="cke_"], div[id*="cke_"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        box-sizing: border-box !important;
+        display: block !important;
+    }
+
+    .cke_top {
+        width: 100% !important;
+        max-width: 100% !important;
+        white-space: normal !important;
+        display: inline-block !important;
+        box-sizing: border-box !important;
+    }
+    
+    .cke_toolbox {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 3px !important;
+    }
+
+    .cke_contents, .cke_wysiwyg_frame, .cke_wysiwyg_div, iframe[class*="cke_"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* ==========================================================================
+       POP-UP CALENDAR & CLOCK DROPDOWN SELECTION FIXED FOCUS
+       ========================================================================= */
+    .calendarbox, 
+    .clockbox, 
+    div[class*="ui-datepicker"], 
+    div[class*="picker"], 
+    .flatpickr-calendar,
+    .unfold-calendar {
+        max-width: 92vw !important;
+        position: fixed !important; 
+        z-index: 9999 !important; /* Floats safely ahead of content stacks */
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important; 
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* ==========================================================================
+       STICKY ACTIONS WORKBAR AND SCROLL FOOTERS
+       ========================================================================== */
+    div.fixed.bottom-0, 
+    div[class*="fixed"][class*="bottom-0"] {
+        left: 0 !important;
+        right: 0 !important;
+        width: calc(100% - 0.5rem) !important;
+        margin: 0.25rem auto !important;
+        box-sizing: border-box !important;
+        z-index: 50 !important;
+    }
+
+    .overflow-x-auto, .changelist-form, #changelist, .unfold-table-wrapper {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        display: block !important;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* ==========================================================================
+   2. DESKTOP WORKSPACE CONFIGURATION (Monitors 1024px and up)
+   ========================================================================== */
+@media (min-width: 1024px) {
+    main#content,
+    #content-start,
+    .unfold-dashboard,
+    div.flex-1.min-w-0.overflow-x-hidden {
+        margin-left: 18rem !important;
+        padding-left: 2rem !important;
+        padding-right: 2rem !important;
+    }
+
+    .unfold-dashboard > div {
+        max-width: 100% !important;
+    }
+}
