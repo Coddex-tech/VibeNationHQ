@@ -31,9 +31,9 @@
   <meta name="twitter:image" content="https://vibenationhq.com{% static 'images/VibeNation-logo.png' %}">
   {% endblock %}
 
-  <link rel="icon" type="image/png" href="{% static 'images/VibeNation_favicon.png' %}">
+  <link rel="icon" type="image/png" href="{% static 'images/vibe_cream_favicon.png' %}">
   <link rel="manifest" href="{% static 'manifest.json' %}">
-  <link rel="apple-touch-icon" href="{% static 'images/VibeNation_favicon.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'images/apple_cream_favicon.png' %}">
   <meta name="theme-color" content="#008080">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,7 +57,7 @@
 
 <body>
   <div id="splash-screen">
-    <img src="{% static 'images/vn_splash-logo-white.png' %}?v=1" class="splash-logo" alt="VibeNation Loading">
+    <img src="{% static 'images/vn_splash-logo-cream.webp' %}?v=1" class="splash-logo" alt="VibeNation Loading">
   </div>
 
   <script>
@@ -91,13 +91,13 @@
 
   <!-- Header -->
   <header class="header">
-    <a href="{% url 'news:homepage' %}">
-      <div class="logo">VIBENATION</div>
+    <a href="{% url 'news:homepage' %}" class="logo-link">
+      <img src="{% static 'images/vibenation_nav_logo.png' %}" alt="VibeNationHQ Logo" class="navbar-logo">
     </a>
 
     <div class="nav-wrapper">
       <nav class="nav">
-        <ul style="gap: 40px;">
+        <ul class="nav-list-container">
           <li class="{% if request.path == '/' %}active{% endif %}">
             <a href="/">Home</a>
           </li>
@@ -133,7 +133,9 @@
 
   <!-- Footer -->
   <footer>
-    <h3><a href="{% url 'news:homepage' %}">VIBENATION</a></h3>
+    <a href="{% url 'news:homepage' %}" class="logo-link">
+      <img src="{% static 'images/vibenation_nav_logo.png' %}" alt="VibeNationHQ Logo" class="navbar-logo">
+    </a>
     <div class="footer-links">
       <a href="{% url 'about' %}">About Us</a>
       <a href="{% url 'advertise' %}">Advertise With Us</a>

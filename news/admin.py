@@ -22,7 +22,7 @@ class NewsAdmin(UnfoldModelAdmin):
     form = NewsAdminForm
     list_display = ('go_to_live', 'title', 'get_categories', 'date_published', 'views', 'get_author_name', 'thumbnail_preview')
     list_display_links = ('title',)
-    search_fields = ('title', 'category__name', 'author')
+    search_fields = ('title', 'category__name', 'author__username', 'author__first_name')
     prepopulated_fields = {'slug': ('title',)}
     filter_horizontal = ('category',)
     date_hierarchy = 'date_published'

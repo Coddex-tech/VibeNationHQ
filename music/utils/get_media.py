@@ -25,7 +25,7 @@ def get_primary_media(obj):
 
     return {
         "type": "image",
-        "url": "/media/logo/Media_cover_placeholder.webp",
+        "url": "/static/images/Media_cover_placeholder.webp",
         "alt": "Default Cover"
     }
 

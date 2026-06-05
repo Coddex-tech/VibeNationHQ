@@ -2,6 +2,13 @@
 
 {% load i18n static unfold %}
 
+{% block extrahead %}
+    {{ block.super }}
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/vibe_teal_favicon.png?v=1">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/vibe_teal_favicon.png?v=1">
+    <link rel="shortcut icon" href="/static/images/vibe_teal_favicon.png?v=1" type="image/png">
+{% endblock %}
+
 {% block title %}
 VibeNation Boss Portal
 {% endblock %}

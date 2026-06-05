@@ -106,7 +106,7 @@
 
 <!-- main category grid section -->
 <section class="category-section">
-  <!-- <h2 class="category-title"><span class="icon-dot"></span> Events</h2> -->
+  <!-- <h2 class="category-title"><span class="icon-dot"></span> Education</h2> -->
 
   <div class="category-news-list">
     {% for news in page_obj %}
@@ -116,7 +116,7 @@
         <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
         {% endif %}
         <div class="news-info">
-          <!-- <small style="color: red;">{{ news.category.name }}</small> -->
+          <small style="color: red;">{{ current_category }}</small>
           <h4>{{ news.title }}</h4>
           <small>
             {{ news.date_published|hybrid_time }}
@@ -125,7 +125,7 @@
       </a>
     </div>
     {% empty %}
-    <p>No Event available yet.</p>
+    <p>No Education News available yet.</p>
     {% endfor %}
   </div>
 </section>

@@ -5,19 +5,19 @@
   "description": "VibeNation is Nigeria's premier source for breaking news, latest entertainment gist, trending music downloads, and premium video content - all with less data.",
   "icons": [
     {
-      "src": "/static/images/vn_icon-192.png",
+      "src": "/static/images/vibe_cream_icon.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/static/images/vn_icon-512.png",
+      "src": "/static/images/vibe_cream_icon_5.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/static/images/vn_icon-512.png",
+      "src": "/static/images/vibe_cream_icon_5.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

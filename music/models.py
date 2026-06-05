@@ -97,7 +97,7 @@ class Song(models.Model):
                     pass
 
             # TAG CLEANING
-            logo_path = os.path.join('media', 'logo', 'VibeNation_cover.png')
+            logo_path = os.path.join('static', 'images', 'VibeNation_cover.jpg')
             if self.audio_file and os.path.exists(logo_path):
                 artist_list = ", ".join([a.name for a in self.artists.all()])
                 clean_mp3_tags(self.audio_file.path, self.title, artist_list, logo_path)

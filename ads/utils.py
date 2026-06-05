@@ -15,30 +15,40 @@ def insert_dynamic_ads(content):
     # Get all active in-article ads
     active_ads = list(Advertisement.objects.filter(zone__name="In-Article", is_active=True))
     
+    # BUMPED THRESHOLD: Require at least 750 characters of real text before allowing another ad
+    characters_since_last_ad = 0
+    ad_position = 0
+
     for i, paragraph in enumerate(paragraphs):
-        # Always add the paragraph text back with its closing tag
         new_content += paragraph + "</p>"
         
-        is_ad_spot = (i == 1) or (i > 1 and (i - 1) % 4 == 0)
-
-        if is_ad_spot and (i < total_paragraphs - 1):
+        # Strip internal HTML tags to count actual reading characters
+        clean_text = paragraph.replace("<p>", "").strip()
+        characters_since_last_ad += len(clean_text)
+        
+        is_not_the_absolute_last = i < (total_paragraphs - 1)
+        
+        # Check if we've met the higher reading distance requirement
+        if is_not_the_absolute_last and characters_since_last_ad >= 750:
+            ad_position += 1
             
             if active_ads:
-                # Pick a random direct ad
                 ad = random.choice(active_ads)
-                
-                # Increment impression count silently
                 ad.impressions += 1
                 ad.save(update_fields=['impressions'])
-                
-                # Render direct ad
                 ad_html = render_to_string('ads/render_ads.html', {'ad': ad, 'zone_name': 'In-Article'})
-                wrapped_ad = f'<div class="article-ad" style="margin: 20px 0;">{ad_html}</div>'
-                new_content += wrapped_ad
             else:
-                # If no direct ads, fallback to AdSense/Default
                 ad_html = render_to_string('ads/render_ads.html', {'ad': None, 'zone_name': 'In-Article'})
-                wrapped_ad = f'<div class="article-ad" style="margin: 20px 0;">{ad_html}</div>'
-                new_content += wrapped_ad
+            
+            # Styled wrapper with a clean, low-key "ADVERTISEMENT" label above the slot
+            wrapped_ad = (
+                f'<div class="article-ad" data-ad-num="{ad_position}" style="margin: 25px 0; text-align: center;">'
+                f'{ad_html}'
+                f'</div>'
+            )
+            new_content += wrapped_ad
+            
+            # RESET character counter right after injection
+            characters_since_last_ad = 0
 
     return mark_safe(new_content)

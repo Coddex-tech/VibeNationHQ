@@ -469,6 +469,7 @@ def entertainment(request):
         'latest_entertainment': latest_entertainment,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Entertainment',
     }
     return render(request, 'news/entertainment.html', context)
 
@@ -549,6 +550,7 @@ def politics(request):
         'latest_political': latest_political,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Politics',
     }
     return render(request, 'news/politics.html', context)
 # ---------------------------------------------------------------------------
@@ -630,6 +632,7 @@ def lifestyle(request):
         'latest_lifestyle': latest_lifestyle,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Lifestyle',
     }
     return render(request, 'news/lifestyle.html', context)
 
@@ -710,6 +713,7 @@ def technology(request):
         'latest_technology': latest_technology,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Technology',
     }
     return render(request, 'news/technology.html', context)
 
@@ -788,6 +792,7 @@ def music_news(request):
         'latest_music_news': latest_music_news,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Music News',
     }
     return render(request, 'news/music_news.html', context)
 # --------------------------------------------------------------------
@@ -868,6 +873,7 @@ def sport(request):
         'latest_sport': latest_sport,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Sport',
     }
     return render(request, 'news/sport_news.html', context)
 # -----------------------------------------------------------------------
@@ -947,6 +953,7 @@ def event(request):
         'latest_event': latest_event,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Event',
     }
     return render(request, 'news/event.html', context)
 # ------------------------------------------------------------------------
@@ -1027,6 +1034,7 @@ def education(request):
         'latest_education': latest_education,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Education',
     }
     return render(request, 'news/education.html', context)
 # -----------------------------------------------------------------------
@@ -1052,6 +1060,8 @@ def opinion(request):
 
     # News card
     used_ids = [n.id for n in top_opinion]
+    used_ids += [n.id for n in latest_opinion]
+    
     if featured_opinion:
         used_ids.append(featured_opinion.id)
     
@@ -1084,5 +1094,6 @@ def opinion(request):
         'latest_opinion': latest_opinion,
         'page_obj': page_obj,
         'mini_featured_news': mini_featured_news,
+        'current_category': 'Opinion',
     }
     return render(request, 'news/opinion.html', context)

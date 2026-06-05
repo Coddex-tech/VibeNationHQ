@@ -170,3 +170,19 @@
 #footer-ad .ad-label {
     display: none !important;
 }
+
+/* By default, show ALL throttled ads (Perfect for mobile scrolling layout) */
+.article-ad {
+    display: block;
+}
+
+/* 🖥️ DESKTOP DISPLAY RULES (Screens wider than 768px) */
+@media (min-width: 769px) {
+    /* Hide even-numbered ad breaks on desktop to ensure spacing remains elegant */
+    .article-ad[data-ad-num="2"],
+    .article-ad[data-ad-num="4"],
+    .article-ad[data-ad-num="6"],
+    .article-ad[data-ad-num="8"] {
+        display: none;
+    }
+}

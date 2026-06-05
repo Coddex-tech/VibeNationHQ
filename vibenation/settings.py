@@ -8,6 +8,7 @@ import os
 import environ
 from django.templatetags.static import static
 from django.urls import reverse_lazy
+from django.utils.safestring import mark_safe
 from pathlib import Path
 
 env = environ.Env(
@@ -159,14 +160,16 @@ WSGI_APPLICATION = 'vibenation.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        # Optimization for SQLite news sites:
-        'OPTIONS': {
-            'timeout': 20, # Helps prevent "Database is locked" errors during traffic spikes
-        }
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD', default=''),
+        'HOST': env('DB_HOST', default='127.0.0.1'),
+        'PORT': env.int('DB_PORT', default=5432),
     }
 }
+
+
 
 
 # Password validation
@@ -213,14 +216,15 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# --- PRODUCTION SECURITY ---
+# =================================
+# PRODUCTION & SECURITY SETTINGS
+# ================================
 if not DEBUG:
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
@@ -234,6 +238,7 @@ if not DEBUG:
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         },
     }
+    
     # Connect Django's "AWS" variables
     AWS_ACCESS_KEY_ID = env('R2_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = env('R2_SECRET_ACCESS_KEY')
@@ -247,10 +252,16 @@ if not DEBUG:
     AWS_QUERYSTRING_AUTH = False
     AWS_S3_REGION_NAME = 'auto' # Cloudflare R2 usually uses 'auto'
 
+# Global requirement for Unfold's responsive layout engines
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+SITE_ID = 1
+
 UNFOLD = {
     "SITE_TITLE": "VibeNation Admin",
     "SITE_HEADER": "VibeNation",
-    "SITE_SYMBOL": "shield",
+    "SITE_SYMBOL": lambda request: mark_safe(
+        f'<img src="{static("images/vibe_cream_favicon.png")}" class="w-10 h-10 object-contain" alt="VN Logo">'
+    ),
 
     "STYLES": [
         lambda request: static("css/unfold_patch.css"),
@@ -405,7 +416,3 @@ UNFOLD = {
         ],
     },
 }
-
-X_FRAME_OPTIONS = 'SAMEORIGIN'
-
-SITE_ID = 1

@@ -36,7 +36,7 @@ def hybrid_time(date):
     diff = now - date
 
     if diff < timedelta(minutes=1):
-        return "just now"
+        return "Just now"
     elif diff < timedelta(hours=24):
         from django.utils.timesince import timesince
         return f"{timesince(date)} ago"

@@ -176,7 +176,7 @@ entertainment news and updates on VibeNation.{% endblock %}
       <span class="ticker-label">TRENDING:</span>
       <marquee behavior="scroll" direction="left">
         {% for item in trending_news %}
-        <a href="{% url 'news:news_details' item.slug %}">{{ item.title }}</a> •
+        <a href="{% url 'news:news_details' item.slug %}">{{ item.title|truncatewords:6 }}</a> •
         {% endfor %}
       </marquee>
     </div>
@@ -218,6 +218,7 @@ entertainment news and updates on VibeNation.{% endblock %}
       </form>
 
       <div class="vn-comments-list" id="main-comments-container">
+        <h3 class="vn-comments-title">All Comments</h3>
         {% for comment in comments %}
         {% include 'news/partials/news_comment.html' with comment=comment %}
         {% empty %}

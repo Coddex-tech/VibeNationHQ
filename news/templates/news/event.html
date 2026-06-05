@@ -117,7 +117,7 @@
         <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
         {% endif %}
         <div class="news-info">
-          <!-- <small style="color: red;">{{ news.category.name }}</small> -->
+          <small style="color: red;">{{ current_category }}</small>
           <h4>{{ news.title }}</h4>
           <small>
             {{ news.date_published|hybrid_time }}

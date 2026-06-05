@@ -437,7 +437,7 @@ def download_song(request, slug):
 
     try:
         # Embed Branding
-        logo_path = os.path.join(settings.MEDIA_ROOT, 'logo', 'VibeNation_cover.png')
+        logo_path = os.path.join(settings.STATICFILES_DIRS[0], 'images', 'VibeNation_cover.jpg')
         clean_mp3_tags(temp_path, song.title, artist_names, logo_path)
 
         # We wrap the file so that os.remove is called ONLY after the file is sent
@@ -477,6 +477,7 @@ def songs_by_tag(request, tag_slug):
     page_number = request.GET.get('page')
     songs = paginator.get_page(page_number)
 
+    songs = attach_media(songs)
     return render(request, 'music/songs_by_tag.html', {
         'tag': tag,
         'songs': songs

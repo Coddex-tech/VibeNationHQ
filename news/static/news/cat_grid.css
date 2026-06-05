@@ -7,6 +7,14 @@
   grid-template-columns: repeat(2, 1fr); /* 2 per row on mobile */
 }
 
+.category-news-list small {
+  color: var(--text-muted);
+}
+
+.category-news-list a {
+    text-decoration: none;
+}
+
 /* === DESKTOP VIEW: 12-Column Math === */
 @media (min-width: 992px) {
   .category-news-list {
