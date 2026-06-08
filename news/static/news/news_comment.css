@@ -1,6 +1,7 @@
-/* ================================================= */
-/* ===== VIBENATION COMMENTS SECTION WRAPPER ======= */
-/* ================================================= */
+/* ==========================================================================
+   VIBENATION MAIN COMMENTS ENGINE STYLESHEET
+   ========================================================================== */
+
 .comments-wrapper {
   font-family: "Inter", "Poppins", sans-serif;
   width: 70%;
@@ -21,17 +22,17 @@ p:hover {
   margin-bottom: 12px;
 }
 
-/* --- The Main Container --- */
+/* --- The Main Base Feed Container --- */
 .vn-comments-list {
   background: #0c1414;
-  padding: 20px; /* Increased for better spacing */
+  padding: 20px;
   border-radius: 8px;
   border: 1px solid rgba(29, 191, 115, 0.12);
   box-sizing: border-box;
   min-height: 100px;
 }
 
-/* --- The Form --- */
+/* --- The Form Layout --- */
 .vn-comment-form {
   margin-bottom: 18px;
 }
@@ -63,21 +64,84 @@ p:hover {
   min-width: 100px;
 }
 
-/* --- Comment Items --- */
-.comment-item,
+/* --- Form Actions --- */
+.vn-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-top: 12px;
+}
+
+.vn-cancel-btn {
+  display: none;
+  color: #ff4d4d;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 5px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.vn-cancel-btn:hover {
+  color: #cc0000;
+  text-decoration: underline;
+  transform: translateX(2px);
+}
+
+/* ==========================================================================
+   VISITOR ENGINE CARD THEMING & STRUCTURAL LAYOUT
+   ========================================================================== */
+
+/* --- Top-Level User Comment (Clean, Subtle Dark-Teal Container Frame) --- */
+.comment-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #e6f2f2;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  box-sizing: border-box;
+  width: 100%;
+
+  /* Spacing Handled dynamically by Top Margin */
+  margin-top: 20px !important; 
+  margin-bottom: 4px !important;
+
+  /* Premium Card Outline Design */
+  background: rgba(15, 31, 31, 0.4); 
+  border: 1px solid rgba(29, 191, 115, 0.08);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+/* --- Nested User Reply (Slightly Thinner, Nested Accent Card Style) --- */
 .reply-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 0;
   color: #e6f2f2;
   transition: opacity 0.5s ease, transform 0.5s ease;
+  box-sizing: border-box;
+  width: auto;
+
+  /* Spacing Handled dynamically by Top Margin */
+  margin-top: 12px !important;
+  margin-bottom: 2px !important;
+
+  /* Clean Sub-Card Layering */
+  background: rgba(15, 31, 31, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+  padding: 10px 12px;
+  border-radius: 4px;
 }
 
 .comment-left {
   flex-shrink: 0;
 }
 
+/* --- Standard Fan Avatar (Fresh Brand Linear Look) --- */
 .comment-avatar {
   width: 36px;
   height: 36px;
@@ -117,7 +181,7 @@ p:hover {
 
 .comment-meta a {
   text-decoration: none;
-  color: #54a29b
+  color: #54a29b;
 }
 
 .comment-meta a:hover {
@@ -132,47 +196,20 @@ p:hover {
 }
 
 .reply-count {
-    font-size: 11px;
-    font-weight: 600;
-    color: #666;
-    margin: 10px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  margin: 10px 0 8px;
 }
 
-/* --- Form Actions --- */
-.vn-form-actions {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-top: 12px;
-}
-
-.vn-cancel-btn {
-    display: none;
-    color: #ff4d4d;
-    font-size: 13px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 5px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.vn-cancel-btn:hover {
-    color: #cc0000;
-    text-decoration: underline;
-    transform: translateX(2px);
-}
-
-/* --- Replies Section --- */
+/* --- Replies Section Container Wrapper --- */
 .comment-replies {
   margin-top: 12px;
   padding-left: 10px;
-  border-left: 2px solid rgba(29, 191, 115, 0.25);
+  border-left: 2px solid rgba(29, 191, 115, 0.15);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .reply-label {
@@ -182,73 +219,128 @@ p:hover {
   margin-bottom: 4px;
 }
 
-/* --- NO COMMENTS MESSAGE (Dark Theme Fix) --- */
+/* ==========================================================================
+   ELITE STAFF OVERRIDES (STAND OUT PERFECTLY)
+   ========================================================================== */
+
+/* --- Top-Level Staff Comment Card (Deep, Rich Brand Accent) --- */
+.comment-item.staff-entry {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(17, 30, 46, 0.75) 100%) !important;
+  border-left: 3px solid teal !important; 
+  border-top: 1px solid rgba(0, 128, 128, 0.15) !important;
+  border-right: 1px solid rgba(0, 128, 128, 0.15) !important;
+  border-bottom: 1px solid rgba(0, 128, 128, 0.15) !important;
+  padding: 14px 14px 14px 16px;
+  border-radius: 6px;
+}
+
+/* --- Nested Staff Reply Card (Softer, Transparent Depth Transition) --- */
+.reply-item.staff-entry {
+  background: rgba(30, 41, 59, 0.35) !important; 
+  border-left: 2px solid rgba(45, 212, 191, 0.5) !important; 
+  border-top: 1px solid rgba(255, 255, 255, 0.03) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.03) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03) !important;
+  padding: 10px 12px 10px 14px;
+  border-radius: 4px;
+  margin-left: 8px; 
+}
+
+/* --- Premium Staff Avatar Theme --- */
+.comment-avatar.staff-avatar {
+  background-color: teal !important;
+  color: #fff !important;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* --- Inline Staff Metadata Badge --- */
+.badge-crew {
+  background-color: rgba(0, 128, 128, 0.15);
+  color: #2dd4bf;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  letter-spacing: 0.06em;
+  border: 1px solid rgba(0, 128, 128, 0.25);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+/* ==========================================================================
+   MISC UTILITIES & SYSTEM LAYOUTS
+   ========================================================================== */
+
+/* --- No Comments Message Block --- */
 .no-comments-msg {
-    padding: 40px 20px;
-    text-align: center;
-    background-color: #0f1f1f; /* Matches your input field background */
-    border: 1px dashed rgba(29, 191, 115, 0.3);
-    border-radius: 12px;
-    margin: 10px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  background-color: #0f1f1f;
+  border: 1px dashed rgba(29, 191, 115, 0.3);
+  border-radius: 12px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .no-comments-msg p {
-    color: #8fd6cf; /* Matches your meta text color */
-    font-size: 15px;
-    font-weight: 500;
-    margin: 0;
-    line-height: 1.4;
+  color: #8fd6cf;
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .no-comments-msg::before {
-    content: "💬"; 
-    font-size: 24px;
-    margin-bottom: 10px;
-    opacity: 0.8;
+  content: "💬"; 
+  font-size: 24px;
+  margin-bottom: 10px;
+  opacity: 0.8;
 }
 
-/* --- Loading States --- */
+/* --- Dynamic Async Interactions --- */
 .load-more-replies-btn {
-    background: none;
-    border: none;
-    color: #1dbf73;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 10px 0;
+  background: none;
+  border: none;
+  color: #1dbf73;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 0;
 }
 
 .loading-spinner {
-    display: inline-block;
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    border-top-color: var(--primary-text-colour);
-    animation: spin 0.8s linear infinite;
-    margin-right: 8px;
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  border-top-color: var(--primary-text-colour);
+  animation: spin 0.8s linear infinite;
+  margin-right: 8px;
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* --- Animations --- */
 .new-comment-reveal {
-    animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards !important;
-    opacity: 1 !important;
+  animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards !important;
+  opacity: 1 !important;
 }
 
 @keyframes fadeInUp {
-    0% { opacity: 0; transform: translateY(20px); }
-    100% { opacity: 1; transform: translateY(0); }
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Responsive --- */
 @media (max-width: 768px) {
   .comments-wrapper {
     width: 100%;

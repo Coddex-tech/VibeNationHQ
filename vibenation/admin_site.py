@@ -42,6 +42,7 @@ def dashboard_stats_callback(request, context):
     total_songs = Song.objects.count()
     total_uploads = total_news + total_songs
     total_ads = Advertisement.objects.count()
+    total_sponsored = News.objects.filter(is_sponsored=True).count
     total_comments = MusicComment.objects.count() + NewsComment.objects.count()
     total_pending_comments = (
         MusicComment.objects.filter(is_approved=False).count() 
@@ -100,18 +101,17 @@ def dashboard_stats_callback(request, context):
                 "icon": "rule",
                 "color": "danger" if 12 > 0 else "success", # Dynamic coloring!
             },
-            # {
-            #     "title": "Portal Security",
-            #     "metric": "Active",
-            #     "footer": "OTP Protection Enabled",
-            #     "icon": "verified_user",
-            #     "color": "success",
-            # },
             {
             "title": "Ad System",
             "metric": total_ads,
             "footer": "Running advertisements",
             "icon": "campaign",
+            },
+            {
+            "title": "Active Sponsored Post",
+            "metric": total_sponsored,
+            "footer": "Running Sponsored Content",
+            "icon": "post",
             },
         ],
 

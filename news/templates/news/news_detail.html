@@ -207,6 +207,9 @@ entertainment news and updates on VibeNation.{% endblock %}
         <input type="hidden" name="parent_id" id="parent_id">
 
         {{ form.as_p }}
+        <div class="vn-hidden-field" style="display:none !important;" aria-hidden="true">
+          <input type="text" name="user_website" tabindex="-1" autocomplete="off">
+        </div>
 
         <div class="vn-form-actions" style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
           <button type="submit" class="vn-comment-submit">Post</button>

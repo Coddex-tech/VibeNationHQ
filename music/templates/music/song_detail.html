@@ -317,7 +317,11 @@
       {{ form.name.label_tag }}
       {{ form.name }}
     </div>
+    
     <div class="form-group">
+      <div class="vn-hidden-field" style="display:none !important;" aria-hidden="true">
+        <input type="text" name="user_website" tabindex="-1" autocomplete="off">
+      </div>
       {{ form.content.label_tag }}
       {{ form.content }}
     </div>
@@ -327,23 +331,24 @@
         Post
       </button>
 
-      <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn">
+      <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn" style="display: none;">
         ✕ CANCEL REPLY
       </a>
     </div>
   </form>
 
   <div class="vn-comments-list music-comments-list" id="main-comments-container">
+    <h3 class="vn-comments-title">All Comments</h3>
     {% for comment in music_comments %}
-    {% include 'music/partials/music_comment.html' with comment=comment %}
+      {% include 'music/partials/music_comment.html' with comment=comment %}
     {% empty %}
-    <div class="no-comments-msg">
-      <p>No comments yet. Be the first to share your thoughts!</p>
-    </div>
+      <div class="no-comments-msg">
+        <p>No comments yet. Be the first to share your thoughts!</p>
+      </div>
     {% endfor %}
   </div>
 
-  {% if music_comments.count >= 1 %}
+  {% if music_comments %}
   <div style="margin-top: 20px; text-align: center;">
     <button id="load-more-comments-btn" data-url="{% url 'music:load_more_music_comments' song.id %}"
       class="vn-comment-submit">

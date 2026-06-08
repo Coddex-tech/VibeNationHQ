@@ -1,31 +1,51 @@
 {% load news_extras %}
-<div class="comment-item" id="comment-{{ comment.id }}">
+<div class="comment-item {% if comment.is_verified_staff %}staff-entry{% endif %}" id="comment-{{ comment.id }}">
   <div class="comment-left">
-    <div class="comment-avatar">{{ comment.name|first|upper }}</div>
+    {% if comment.is_verified_staff %}
+    <div class="comment-avatar staff-avatar">VN</div>
+    {% else %}
+    <div class="comment-avatar">{{ comment.display_name|first|upper }}</div>
+    {% endif %}
   </div>
   <div class="comment-center">
-    <p class="comment-author">{{ comment.name|upper }}</p>
+    <p class="comment-author">
+      {{ comment.display_name|upper }}
+
+      {% if comment.is_verified_staff %}
+      <span class="badge-crew">
+        <svg style="width:11px; height:11px; display:inline; margin-right:3px; vertical-align:middle;"
+          viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+        </svg>
+        STAFF
+      </span>
+      {% endif %}
+    </p>
     <p class="comment-text">{{ comment.content }}</p>
 
     <div class="comment-meta">
       <span>{{ comment.created_at|hybrid_time }}</span>
-      <a href="javascript:void(0)" onclick="handleReplyClick('{{ comment.id }}', '{{ comment.name|upper }}')">Reply</a>
+      <a href="javascript:void(0)"
+        onclick="handleReplyClick('{{ comment.id }}', '{{ comment.display_name|upper }}')">Reply</a>
     </div>
 
-    {% with total_replies=comment.get_all_replies|length %}
+    {# 1. Calculate length using the built-in replies manager to match backend architecture #}
+    {% with total_replies=comment.replies.all|length %}
     {% if total_replies > 0 %}
-    <div class="reply-count">
+    <div class="reply-count" id="reply-count-{{ comment.id }}">
       {{ total_replies }} Repl{{ total_replies|pluralize:"y,ies" }}
     </div>
     {% endif %}
     {% endwith %}
 
     <div class="comment-replies">
-      <div id="reply-container-{{ comment.id }}">
-        {% include 'music/partials/music_reply_list.html' with replies=comment.get_all_replies|slice:":3" %}
+      {# 2. This container wrapper is explicitly structured to receive the client-side injections #}
+      <div id="reply-container-{{ comment.id }}" class="vn-comment-replies-list">
+        {% include 'music/partials/music_reply_list.html' with replies=comment.replies.all|slice:":3" %}
       </div>
 
-      {% if comment.get_all_replies|length > 3 %}
+      {% if comment.replies.all|length > 3 %}
       <button class="load-more-replies-btn" data-comment-id="{{ comment.id }}"
         data-url="{% url 'music:load_more_music_replies' comment.id %}">
         See More Replies

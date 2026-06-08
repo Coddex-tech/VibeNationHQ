@@ -117,6 +117,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'vibenation.middleware.IpBlockMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -411,6 +412,12 @@ UNFOLD = {
                         "icon": "phonelink_lock",
                         "permission": lambda request: request.user.is_superuser
                     },
+                    {
+                        "title": "Blocked IP Address",
+                        "link": reverse_lazy("admin:news_ipblock_changelist"),
+                        "icon": "shield",
+                        "permission": lambda request: request.user.is_superuser
+                    }
                 ],
             },
         ],

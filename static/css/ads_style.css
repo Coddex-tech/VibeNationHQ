@@ -176,7 +176,10 @@
     display: block;
 }
 
-/* 🖥️ DESKTOP DISPLAY RULES (Screens wider than 768px) */
+
+/* ============================================
+    RULE FOR IN-ARTICLE FROM DIFFERENT DEVICES 
+==================================================*/
 @media (min-width: 769px) {
     /* Hide even-numbered ad breaks on desktop to ensure spacing remains elegant */
     .article-ad[data-ad-num="2"],

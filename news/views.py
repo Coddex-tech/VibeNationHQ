@@ -8,9 +8,12 @@ from datetime import timedelta
 from django.core.cache import cache
 from django.db.models import Count, Q, F
 import random
+import re
 from .forms import NewsCommentForm
 from django.template.loader import render_to_string
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
+from django_ratelimit.decorators import ratelimit
+from utils.security import get_cloudflare_ip
 from collections import defaultdict
 from ads.utils import insert_dynamic_ads
 
@@ -250,20 +253,139 @@ def category_news(request, slug):
     }
     return render(request, 'news/category_list.html', context)
 
+
+# ================================================================
+# Enforces 3 comment submissions per minute based on their unique Cloudflare IP
+@ratelimit(key=get_cloudflare_ip, rate='3/m', method='POST', block=False)
 def news_detail(request, slug):
     last_week = timezone.now() - timedelta(days=7)
+    News.objects.filter(slug=slug).update(views=F('views') + 1)
     news = get_object_or_404(News.objects.prefetch_related('category', 'tags'), slug=slug)
 
-    # Process the content through the utility once
     article_content = insert_dynamic_ads(news.content)
-    
-    # Increment views
-    News.objects.filter(id=news.id).update(views=F('views') + 1)
     NewsView.objects.create(news=news)
 
-    # trending now
+    # ==================== COMMENT ==============
+    if request.method == 'POST':
+
+        is_staff = request.user.is_authenticated and request.user.is_staff
+
+        # Rate Limit Guard
+        if not is_staff:
+            was_limited = getattr(request, 'limited', False)
+            if was_limited:
+                return JsonResponse({
+                    "status": "error",
+                    "message": "🔥 Slow down! You are posting too fast. Please wait a minute."
+                }, status=429)
+
+        # Honeypot
+        honeypot_value = request.POST.get('user_website', '')
+        if honeypot_value:
+            return JsonResponse({
+                "status": "success",
+                "message": "Comment submitted successfully."
+            })
+
+        # AUTOMATED IP BLOCK INTEGRATION
+        if not is_staff:
+            # Resolve client IP matching your Cloudflare config strategy
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR')
+            
+            # Run cache monitor check
+            from utils.monitor_ip import monitor_and_filter_ip
+            if monitor_and_filter_ip(client_ip, action_type="comment"):
+                return JsonResponse({
+                    "status": "error",
+                    "message": "🚫 Access Denied. Your IP footprint has been blacklisted for 24 hours due to spam behavior."
+                }, status=403)
+
+        # Link filter
+        content_submitted = request.POST.get('content', '')
+        if not is_staff:
+            link_pattern = r'(https?://|www\.|<a\s+href|\[url\])'
+            if re.search(link_pattern, content_submitted, re.IGNORECASE):
+                return JsonResponse({
+                    "status": "error",
+                    "message": "Links are not allowed in comments."
+                }, status=400)
+
+        form = NewsCommentForm(request.POST)
+        if form.is_valid():
+            comment = form.save(commit=False)
+            comment.news = news
+
+            # ================= IDENTITY RULE =================
+            if is_staff:
+                comment.user = request.user
+                comment.name = request.user.get_full_name() or request.user.username
+            else:
+                forbidden_flags = ["admin", "vibenation", "staff", "moderator", "editor", "boss"]
+                if any(flag in str(comment.name).lower() for flag in forbidden_flags):
+                    comment.name = "Anonymous Fan"
+            # ==========================================================
+
+            parent_id = request.POST.get('parent_id')
+            if parent_id:
+                comment.parent_id = parent_id
+
+            comment.save()
+
+            # Render HTML
+            if comment.parent_id:
+                html_content = render_to_string(
+                    'news/partials/news_reply.html',
+                    {'reply': comment},
+                    request=request
+                )
+            else:
+                html_content = render_to_string(
+                    'news/partials/news_comment.html',
+                    {'comment': comment},
+                    request=request
+                )
+
+            # ================= JSON RESPONSE =================
+            response = JsonResponse({
+                "status": "success",
+                "message": "Comment posted successfully!",
+                "html": html_content,
+                "parent_id": comment.parent_id,
+                "root_comment_id": comment.root_comment.id,
+                "commenter_name": comment.name,
+            })
+
+            # COOKIE FIX
+            if not is_staff:
+                response.set_cookie(
+                    'last_commenter_name',
+                    comment.name,
+                    max_age=60 * 60 * 24 * 30
+                )
+
+            return response
+
+        else:
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({
+                    "status": "error",
+                    "errors": form.errors
+                }, status=400)
+            message.error(request, "There was an error with your comment submission")
+            return HttpResponseRedirect(request.path)
+
+    # ==================== GET REQUEST ====================
+    if request.user.is_authenticated and request.user.is_staff:
+        form = NewsCommentForm()
+    else:
+        last_name = request.COOKIES.get('last_commenter_name', '')
+        form = NewsCommentForm(initial={'name': last_name} if last_name else None)
+
+    # Sidebar data
     trending_news = (
-        News.objects.public().filter(date_published__gte=last_week)
+        News.objects.public()
+        .filter(date_published__gte=last_week)
         .exclude(id=news.id)
         .order_by('-views')[:5]
     )
@@ -272,49 +394,24 @@ def news_detail(request, slug):
 
     all_categories = Category.objects.annotate(
         news_count=Count('news')
-        ).order_by('-news_count')[:10]
-    
-    # Optimized Related News
+    ).order_by('-news_count')[:10]
+
     related_news = (
-        News.objects.public().filter(category__in=news.category.all())
+        News.objects.public()
+        .filter(category__in=news.category.all())
         .exclude(id=news.id)
-        .order_by('-date_published') 
+        .order_by('-date_published')
         .distinct()[:6]
     )
 
-    # COMMENT SYSTEM 
-    if request.method == 'POST':
-        form = NewsCommentForm(request.POST)
-        if form.is_valid():
-            comment = form.save(commit=False)
-            comment.news = news
-
-            parent_id = request.POST.get('parent_id')
-            if parent_id:
-                comment.parent_id = parent_id
-
-            comment.save()
-            response = redirect(request.path)
-            
-            response.set_cookie(
-                'last_commenter_name',
-                comment.name,
-                max_age=60 * 60 * 24 * 30
-            )
-            return response
-    else:
-        last_name = request.COOKIES.get('last_commenter_name')
-        form = NewsCommentForm(initial={'name': last_name} if last_name else None)
-
-    # Pagination & Comments (Top-level only)
     comments_qs = (
         NewsComment.objects
         .filter(news=news, parent__isnull=True, is_approved=True)
-        .prefetch_related('replies') 
+        .prefetch_related('replies')
         .order_by('-created_at')
     )
 
-    paginator = Paginator(comments_qs, 2)
+    paginator = Paginator(comments_qs, 3)
     page_number = request.GET.get('page', 1)
     comments = paginator.get_page(page_number)
 
@@ -328,6 +425,7 @@ def news_detail(request, slug):
         'form': form,
         'article_content': article_content,
     }
+
     return render(request, 'news/news_detail.html', context)
 # ------------------------------------------------------------------------------
 

@@ -1,3 +1,4 @@
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import Artist, Song, DJ, Genre, Album, MusicComment
@@ -6,7 +7,8 @@ from vibenation.admin_site import admin_site, staff_admin_site
 from vibenation.status_condition import get_status_badge
 from django.utils.safestring import mark_safe
 
-class ArtistAdmin(ModelAdmin):
+
+class ArtistAdmin(UnfoldModelAdmin):
     list_display = ('name', 'created_at', 'song_count')
     search_fields = ('name',)
     ordering = ('-created_at',)
@@ -15,7 +17,7 @@ class ArtistAdmin(ModelAdmin):
         return obj.songs.count()
     song_count.short_description = "Songs"
 
-class SongAdmin(ModelAdmin):
+class SongAdmin(UnfoldModelAdmin):
     list_display = ('title', 'get_artists', 'views', 'release_date', 'get_genres', 'download_status', 'cover_preview')
     
     list_display_links = ('title',)
@@ -96,7 +98,7 @@ class SongAdmin(ModelAdmin):
         ''')
 
 # Apply similar logic to DJAdmin to keep it safe
-class DJAdmin(ModelAdmin):
+class DJAdmin(UnfoldModelAdmin):
     list_display = ('dj_name', 'get_artists', 'created_at', 'dj_cover_preview')
     list_display_links = ('dj_name',)
     prepopulated_fields = {"slug": ("dj_name",)}
@@ -122,7 +124,7 @@ class DJAdmin(ModelAdmin):
             return format_html('<img src="{}" class="w-10 h-10 rounded-md object-cover border border-white/10" />', obj.dj_cover.url)
         return "-"
 
-class AlbumAdmin(ModelAdmin):
+class AlbumAdmin(UnfoldModelAdmin):
     prepopulated_fields = {"slug": ("title",)}
     list_display = ('title', 'artist', 'release_date')
     search_fields = ('title', 'artist__name')
@@ -135,18 +137,27 @@ class AlbumAdmin(ModelAdmin):
                 del actions['delete_selected']
         return actions
 
-class MusicCommentAdmin(ModelAdmin):
-    list_display = ('name', 'song', 'parent', 'created_at', 'status_badge')
+class MusicCommentAdmin(UnfoldModelAdmin):
+    list_display = ('author_identity', 'song__title', 'parent', 'content', 'created_at', 'status_badge', 'is_approved')
+    list_display_links = ('author_identity',)
     list_filter_submit = True
     list_filter = ('is_approved', 'created_at')
     search_fields = ('name', 'content', 'song__title')
+    ordering = ('-created_at',)
+    # Allows quick checking/unchecking right from the table grid row
+    list_editable = ('is_approved',)
 
     def get_readonly_fields(self, request, obj=None):
-        return ('song', 'dj', 'parent', 'name', 'content') if not request.user.is_superuser else ()
+        return ('song', 'dj', 'user', 'parent', 'name', 'content') if not request.user.is_superuser else ()
+
+    def author_identity(self, obj):
+        if obj.is_verified_staff:
+            return f"🛡️ {obj.display_name} (Staff)"
+        return obj.display_name or "Anonymous Fan"
+    author_identity.short_description = "Commenter"
 
     def status_badge(self, obj):
         return get_status_badge(obj.is_approved, true_label="Approved", false_label="Pending")
-
     status_badge.short_description = "Status"
 
     # ------ ACTION COMMANDS --------
@@ -154,7 +165,6 @@ class MusicCommentAdmin(ModelAdmin):
 
     def get_actions(self, request):
         actions = super().get_actions(request)
-        # This ONLY removes the delete option for staff
         if not request.user.is_superuser:
             if 'delete_selected' in actions:
                 del actions['delete_selected']

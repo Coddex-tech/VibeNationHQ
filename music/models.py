@@ -1,6 +1,7 @@
 import os
 from .utils.clean_tags import clean_mp3_tags
 from django.db import models
+from vibenation.models_base import BaseComment
 from django.utils.text import slugify
 from taggit_autosuggest.managers import TaggableManager
 from sortedm2m.fields import SortedManyToManyField
@@ -161,7 +162,8 @@ class SongView(models.Model):
         return f"{self.song.title} viewed on {self.timestamp}"
 
     
-class MusicComment(models.Model):
+class MusicComment(BaseComment):
+    # Keep only the custom model relationships unique to the Music ecosystem
     song = models.ForeignKey(
         Song,
         on_delete=models.CASCADE,
@@ -177,38 +179,6 @@ class MusicComment(models.Model):
         null=True, 
         blank=True
     )
-
-    parent = models.ForeignKey(
-        'self',
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name='replies'
-    )
-
-    name = models.CharField(max_length=100)
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_approved = models.BooleanField(default=True)
-
-    def get_all_replies(self):
-        """Returns all replies flattened under this comment, preserving actual parents."""
-        all_replies = []
-
-        def collect(comment):
-            for reply in comment.replies.all().order_by('created_at'):
-                all_replies.append(reply)
-                collect(reply)
-
-        collect(self)
-        return all_replies
-
-    @property
-    def replying_to(self):
-        return self.parent.name if self.parent else None
-
-    def __str__(self):
-        return self.content[:30]
 
     
 
@@ -226,5 +196,4 @@ class Album(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        
         return self.title

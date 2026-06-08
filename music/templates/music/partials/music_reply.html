@@ -1,21 +1,39 @@
 {% load news_extras %}
-<div class="reply-item" id="reply-{{ reply.id }}">
+<div class="reply-item {% if reply.is_verified_staff %}staff-entry{% endif %}" id="reply-{{ reply.id }}">
   <div class="comment-left">
-    <div class="comment-avatar">{{ reply.name|first|upper }}</div>
+    {% if reply.is_verified_staff %}
+    <div class="comment-avatar staff-avatar">VN</div>
+    {% else %}
+    <div class="comment-avatar">{{ reply.display_name|first|upper }}</div>
+    {% endif %}
   </div>
   <div class="comment-center">
-    <p class="comment-author">{{ reply.name|upper }}</p>
+    <p class="comment-author">
+      {{ reply.display_name|upper }}
+
+      {% if reply.is_verified_staff %}
+      <span class="badge-crew">
+        <svg style="width:11px; height:11px; display:inline; margin-right:3px; vertical-align:middle;"
+          viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+        </svg>
+        STAFF
+      </span>
+      {% endif %}
+    </p>
 
     {% if reply.parent %}
     <p class="reply-label">
-      Replying to <span class="replying-to">@{{ reply.parent.name|upper }}</span>
+      Replying to <span class="replying-to">@{{ reply.replying_to|upper }}</span>
     </p>
     {% endif %}
 
     <p class="comment-text">{{ reply.content }}</p>
     <div class="comment-meta">
       <span>{{ reply.created_at|hybrid_time }}</span>
-      <a href="javascript:void(0)" onclick="handleReplyClick('{{ reply.id }}', '{{ reply.name|upper }}')">Reply</a>
+      <a href="javascript:void(0)"
+        onclick="handleReplyClick('{{ reply.id }}', '{{ reply.display_name|upper }}')">Reply</a>
     </div>
   </div>
 </div>

@@ -5,31 +5,21 @@ from django.conf import settings
 from .utils.get_media import get_primary_media, attach_media
 from .utils.clean_tags import clean_mp3_tags
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import Song, DJ, Album, Artist, MusicComment, SongView
+from .models import Song, DJ, Album, Artist, SongView, MusicComment
 from django.contrib.contenttypes.models import ContentType
 from news.models import News
 import shutil
 import os
+import re
 from .forms import MusicCommentForm
 from taggit.models import Tag
 from django.utils import timezone
 from datetime import timedelta
 from django.core.cache import cache
 from django.template.loader import render_to_string
+from utils.security import get_cloudflare_ip
+from django_ratelimit.decorators import ratelimit
 from django.http import JsonResponse
-
-
-
-# === Helper Functions ===
-def get_client_ip(request):
-    """Get the visitor’s IP address."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
-    return ip
-# ------ END OF HELPER FUNCTION ------
 
 # ==================================================================
 # MUSIC HOMEPAGE
@@ -230,8 +220,8 @@ def african_music(request):
 # =======================================================================
 # SONG DETAIL PAGE
 # =======================================================================
+@ratelimit(key=get_cloudflare_ip, rate='3/m', method='POST', block=False)
 def song_detail(request, slug):
-    # Try Song, then DJ
     obj = Song.objects.filter(slug=slug).select_related('album').prefetch_related('artists').first()
     is_dj = False
 
@@ -242,7 +232,142 @@ def song_detail(request, slug):
     if not obj:
         raise Http404("Not found")
 
-    # Fetch Related/Trending (These are Song objects)
+    if not is_dj:
+        Song.objects.filter(id=obj.id).update(views=F('views') + 1)
+        try:
+            from .utils import get_cloudflare_ip as get_client_ip
+            ip = get_client_ip(request)
+            if not SongView.objects.filter(song=obj, ip_address=ip).exists():
+                SongView.objects.create(song=obj, ip_address=ip)
+        except:
+            pass
+
+    is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    # ====== COMMENT ========== 
+    if request.method == 'POST':
+        is_staff = request.user.is_authenticated and request.user.is_staff
+
+        # Rate Limit
+        if not is_staff:
+            was_limited = getattr(request, 'limited', False)
+            if was_limited:
+                if is_ajax:
+                    return JsonResponse({"status": "error", "message": "🔥 Slow down! You are posting too fast."}, status=429)
+                return redirect(request.path)
+
+        # Honeypot
+        honeypot_value = request.POST.get('user_website', '')
+        if honeypot_value:
+            return JsonResponse({
+                "status": "success",
+                "message": "Comment submitted successfully."
+            })
+
+        # AUTOMATED IP BLOCK INTEGRATION
+        if not is_staff:
+            # Resolve client IP matching your Cloudflare config strategy
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR')
+            
+            # Run cache monitor check
+            from utils.monitor_ip import monitor_and_filter_ip
+            if monitor_and_filter_ip(client_ip, action_type="comment"):
+                return JsonResponse({
+                    "status": "error",
+                    "message": "🚫 Access Denied. Your IP footprint has been blacklisted for 24 hours due to spam behavior."
+                }, status=403)
+
+        # Link filter
+        content_submitted = request.POST.get('content', '')
+        if not is_staff:
+            link_pattern = r'(https?://|www\.|<a\s+href|\[url\])'
+            if re.search(link_pattern, content_submitted, re.IGNORECASE):
+                if is_ajax:
+                    return JsonResponse({"status": "error", "message": "Links are not allowed in comments."}, status=400)
+                return redirect(request.path)
+
+        form = MusicCommentForm(request.POST)
+        if form.is_valid():
+            comment = form.save(commit=False)
+
+            if not is_dj:
+                comment.song = obj
+            else:
+                comment.dj = obj
+
+            # ===== IDENTITY RULE =====
+            if is_staff:
+                comment.user = request.user
+                comment.name = request.user.get_full_name() or request.user.username
+            else:
+                forbidden_flags = ["admin", "vibenation", "staff", "moderator", "editor", "boss"]
+                if any(flag in str(comment.name).lower() for flag in forbidden_flags):
+                    comment.name = "Anonymous Fan"
+            # ===============================
+
+            parent_id = request.POST.get('parent_id')
+
+            if parent_id:
+                try:
+                    parent_comment = MusicComment.objects.get(id=parent_id)
+
+                    if parent_comment.parent_id:
+                        comment.parent_id = parent_comment.parent_id
+                    else:
+                        comment.parent_id = parent_comment.id
+                except Exception:
+                    comment.parent_id = parent_id
+
+            comment.save()
+
+            html_content = None
+
+            if comment.parent_id:
+                html_content = render_to_string(
+                    'music/partials/music_reply.html',
+                    {'reply': comment},
+                    request=request
+                )
+            else:
+                html_content = render_to_string(
+                    'music/partials/music_comment.html',
+                    {'comment': comment},
+                    request=request
+                )
+
+            # =============== JSON RESPONSE =============
+            response = JsonResponse({
+                "status": "success",
+                "message": "Comment posted successfully!",
+                "html": html_content,
+                "root_id": comment.root_comment.id,
+                "commenter_name": comment.name,
+            })
+
+            # COOKIE
+            if not is_staff:
+                response.set_cookie(
+                    'music_commenter_name',
+                    comment.name,
+                    max_age=60 * 60 * 24 * 30
+                )
+
+            return response
+
+        else:
+            if is_ajax:
+                error_messages = ", ".join([f"{field}: {errors[0]}" for field, errors in form.errors.items()])
+                return JsonResponse({"status": "error", "message": error_messages}, status=400)
+
+    # ================= GET REQUEST ======================
+    if request.user.is_authenticated and request.user.is_staff:
+        form = MusicCommentForm()
+    else:
+        last_name = request.COOKIES.get('music_commenter_name', '')
+        form = MusicCommentForm(initial={'name': last_name} if last_name else None)
+
+    # ===== CONTENT =====
     if not is_dj and obj.genres:
         genre_songs = Song.objects.filter(genres__in=obj.genres.all()).exclude(id=obj.id).prefetch_related('artists', 'genres')[:12]
     else:
@@ -250,52 +375,20 @@ def song_detail(request, slug):
 
     trending_songs = Song.objects.all().order_by('-views').prefetch_related('artists')[:12]
 
-    # Comment Logic
     comment_filter = {'parent__isnull': True, 'is_approved': True}
     if not is_dj:
         comment_filter['song'] = obj
     else:
-        comment_filter['dj'] = obj 
+        comment_filter['dj'] = obj
 
-    music_comments = MusicComment.objects.filter(**comment_filter).prefetch_related('replies').order_by('-created_at')[:1]
+    music_comments = MusicComment.objects.filter(**comment_filter).prefetch_related('replies').order_by('-created_at')[:10]
 
-    if request.method == 'POST':
-        form = MusicCommentForm(request.POST)
-        if form.is_valid():
-            comment = form.save(commit=False)
-            if not is_dj:
-                comment.song = obj
-            else:
-                comment.dj = obj
-            parent_id = request.POST.get('parent_id')
-            if parent_id:
-                comment.parent_id = parent_id
-            comment.save()
-            response = redirect(request.path)
-            response.set_cookie('music_commenter_name', comment.name, max_age=2592000)
-            return response
-    else:
-        initial_name = request.COOKIES.get('music_commenter_name', '')
-        form = MusicCommentForm(initial={'name': initial_name})
-
-    # 4 View Tracking (Song only as per your model)
-    if not is_dj:
-        from django.db.models import F
-        Song.objects.filter(id=obj.id).update(views=F('views') + 1)
-        try:
-            from .utils import get_client_ip 
-            ip = get_client_ip(request)
-            if not SongView.objects.filter(song=obj, ip_address=ip).exists():
-                SongView.objects.create(song=obj, ip_address=ip)
-        except: pass
-
-    # Context Mapping
     display_title = obj.dj_name if is_dj else obj.title
-    
+
     context = {
         'song': obj,
-        "media": get_primary_media(obj), # For the thumbnail
-        'artists': obj.artists.all(),  # Properly extracts the DJ/Artist objects
+        'artists': obj.artists.all(),
+        "media": get_primary_media(obj), # For media
         'music_comments': music_comments,
         'form': form,
         'is_dj': is_dj,
@@ -304,6 +397,7 @@ def song_detail(request, slug):
         'page_title': f"{display_title} | VibeNation",
     }
     return render(request, 'music/song_detail.html', context)
+# ======================================================================================
 
 COMMENTS_PER_LOAD = 5
 REPLIES_PER_LOAD = 3
@@ -343,7 +437,7 @@ def load_more_music_replies(request, comment_id):
     # Get the flattened list from your model's helper method
     all_replies = comment.get_all_replies()
     
-    # Slice for the next batch (Amoto, Maxwell, etc.)
+    # Slice for the next batch
     replies = all_replies[offset : offset + REPLIES_PER_LOAD]
 
     # Render only the inner reply items

@@ -11,8 +11,9 @@ class AdZoneAdmin(UnfoldModelAdmin):
     list_display = ("name",)
 
 class AdvertisementAdmin(UnfoldModelAdmin):
-    list_display = ("title", "zone", "status_badge", "clicks", "impressions")
+    list_display = ("title", "zone", "status_badge", "clicks", "impressions", 'is_active')
     search_fields = ("title", "client_name", "zone__name")
+    list_editable = ('is_active',)
 
     def status_badge(self, obj):
         return get_status_badge(obj.is_active)

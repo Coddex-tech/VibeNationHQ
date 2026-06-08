@@ -1,19 +1,38 @@
 from django.conf import settings
 from django.db import models
+from vibenation.models_base import BaseComment # Clean core import
 from django.utils.text import slugify
 from sortedm2m.fields import SortedManyToManyField
 from taggit_autosuggest.managers import TaggableManager
 from django_ckeditor_5.fields import CKEditor5Field
 from music.compress_image import handle_webp_compression
 from django.utils import timezone
+from datetime import timedelta
 from django.urls import reverse
+
+class IpBlock(models.Model):
+    ip_address = models.GenericIPAddressField(db_index=True, unique=True)
+    reason = models.CharField(max_length=255, blank=True)
+    blocked_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"{self.ip_address} (Expires: {self.expires_at})"
+
+    class Meta:
+        verbose_name = "IpBlock"
+        verbose_name_plural = "Blocked IP Address"
 
 class NewsManager(models.Manager):
     def public(self):
-        """
-        Returns only news that is marked as published AND 
-        whose publication date has already arrived.
-        """
         return self.filter(
             is_published=True, 
             date_published__lte=timezone.now()
@@ -21,13 +40,23 @@ class NewsManager(models.Manager):
     
     def sponsored(self):
         """
-        Database-level version of your check.
-        Filters for: Is Sponsored AND (Hasn't Expired OR Has no Expiry date).
+        Strictly pulls active sponsored items
         """
         now = timezone.now()
         return self.public().filter(
             models.Q(is_sponsored=True) & 
             (models.Q(expires_at__gt=now) | models.Q(expires_at__isnull=True))
+        )
+
+    def regular_news(self):
+        """
+        🔥 HIGH PERFORMANCE READ: Pulls standard news AND any expired 
+        sponsored posts together seamlessly. Zero database stress.
+        """
+        now = timezone.now()
+        return self.public().filter(
+            models.Q(is_sponsored=False) | 
+            (models.Q(is_sponsored=True) & models.Q(expires_at__lte=now))
         )
 
 class Category(models.Model):
@@ -82,9 +111,12 @@ class News(models.Model):
     # SPONSORED POST EXPIRING
     def is_currently_sponsored(self):
         """Checks if the post is sponsored and hasn't expired yet."""
-        if self.is_sponsored and self.expires_at:
-            return timezone.now() < self.expires_at
-        return self.is_sponsored
+        if self.is_sponsored:
+            # If it has an expiration date and we've crossed it, it's no longer active!
+            if self.expires_at and timezone.now() >= self.expires_at:
+                return False
+            return True
+        return False
 
     def __str__(self):
         return self.title
@@ -120,45 +152,10 @@ class NewsView(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
-class NewsComment(models.Model):
+class NewsComment(BaseComment):
+    # Keep only the custom model relationships unique to the News ecosystem
     news = models.ForeignKey(
         News,
         on_delete=models.CASCADE,
         related_name='comments'
     )
-
-    parent = models.ForeignKey(
-        'self',
-        null=True,
-        blank=True,
-        on_delete=models.CASCADE,
-        related_name='replies'
-    )
-
-    name = models.CharField(max_length=100)
-    content = models.TextField()
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_approved = models.BooleanField(default=True)
-
-    def get_all_replies(self):
-        """
-        Returns ALL replies flattened under the top comment.
-        This is required for one-level visual nesting.
-        """
-        all_replies = []
-
-        def collect(comment):
-            for reply in comment.replies.all():
-                all_replies.append(reply)
-                collect(reply)
-
-        collect(self)
-        return sorted(all_replies, key=lambda r: (r.created_at, r.id))
-
-    @property
-    def replying_to(self):
-        return self.parent.name if self.parent else None
-
-    def __str__(self):
-        return self.content[:30]

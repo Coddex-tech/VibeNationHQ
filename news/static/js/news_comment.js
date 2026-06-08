@@ -41,22 +41,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     /* ================= SAFE INJECT ================= */
-    function injectWithAnimation(container, html) {
+    function injectWithAnimation(container, html, isReply = false) {
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = html;
 
         const newItems = Array.from(tempDiv.children);
 
         newItems.forEach(item => {
-
             // prevent duplicates
             if (item.id && document.getElementById(item.id)) return;
 
             item.style.opacity = '0';
             item.style.transform = 'translateY(20px)';
 
-            container.appendChild(item);
-            item.offsetHeight;
+            if (isReply) {
+                // For nested comment threads, append natively to the bottom
+                container.appendChild(item);
+            } else {
+                const titleHeading = container.querySelector('.vn-comments-title');
+                if (titleHeading) {
+                    titleHeading.insertAdjacentElement('afterend', item);
+                } else {
+                    container.prepend(item);
+                }
+            }
+            
+            item.offsetHeight; // Force browser layout execution to trigger transitions cleanly
 
             requestAnimationFrame(() => {
                 item.classList.add('new-comment-reveal');
@@ -85,7 +95,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(res => res.json())
                 .then(data => {
 
-                    if (data.html) injectWithAnimation(container, data.html);
+                    // Pagination appends older items down to the bottom loop feed safely
+                    if (data.html) injectWithAnimation(container, data.html, true);
 
                     if (!data.has_more) {
                         this.remove();
@@ -116,7 +127,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const commentId = btn.dataset.commentId;
         const container = document.getElementById(`reply-container-${commentId}`);
-        const offset = container.querySelectorAll('.reply-item').length;
+        const offset = container ? container.querySelectorAll('.reply-item').length : 0;
 
         const url = btn.dataset.url
             ? `${btn.dataset.url}?offset=${offset}`
@@ -132,7 +143,9 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
 
-                if (data.html) injectWithAnimation(container, data.html);
+                if (data.html && container) {
+                    injectWithAnimation(container, data.html, true);
+                }
 
                 if (!data.has_more) {
                     btn.remove();
@@ -151,27 +164,129 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     });
 
-    /* ================= POST SPINNER ================= */
+    /* ================= DYNAMIC ASYNC POST (NO REFRESH / NO SPLASH) ================= */
     const postForm = document.querySelector('.vn-comment-form');
 
     if (postForm) {
         postForm.addEventListener('submit', function(e) {
+            e.preventDefault(); 
 
             const btn = this.querySelector('.vn-comment-submit');
+            if (!btn) return;
 
-            if (btn) {
-                // prevent double submit (ENTER spam fix)
-                if (btn.dataset.submitting === 'true') {
-                    e.preventDefault();
-                    return;
+            if (btn.dataset.submitting === 'true') return;
+            btn.dataset.submitting = 'true';
+
+            const originalBtnHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="loading-spinner"></span> POSTING...';
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.7';
+
+            const formData = new FormData(this);
+            const actionUrl = this.getAttribute('action') || window.location.pathname;
+
+            fetch(actionUrl, {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
                 }
+            })
+            .then(response => response.json().then(data => ({ status: response.status, body: data })))
+            .then(res => {
+                if (res.status === 200 && res.body.status === "success") {
+                    
+                    let targetContainer;
+                    const isReply = !!res.body.parent_id;
 
-                btn.dataset.submitting = 'true';
+                    if (isReply) {
 
-                btn.innerHTML = '<span class="loading-spinner"></span> POSTING...';
-                btn.style.pointerEvents = 'none';
-                btn.style.opacity = '0.7';
-            }
+                        // Root parent comment container
+                        targetContainer = document.getElementById(
+                            `reply-container-${res.body.root_comment_id}`
+                        );
+
+                        // First reply ever under this thread
+                        if (!targetContainer) {
+
+                            const rootCommentBlock = document.getElementById(
+                                `comment-${res.body.root_comment_id}`
+                            );
+
+                            if (rootCommentBlock) {
+
+                                let repliesWrapper =
+                                    rootCommentBlock.querySelector('.comment-replies');
+
+                                if (!repliesWrapper) {
+                                    repliesWrapper = document.createElement('div');
+                                    repliesWrapper.className = 'comment-replies';
+                                    rootCommentBlock.appendChild(repliesWrapper);
+                                }
+
+                                targetContainer = document.createElement('div');
+                                targetContainer.id =
+                                    `reply-container-${res.body.root_comment_id}`;
+
+                                repliesWrapper.appendChild(targetContainer);
+                            }
+                        }
+
+                        // Emergency fallback
+                        if (!targetContainer) {
+                            targetContainer =
+                                document.getElementById('main-comments-container');
+                        }
+                    } else {
+                        targetContainer = document.getElementById('main-comments-container');
+                    }
+
+                    if (targetContainer) {
+                        // Clear out the "No comments yet" message if it exists
+                        const emptyMsg = targetContainer.querySelector('.no-comments-msg');
+                        if (emptyMsg) emptyMsg.remove();
+
+                        // Inject the new comment HTML cleanly using our fixed function
+                        if (res.body.html) {
+                            injectWithAnimation(targetContainer, res.body.html, isReply);
+                        }
+                    }
+                    
+                    // Capture incoming background signature state before running form clear
+                    const newCommenterName = res.body.commenter_name;
+                    const nameInput = postForm.querySelector('input[name="name"]') || postForm.querySelector('#id_name');
+                    const internalParentInput = document.getElementById('parent_id');
+                    const internalTextArea = postForm.querySelector('textarea');
+                    const internalCancelBtn = document.getElementById('cancel-reply-btn');
+
+                    // Reset form and UI states
+                    postForm.reset(); 
+                    if (internalParentInput) internalParentInput.value = "";
+                    if (internalTextArea) internalTextArea.placeholder = "Write your comment...";
+                    if (internalCancelBtn) internalCancelBtn.style.display = 'none';
+
+                    // Force input assignment outside the browser's form reset thread loop
+                    if (nameInput && newCommenterName) {
+                        setTimeout(() => {
+                            nameInput.setAttribute('value', newCommenterName);
+                            nameInput.value = newCommenterName;
+                        }, 10);
+                    }
+
+                } else {
+                    alert(res.body.message || "Submission parameter failure.");
+                }
+            })
+            .catch(err => {
+                console.error("Comment submission execution error:", err);
+                alert("Network communication drop encountered. Please try again.");
+            })
+            .finally(() => {
+                btn.dataset.submitting = 'false';
+                btn.innerHTML = originalBtnHtml;
+                btn.style.pointerEvents = 'auto';
+                btn.style.opacity = '';
+            });
         });
     }
 

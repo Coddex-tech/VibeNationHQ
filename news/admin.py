@@ -2,12 +2,13 @@ from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from django.contrib import admin
 from django import forms
 from django.utils.html import format_html, escape
+from django.utils import timezone
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from vibenation.status_condition import get_status_badge
 import json
 # Models
-from .models import News, Category, NewsComment
+from .models import News, Category, NewsComment, IpBlock
 # Standard filters used to prevent E115 System Check errors
 from django_ckeditor_5.widgets import CKEditor5Widget
 from vibenation.admin_site import admin_site, staff_admin_site
@@ -93,6 +94,20 @@ class NewsAdmin(UnfoldModelAdmin):
         queryset.update(is_featured=True)
         self.message_user(request, "Articles moved to Featured section.")
 
+    # ============== FOR DYNAMIC NEWS AND SPONSORED POST =================
+    def changelist_view(self, request, extra_context=None):
+        """
+        Runs quietly in the background only when staff views the admin list.
+        Permanently turns off expired campaigns at the database layer.
+        """
+        now = timezone.now()
+        expired_count = News.objects.filter(is_sponsored=True, expires_at__lte=now).update(is_sponsored=False)
+        
+        if expired_count > 0:
+            self.message_user(request, f"🧹 System Cleaned: {expired_count} expired campaign(s) converted to regular news columns.")
+            
+        return super().changelist_view(request, extra_context=extra_context)
+
     
 
     fieldsets = (
@@ -123,13 +138,24 @@ class CategoryAdmin(UnfoldModelAdmin):
         return ('name', 'slug') if not request.user.is_superuser else ()
 
 class NewsCommentAdmin(UnfoldModelAdmin):
-    list_display = ('name', 'news', 'parent', 'content', 'created_at', 'status_badge')
+    list_display = ('author_identity', 'news', 'parent', 'content', 'created_at', 'status_badge', 'is_approved')
     list_filter_submit = True
     list_filter = ('news', 'created_at')
     # list_display_links = ('title',)
+    ordering = ('-created_at',)
+    list_editable = ('is_approved',)
 
     def get_readonly_fields(self, request, obj=None):
-        return ('news', 'name', 'content', 'parent') if not request.user.is_superuser else ()
+        return ('news', 'user', 'name', 'content', 'parent') if not request.user.is_superuser else ()
+
+    def author_identity(self, obj):
+        """
+        Dynamically builds a premium display handle inside your Unfold dashboard grid table view.
+        """
+        if obj.is_verified_staff:
+            return f"🛡️ {obj.display_name} (Staff)"
+        return obj.display_name or "Anonymous Fan"
+    author_identity.short_description = "Commenter"
 
     def status_badge(self, obj):
         return get_status_badge(obj.is_approved, true_label="Approved", false_label="Pending")
@@ -155,10 +181,15 @@ class NewsCommentAdmin(UnfoldModelAdmin):
     def pending(self, request, queryset):
         queryset.update(is_approved=False)
         self.message_user(request, "Selected comments have been hidden.")
+
+class IpAdmin(UnfoldModelAdmin):
+    list_display = ('ip_address', 'blocked_at', 'expires_at', 'reason')
+    list_filter_submit = True
+    ordering = ('-blocked_at',)
     
 
 all_portals = [admin.site, admin_site, staff_admin_site]
-registrations = [(News, NewsAdmin), (Category, CategoryAdmin), (NewsComment, NewsCommentAdmin)]
+registrations = [(News, NewsAdmin), (Category, CategoryAdmin), (NewsComment, NewsCommentAdmin), (IpBlock, IpAdmin)]
 
 for portal in all_portals:
     for model, admin_class in registrations:
