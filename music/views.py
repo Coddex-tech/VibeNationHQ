@@ -6,7 +6,7 @@ from .utils.get_media import get_primary_media, attach_media
 from .utils.clean_tags import clean_mp3_tags
 from django.shortcuts import render, get_object_or_404, redirect
 from .models import Song, DJ, Album, Artist, SongView, MusicComment
-from django.contrib.contenttypes.models import ContentType
+from itertools import chain
 from news.models import News
 import shutil
 import os
@@ -127,46 +127,81 @@ def mixtape(request):
 # =======================================================================
 # TRENDING SONG
 # =======================================================================
+class CacheSafeArtistList(list):
+    def all(self):
+        return self
+
 def trending_song(request):
     now = timezone.now()
 
     def get_trending(cache_key, days, limit=21):
-        data = cache.get(cache_key)
+        # 1. Try to fetch from cache
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
 
-        if not data:
-            time_threshold = now - timedelta(days=days)
-
-            data = list(
-                Song.objects.annotate(
-                    recent_views=Count(
-                        'song_views',
-                        filter=Q(song_views__timestamp__gte=time_threshold)
-                    )
+        # 2. Cache Miss: Calculate fresh data from DB
+        time_threshold = now - timedelta(days=days)
+        songs = (
+            Song.objects.annotate(
+                recent_views=Count(
+                    'song_views',
+                    filter=Q(song_views__timestamp__gte=time_threshold)
                 )
-                .prefetch_related('artists')
-                .order_by('-recent_views')[:limit]
             )
+            .prefetch_related('artists')
+            .order_by('-recent_views')[:limit]
+        )
 
-            # Attach unified media
-            data = attach_media(data)
+        # 3. Build an ultra-light list of data dictionaries (Fully cache-safe!)
+        processed_list = []
+        for song in songs:
+            media_data = get_primary_media(song)
+            
+            # Wrap artists in our custom list so template `.artists.all` loop still functions
+            cached_artists = CacheSafeArtistList([
+                {'name': artist.name} for artist in song.artists.all()
+            ])
+            
+            processed_list.append({
+                'id': song.id,
+                'title': song.title,
+                'slug': song.slug,
+                'group': getattr(song, 'group', 'Music'),
+                'media': media_data, 
+                'artists': cached_artists
+            })
 
-            # Cache processed objects
-            cache_duration = 800 if days == 1 else 1800
-            cache.set(cache_key, data, cache_duration)
+        # 4. Cache the structure safely
+        cache_duration = 800 if days == 1 else 1800
+        cache.set(cache_key, processed_list, cache_duration)
 
-        return data
+        return processed_list
 
-    trending_songs = Song.objects.prefetch_related(
-        'artists'
-    ).order_by('-views')[:40]
-
-    trending_songs = attach_media(trending_songs)
+    # --- Standard Trending Songs (No Cache) ---
+    raw_trending_songs = Song.objects.prefetch_related('artists').order_by('-views')[:40]
+    
+    trending_songs_list = []
+    for song in raw_trending_songs:
+        # Wrap artists here too for identical data structures in template
+        active_artists = CacheSafeArtistList([
+            {'name': artist.name} for artist in song.artists.all()
+        ])
+        
+        trending_songs_list.append({
+            'id': song.id,
+            'title': song.title,
+            'slug': song.slug,
+            'group': getattr(song, 'group', 'Music'),
+            'media': get_primary_media(song),
+            'artists': active_artists
+        })
 
     context = {
         'trending_now': get_trending('trending_now', 1),
         'trending_week': get_trending('trending_week', 7),
         'trending_month': get_trending('trending_month', 30),
-        'trending_songs': trending_songs,
+        'trending_songs': trending_songs_list,
     }
     return render(request, "music/trending.html", context)
 # -----------------------------------------------------------------------
@@ -374,6 +409,30 @@ def song_detail(request, slug):
         genre_songs = Song.objects.all().order_by('-release_date').prefetch_related('artists')[:12]
 
     trending_songs = Song.objects.all().order_by('-views').prefetch_related('artists')[:12]
+    
+    # Fetch the newest 12 records of each content type
+    songs = Song.objects.order_by('-release_date')[:6]
+    mixtapes = DJ.objects.order_by('-created_at')[:6]
+
+    # Normalize fields for template looping consistency
+    for song in songs:
+        song.display_title = song.title
+        song.display_date = song.release_date
+        song.display_cover = song.cover_image.url if song.cover_image else None
+        song.is_song = True
+
+    for mix in mixtapes:
+        mix.display_title = f"{mix.dj_name} Mixtape"
+        mix.display_date = mix.created_at
+        mix.display_cover = mix.dj_cover.url if mix.dj_cover else None
+        mix.is_song = False
+
+    # Combine both lists and sort them by the unified display_date value
+    newest_music_content = sorted(
+        chain(songs, mixtapes),
+        key=lambda item: item.display_date,
+        reverse=True
+    )[:12]
 
     comment_filter = {'parent__isnull': True, 'is_approved': True}
     if not is_dj:
@@ -394,6 +453,7 @@ def song_detail(request, slug):
         'is_dj': is_dj,
         'genre_songs': genre_songs,
         'trending_songs': trending_songs,
+        'newest_music_content': newest_music_content,
         'page_title': f"{display_title} | VibeNation",
     }
     return render(request, 'music/song_detail.html', context)

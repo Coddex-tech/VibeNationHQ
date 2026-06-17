@@ -50,7 +50,7 @@ class NewsManager(models.Manager):
 
     def regular_news(self):
         """
-        🔥 HIGH PERFORMANCE READ: Pulls standard news AND any expired 
+        HIGH PERFORMANCE READ: Pulls standard news AND any expired 
         sponsored posts together seamlessly. Zero database stress.
         """
         now = timezone.now()

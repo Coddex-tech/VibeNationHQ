@@ -2,6 +2,7 @@
     --main-colour: rgb(7, 51, 51);
     --main-button: #008080;
     --main-button-hover: #006666;
+    --brand-teal-glow: #00b3b3;
     --background-colour: #cacaca;
     --primary-text-colour: #fff; /* primary text or background */
     --heading-font: 'Inter', sans-serif;
@@ -10,6 +11,10 @@
     --light-grey: #f8f9fa;
     --text-main: #222222;
     --text-muted: #666666;
+
+    /* PREMIUM DARK THEME PALETTE */
+    --bg-dark-deep: #0d1117;
+    --bg-dark-card: #161b22;
 }
 
 /* General Styles */
@@ -33,6 +38,7 @@ body {
     align-items: center;
     gap: 5px;
     flex: 1 0 300px;
+    margin-bottom: 5px;
 }
 
 .navbar-search input[type="text"] {
@@ -848,13 +854,9 @@ img.loaded {
 /* The Logo with Anti-Squash and Animation */
 #splash-screen .splash-logo {
     width: 180px;
-    /* Set a fixed width */
     height: auto;
-    /* Let height adjust naturally */
     max-width: 50%;
-    /* Prevents it being too big on small phones */
     object-fit: contain;
-    /* Keeps the CorelDraw shield shape perfect */
 
     /* Force the animation to run */
     display: block !important;
@@ -912,6 +914,7 @@ img.loaded {
 
     .logo-link {
         flex: 1; /* Reset base constraints on tablet layout viewports */
+        margin-bottom: -20px;
     }
 
     .nav-wrapper {
@@ -1102,5 +1105,101 @@ img.loaded {
         .logo-link {
             margin-left: 15;
         }
+    }
+}
+
+
+/* ==========================================================================
+   PAGINATION GLOBAL ARCHITECTURE ENGINE 
+   ========================================================================== */
+.pagination {
+    margin-top: 40px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px; /* Tighter dynamic button clustering */
+    user-select: none;
+    flex-wrap: wrap; /* Safety fallback block for exceptionally small mobile screens */
+}
+
+.pagination a,
+.pagination strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* Compact crisp sizes to protect layout grids */
+    min-width: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 4px;
+    
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--heading-font);
+    
+    /* Strict Non-Black variables initialization */
+    background-color: var(--light-grey);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--text-main);
+    
+    cursor: pointer;
+    transition: background-color 0.15s ease, 
+                border-color 0.15s ease, 
+                color 0.15s ease, 
+                transform 0.1s ease;
+}
+
+/* Hover transitions for inactive link page indices */
+.pagination a:hover {
+    border-color: var(--brand-teal-glow);
+    color: var(--brand-teal-glow);
+    background-color: rgba(0, 179, 179, 0.05); 
+}
+
+/* Snappy tactile click effect */
+.pagination a:active {
+    transform: scale(0.93);
+}
+
+/* Active current state design override tokens */
+.pagination strong {
+    background-color: var(--main-button);
+    border-color: var(--main-button);
+    color: var(--primary-text-colour); 
+    font-weight: 700;
+}
+
+/* ⚡ ELLIPSIS STYLING: Aligns perfectly with the light gray block sizes */
+.pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 32px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--heading-font);
+    color: var(--text-muted);
+}
+
+/* Mobile responsive scaling overrides */
+@media (max-width: 480px) {
+    .pagination {
+        gap: 3px;
+    }
+    .pagination a,
+    .pagination strong {
+        min-width: 28px;
+        height: 28px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+    .pagination-ellipsis {
+        min-width: 18px;
+        height: 28px;
+        font-size: 12px;
     }
 }

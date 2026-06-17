@@ -1,20 +1,94 @@
-/* PAGINATION STYLE */
+/* ==========================================================================
+   PAGINATION GLOBAL ARCHITECTURE ENGINE 
+   ========================================================================== */
 .pagination {
-  margin-top: 20px;
-  text-align: center;
+    margin-top: 40px;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4px; /* Tighter dynamic button clustering */
+    user-select: none;
+    flex-wrap: wrap; /* Safety fallback block for exceptionally small mobile screens */
 }
 
 .pagination a,
 .pagination strong {
-  margin: 0 5px;
-  padding: 6px 12px;
-  border: 1px solid var(--main-button);
-  border-radius: 4px;
-  text-decoration: none;
-  color: teal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    
+    /* Compact crisp sizes to protect layout grids */
+    min-width: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 4px;
+    
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: var(--heading-font);
+    
+    /* Strict Non-Black variables initialization */
+    background-color: var(--light-grey);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    color: var(--text-main);
+    
+    cursor: pointer;
+    transition: background-color 0.15s ease, 
+                border-color 0.15s ease, 
+                color 0.15s ease, 
+                transform 0.1s ease;
 }
 
+/* Hover transitions for inactive link page indices */
+.pagination a:hover {
+    border-color: var(--brand-teal-glow);
+    color: var(--brand-teal-glow);
+    background-color: rgba(0, 179, 179, 0.05); 
+}
+
+/* Snappy tactile click effect */
+.pagination a:active {
+    transform: scale(0.93);
+}
+
+/* Active current state design override tokens */
 .pagination strong {
-  background: var(--main-button);
-  color: var(--primary-text-colour);
+    background-color: var(--main-button);
+    border-color: var(--main-button);
+    color: var(--primary-text-colour); 
+    font-weight: 700;
+}
+
+/* ⚡ ELLIPSIS STYLING: Aligns perfectly with the light gray block sizes */
+.pagination-ellipsis {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 32px;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: var(--heading-font);
+    color: var(--text-muted);
+}
+
+/* Mobile responsive scaling overrides */
+@media (max-width: 480px) {
+    .pagination {
+        gap: 3px;
+    }
+    .pagination a,
+    .pagination strong {
+        min-width: 28px;
+        height: 28px;
+        padding: 0 8px;
+        font-size: 12px;
+    }
+    .pagination-ellipsis {
+        min-width: 18px;
+        height: 28px;
+        font-size: 12px;
+    }
 }

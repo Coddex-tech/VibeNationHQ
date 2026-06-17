@@ -10,7 +10,6 @@ Find and download complete albums from your favorite artists. Discover the best 
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'music/song_card.css' %}">
-<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
 {% endblock %}
 
@@ -29,39 +28,62 @@ Find and download complete albums from your favorite artists. Discover the best 
   <a class="card-link" href="{% url 'music:album_detail' album.slug %}" aria-labelledby="album-title-{{ forloop.counter }}">
     <div class="card-thumb" aria-hidden="true">
       {% if album.cover %}
-      <img loading="lazy" src="{{ album.cover.url }}" alt="{{ album.title }}">
+        <img loading="lazy" src="{{ album.cover.url }}" alt="{{ album.title }}">
       {% else %}
-      <img loading="lazy" src="https://via.placeholder.com/150" alt="No Cover">
+        <img loading="lazy" src="https://via.placeholder.com/150" alt="No Cover">
       {% endif %}
     </div>
     <div class="card-body">
       {% if album.group %}
-      <span class="tag-pill">{{ album.group }}</span>
+        <span class="tag-pill">{{ album.group }}</span>
       {% endif %}
       <h2 id="album-title-{{ forloop.counter }}" class="card-title">
-        <p>{{ album.title }}{% if album.artist %} - {{ album.artist.name }}{% endif %}</p>
+        {{ album.title }}{% if album.artist %} - {{ album.artist.name }}{% endif %}
       </h2>
     </div>
   </a>
   {% endfor %}
 </div>
 
-<!-- PAGINATION -->
 <div class="pagination">
   {% if page_obj.has_previous %}
-  <a href="?page={{ page_obj.previous_page_number }}">Prev</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% else %}
+      <a href="?page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% endif %}
   {% endif %}
 
   {% for num in page_obj.paginator.page_range %}
-  {% if page_obj.number == num %}
-  <strong>{{ num }}</strong>
-  {% else %}
-  <a href="?page={{ num }}">{{ num }}</a>
-  {% endif %}
+    {# 1. Check if the page number should be visible #}
+    {% if num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+      {% if page_obj.number == num %}
+        <strong>{{ num }}</strong>
+      {% else %}
+        {% if request.GET.q %}
+          <a href="?q={{ request.GET.q }}&page={{ num }}">{{ num }}</a>
+        {% else %}
+          <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+
+    {# 2. Separate blocks handle the ellipses formatting cleanly #}
+    {% if num == 2 and page_obj.number > 4 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
+
+    {% if num == page_obj.paginator.num_pages|add:-1 and page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
   {% endfor %}
 
   {% if page_obj.has_next %}
-  <a href="?page={{ page_obj.next_page_number }}">Next</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.next_page_number }}">Next »</a>
+    {% else %}
+      <a href="?page={{ page_obj.next_page_number }}">Next »</a>
+    {% endif %}
   {% endif %}
 </div>
 
@@ -71,13 +93,12 @@ Find and download complete albums from your favorite artists. Discover the best 
 
 <style>
   h1 {
-    background-color: rgb(7, 51, 51);
-    color: white;
+    background-color: var(--main-colour);
+    color: var(--primary-text-colour);
     padding: 2px 5px;
     width: fit-content;
+    font-family: var(--heading-font);
   }
 </style>
-
-<hr style="border: none; height: 2px; background-color: #000; margin: 10px 0;">
 
 {% endblock %}

@@ -253,12 +253,74 @@
       {% endif %}
     </div>
     <div class="card-body">
-      <span class="tag-pill">{{ item.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in item.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in item.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ item.id }}" class="card-title">
         {{ item.title }} -
         {% for artist in item.artists.all %}
         {{ artist.name }}{% if not forloop.last %}, {% endif %}
         {% endfor %}
+      </h2>
+    </div>
+  </a>
+  {% endfor %}
+  {% endwith %}
+</div>
+{% endif %}
+
+<div class="inline-ad">
+  {% show_ad 'In-Article' %}
+</div>
+
+{% if newest_music_content %}
+<h2 style="margin-top: 30px;">LATEST JAM</h2>
+<div class="card-container-grid">
+  {% with section="song_detail_combine_latest" %}
+  {% for item in newest_music_content %}
+  <a class="card-link" href="{% url 'music:song_detail' item.slug %}">
+    <div class="card-thumb">
+      {% if item.cover_image %}
+      <img loading="lazy" src="{{ item.cover_image.url }}" alt="{{ item.title }}">
+      {% elif item.original_cover %}
+      <img loading="lazy" src="{{ item.original_cover.url }}" alt="{{ item.title }}">
+      {% elif item.dj_cover %}
+      <img loading="lazy" src="{{ item.dj_cover.url }}" alt="{{ item.title }}">
+      {% else %}
+      <img loading="lazy" src="{% static 'images/default_cover.png' %}" alt="Default Cover">
+      {% endif %}
+    </div>
+    <div class="card-body">
+      <span class="tag-pill">
+        {% if "Gospel" in item.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in item.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
+      <h2 id="song-title-{{ section }}-{{ item.id }}" class="card-title">
+        {% if item.group == "Mixtape" %}
+          {{ item.dj_name }} - 
+          {% for artist in item.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% empty %}
+            Host
+          {% endfor %}
+          
+        {% else %}
+          {{ item.title }} - 
+          {% for artist in item.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        {% endif %}
       </h2>
     </div>
   </a>
@@ -287,7 +349,15 @@
       {% endif %}
     </div>
     <div class="card-body">
-      <span class="tag-pill">{{ item.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in item.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in item.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ item.id }}" class="card-title">
         {{ item.title }} -
         {% for artist in item.artists.all %}

@@ -120,7 +120,7 @@ entertainment news and updates on VibeNation.{% endblock %}
       <a href="https://api.whatsapp.com/send?text={{ news.title }}%20{{ request.build_absolute_uri }}"
         class="whatsapp"><i class="fab fa-whatsapp"></i></a>
       <a href="https://twitter.com/intent/tweet?url={{ request.build_absolute_uri }}" class="twitter"><i
-          class="fab fa-twitter"></i></a>
+          class="fa-brands fa-x-twitter"></i></a>
       <a href="https://www.facebook.com/sharer/sharer.php?u={{ request.build_absolute_uri }}" class="facebook"><i
           class="fab fa-facebook-f"></i></a>
       <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}" class="telegram"><i
@@ -188,7 +188,7 @@ entertainment news and updates on VibeNation.{% endblock %}
     <div class="news-tags">
       <h3 style="color: teal;">Related topics:</h3>
       {% for tag in news.tags.all %}
-      <a href="{% url 'music:songs_by_tag' tag.slug %}" class="tag">{{ tag.name }}</a>
+      <a href="{% url 'news:news_by_tag' tag.slug %}" class="tag">{{ tag.name }}</a>
       {% empty %}
       <p style="color: teal; text-decoration: none;">No related topic yet.</p>
       {% endfor %}

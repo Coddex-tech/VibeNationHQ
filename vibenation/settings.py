@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.sites",
     "django.contrib.sitemaps",
+    'rest_framework',
 
     # Two-Factor Authentication
     'django_otp',
@@ -256,6 +257,18 @@ if not DEBUG:
 # Global requirement for Unfold's responsive layout engines
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SITE_ID = 1
+
+REST_FRAMEWORK = {
+    # Allows read-only access to anonymous visitors, full access to authenticated users
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
+    # Keeps your JSON output tight and clean without whitespace overhead
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer', # Keeps that clean test screen active
+    ],
+}
 
 UNFOLD = {
     "SITE_TITLE": "VibeNation Admin",

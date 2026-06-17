@@ -10,7 +10,6 @@ Stay updated with the latest songs, albums, and DJ mixes from your favorite arti
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'music/song_card.css' %}">
-<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
 {% endblock %}
 
@@ -26,42 +25,71 @@ Stay updated with the latest songs, albums, and DJ mixes from your favorite arti
 
 {% if page_obj %}
 <div class="card-container-grid">
-{% with section="latest_song" %}
-  {% for song in page_obj %}
-  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
-    <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        <p>{{ song.title }} -
+  {% with section="latest_song" %}
+    {% for song in page_obj %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
           {% for artist in song.artists.all %}
-          {{ artist.name }}{% if not forloop.last %}, {% endif %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
           {% endfor %}
-        </p>
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
-{% endwith %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
+  {% endwith %}
 </div>
 
 <div class="pagination">
   {% if page_obj.has_previous %}
-  <a href="?q={{ title }}&page={{ page_obj.previous_page_number }}">Prev</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% else %}
+      <a href="?page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% endif %}
   {% endif %}
 
   {% for num in page_obj.paginator.page_range %}
-  {% if page_obj.number == num %}
-  <strong>{{ num }}</strong>
-  {% else %}
-  <a href="?q={{ title }}&page={{ num }}">{{ num }}</a>
-  {% endif %}
+    {% if num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+      {% if page_obj.number == num %}
+        <strong>{{ num }}</strong>
+      {% else %}
+        {% if request.GET.q %}
+          <a href="?q={{ request.GET.q }}&page={{ num }}">{{ num }}</a>
+        {% else %}
+          <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+
+    {% if num == 2 and page_obj.number > 4 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
+
+    {% if num == page_obj.paginator.num_pages|add:-1 and page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
   {% endfor %}
 
   {% if page_obj.has_next %}
-  <a href="?q={{ title }}&page={{ page_obj.next_page_number }}">Next</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.next_page_number }}">Next »</a>
+    {% else %}
+      <a href="?page={{ page_obj.next_page_number }}">Next »</a>
+    {% endif %}
   {% endif %}
 </div>
 
@@ -73,17 +101,18 @@ Stay updated with the latest songs, albums, and DJ mixes from your favorite arti
 <h3>Artists</h3>
 <ul>
   {% for artist in artists %}
-  <li>{{ artist.name }}</li>
+    <li>{{ artist.name }}</li>
   {% endfor %}
 </ul>
 {% endif %}
 
 <style>
   h1 {
-    background-color: rgb(7, 51, 51);
-    color: white;
-    padding: 2px 5px 2px 5px;
+    background-color: var(--main-colour); /* Swapped hard hex to use your real root variable */
+    color: var(--primary-text-colour);     /* Swapped hard hex to use your real root variable */
+    padding: 2px 5px;
     width: fit-content;
+    font-family: var(--heading-font);
   }
 </style>
 {% endblock %}

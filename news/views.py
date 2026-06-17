@@ -2,11 +2,15 @@ from django.shortcuts import render, get_object_or_404, redirect
 from .models import News, Category, NewsView, NewsComment
 from music.models import Song
 from django.core.paginator import Paginator
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from taggit.models import Tag
 from django.utils import timezone
 from datetime import timedelta
 from django.core.cache import cache
 from django.db.models import Count, Q, F
+from .serializers import NewsSerializer
 import random
 import re
 from .forms import NewsCommentForm
@@ -44,6 +48,8 @@ def get_top_ranking(category_name, cache_key, last_caching, strict_caching):
     return cached_data
 # ========= END OF HELPER FUNCTION ========
 
+class NewsPagination(PageNumberPagination):
+    page_size = 1
 
 def homepage(request):
     now = timezone.now()
@@ -494,29 +500,27 @@ def news_by_tag(request, slug):
     return render(request, 'news/news_by_tag.html', context)
 
 
+@api_view(['GET'])
 def entertainment(request):
     now = timezone.now()
-    last_caching = now - timedelta(hours=12)  # Window for "Trending" calculation
-    strict_caching = now - timedelta(days=14) # How far back to look for top news
+    last_caching = now - timedelta(hours=12)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Fetch Section Records
     featured_entertainment = News.objects.public().filter(
         category__name='Entertainment', 
         is_featured=True
     ).order_by('-date_published').first()
 
     sponsored_feature = News.objects.sponsored().filter(category__name='Entertainment').first()    
-    
-    # TOP RANKING fetching 6 through helper function
     top_pool = get_top_ranking('Entertainment', 'top_entertainment', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Conditional Slices Based on Promotion States
     if sponsored_feature:
         top_entertainment = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_entertainment = top_pool[:5]
 
-    # 5. LATEST NEWS (SIDEBAR) LOGIC
     latest_pool = News.objects.public().filter(
         category__name='Entertainment', 
         is_featured=False
@@ -527,23 +531,20 @@ def entertainment(request):
     else:
         latest_entertainment = latest_pool[:5]
 
-    # Prevent news from top section to show in news list
-    used_ids = [n.id for n in top_entertainment]
-    used_ids += [n.id for n in latest_entertainment]
-    
+    # 3. Deduplicate IDs
+    used_ids = [n.id for n in top_entertainment] + [n.id for n in latest_entertainment]
     if featured_entertainment:
         used_ids.append(featured_entertainment.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Entertainment', 
         is_featured=False,
         is_sponsored=False 
-    ).exclude(id__in=used_ids).order_by('-date_published')
+    ).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Pool Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Entertainment')
         .order_by('-date_published')[:20]
@@ -555,51 +556,55 @@ def entertainment(request):
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Process Pagination Blocks via Shared Pagination Config
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_entertainment': featured_entertainment,
-        'sponsored_feature': sponsored_feature,
-        'top_entertainment': top_entertainment,
-        'latest_entertainment': latest_entertainment,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Entertainment',
-    }
-    return render(request, 'news/entertainment.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_entertainment": NewsSerializer(featured_entertainment, context=serializer_context).data if featured_entertainment else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_entertainment": NewsSerializer(top_entertainment, many=True, context=serializer_context).data,
+        "latest_entertainment": NewsSerializer(latest_entertainment, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
 
+def entertainment_frontend(request):
+    return render(request, 'news/entertainment.html', {'current_category': 'Entertainment'})
+# --------------------------------------------------------------------------------------------------------
 
+@api_view(['GET'])
 def politics(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Fetch Section Records
     featured_political = News.objects.public().filter(
         category__name='Politics', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
     sponsored_feature = News.objects.sponsored().filter(category__name='Politics').first()    
-
-    
-    # TOP RANKING fetching 6 through helper function
     top_pool = get_top_ranking('Politics', 'top_political', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Conditional Slices Based on Promotion States
     if sponsored_feature:
         top_political = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_political = top_pool[:5]
 
-    # Latest Political
     latest_pool = News.objects.public().filter(
         category__name='Politics', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -607,81 +612,82 @@ def politics(request):
     else:
         latest_political = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_political]
-    used_ids += [n.id for n in latest_political]
-    
+    # 3. Deduplicate IDs to prevent clumping layout repetitions
+    used_ids = [n.id for n in top_political] + [n.id for n in latest_political]
     if featured_political:
         used_ids.append(featured_political.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    # Base discovery list query feed
+    news_list_queryset = News.objects.public().filter(
         category__name='Politics', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Footer Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Politics')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Process Pagination Slices Through the Paginator Instantiation
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_political': featured_political,
-        'sponsored_feature': sponsored_feature,
-        'top_political': top_political,
-        'latest_political': latest_political,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Politics',
-    }
-    return render(request, 'news/politics.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_political": NewsSerializer(featured_political, context=serializer_context).data if featured_political else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_political": NewsSerializer(top_political, many=True, context=serializer_context).data,
+        "latest_political": NewsSerializer(latest_political, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def politics_frontend(request):
+    """Serves the fast client-side skeleton layout directly to the user"""
+    return render(request, 'news/politics.html', {'current_category': 'Politics'})
 # ---------------------------------------------------------------------------
 
-
+@api_view(['GET'])
 def lifestyle(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Fetch Section Records
     featured_lifestyle = News.objects.public().filter(
         category__name='Lifestyle', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
     sponsored_feature = News.objects.sponsored().filter(category__name='Lifestyle').first()    
-
-    
-    # TOP RANKING fetching 6 through helper function
     top_pool = get_top_ranking('Lifestyle', 'top_lifestyle', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Slices based on promotion states
     if sponsored_feature:
         top_lifestyle = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_lifestyle = top_pool[:5]
 
-    # Latest Lifestyle News
     latest_pool = News.objects.public().filter(
         category__name='Lifestyle', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -689,80 +695,80 @@ def lifestyle(request):
     else:
         latest_lifestyle = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_lifestyle]
-    used_ids += [n.id for n in latest_lifestyle]
-    
+    # 3. Deduplicate elements to keep layout clean
+    used_ids = [n.id for n in top_lifestyle] + [n.id for n in latest_lifestyle]
     if featured_lifestyle:
         used_ids.append(featured_lifestyle.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Lifestyle', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Footer Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Lifestyle')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Pipeline slices through DRF standard pagination instance
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_lifestyle': featured_lifestyle,
-        'sponsored_feature': sponsored_feature,
-        'top_lifestyle': top_lifestyle,
-        'latest_lifestyle': latest_lifestyle,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Lifestyle',
-    }
-    return render(request, 'news/lifestyle.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_lifestyle": NewsSerializer(featured_lifestyle, context=serializer_context).data if featured_lifestyle else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_lifestyle": NewsSerializer(top_lifestyle, many=True, context=serializer_context).data,
+        "latest_lifestyle": NewsSerializer(latest_lifestyle, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
 
+def lifestyle_frontend(request):
+    return render(request, 'news/lifestyle.html', {'current_category': 'Lifestyle'})
 # -------------------------------------------------------------------
 
+@api_view(['GET'])
 def technology(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Gather Section Record Frameworks
     featured_technology = News.objects.public().filter(
         category__name='Technology', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
-    sponsored_feature = News.objects.sponsored().filter(category__name='Technology').first()
-    
-    # TOP RANKING fetching 6 through helper function
+    sponsored_feature = News.objects.sponsored().filter(category__name='Technology').first()    
     top_pool = get_top_ranking('Technology', 'top_technology', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Data Slices Relative to Advertising States
     if sponsored_feature:
         top_technology = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_technology = top_pool[:5]
 
-    # Latest Tech News
     latest_pool = News.objects.public().filter(
         category__name='Technology', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -770,78 +776,80 @@ def technology(request):
     else:
         latest_technology = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_technology]
-    used_ids += [n.id for n in latest_technology]
-    
+    # 3. Prevent Duplications Across Interactive Blocks
+    used_ids = [n.id for n in top_technology] + [n.id for n in latest_technology]
     if featured_technology:
         used_ids.append(featured_technology.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Technology', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Footer Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Technology')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Hand over Main Grid Query to the DRF Paginator Engine
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_technology': featured_technology,
-        'sponsored_feature': sponsored_feature,
-        'top_technology': top_technology,
-        'latest_technology': latest_technology,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Technology',
-    }
-    return render(request, 'news/technology.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_technology": NewsSerializer(featured_technology, context=serializer_context).data if featured_technology else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_technology": NewsSerializer(top_technology, many=True, context=serializer_context).data,
+        "latest_technology": NewsSerializer(latest_technology, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
 
+def technology_frontend(request):
+    """Instantly hands off the static structural layout skeleton to the browser"""
+    return render(request, 'news/technology.html', {'current_category': 'Technology'})
+
+@api_view(['GET'])
 def music_news(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Query Dataset Shells
     featured_music_news = News.objects.public().filter(
         category__name='Music News', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
-    sponsored_feature = News.objects.sponsored().filter(category__name='Music News').first()
-    
-    # TOP RANKING fetching 6 through helper function
+    sponsored_feature = News.objects.sponsored().filter(category__name='Music News').first()    
     top_pool = get_top_ranking('Music News', 'top_music_news', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Display Windows
     if sponsored_feature:
         top_music_news = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_music_news = top_pool[:5]
 
-    # Latest Music News
     latest_pool = News.objects.public().filter(
         category__name='Music News', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -849,80 +857,82 @@ def music_news(request):
     else:
         latest_music_news = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_music_news]
-    used_ids += [n.id for n in latest_music_news]
-    
+    # 3. Deduplicate Content IDs across sections
+    used_ids = [n.id for n in top_music_news] + [n.id for n in latest_music_news]
     if featured_music_news:
         used_ids.append(featured_music_news.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Music News', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Pull Footer Discovery Stories
     other_news_pool = list(
         News.objects.public().exclude(category__name='Music News')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Hand Over Main Feed Query to DRF Pagination Engine
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_music_news': featured_music_news,
-        'sponsored_feature': sponsored_feature,
-        'top_music_news': top_music_news,
-        'latest_music_news': latest_music_news,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Music News',
-    }
-    return render(request, 'news/music_news.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_music_news": NewsSerializer(featured_music_news, context=serializer_context).data if featured_music_news else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_music_news": NewsSerializer(top_music_news, many=True, context=serializer_context).data,
+        "latest_music_news": NewsSerializer(latest_music_news, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def music_news_frontend(request):
+    """Instantly delivers the empty wireframe shell to keep transitions fast"""
+    return render(request, 'news/music_news.html', {'current_category': 'Music News'})
 # --------------------------------------------------------------------
 
 
-def sport(request):
+@api_view(['GET'])
+def sports(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Fetch Section Records
     featured_sport = News.objects.public().filter(
         category__name='Sports', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
-    sponsored_feature = News.objects.sponsored().filter(category__name='Sports').first()
-    
-    # TOP RANKING fetching 6 through helper function
+    sponsored_feature = News.objects.sponsored().filter(category__name='Sports').first()    
     top_pool = get_top_ranking('Sports', 'top_sport', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Slices based on promotion states
     if sponsored_feature:
         top_sport = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_sport = top_pool[:5]
 
-    # Latest Sport News
     latest_pool = News.objects.public().filter(
         category__name='Sports', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -930,79 +940,81 @@ def sport(request):
     else:
         latest_sport = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_sport]
-    used_ids += [n.id for n in latest_sport]
-    
+    # 3. Deduplicate elements to keep layout clean
+    used_ids = [n.id for n in top_sport] + [n.id for n in latest_sport]
     if featured_sport:
         used_ids.append(featured_sport.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Sports', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Footer Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Sports')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Pipeline slices through DRF standard pagination instance
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_sport': featured_sport,
-        'sponsored_feature': sponsored_feature,
-        'top_sport': top_sport,
-        'latest_sport': latest_sport,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Sport',
-    }
-    return render(request, 'news/sport_news.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_sport": NewsSerializer(featured_sport, context=serializer_context).data if featured_sport else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_sport": NewsSerializer(top_sport, many=True, context=serializer_context).data,
+        "latest_sport": NewsSerializer(latest_sport, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def sports_frontend(request):
+    """Returns the single skeleton layout interface frame instantly"""
+    return render(request, 'news/sport_news.html', {'current_category': 'Sports'})
 # -----------------------------------------------------------------------
 
-def event(request):
+@api_view(['GET'])
+def events(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Gather Section Record Frameworks
     featured_event = News.objects.public().filter(
         category__name='Events', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
-    sponsored_feature = News.objects.sponsored().filter(category__name='Events').first()
-    
-    # TOP RANKING fetching 6 through helper function
+    sponsored_feature = News.objects.sponsored().filter(category__name='Events').first()    
     top_pool = get_top_ranking('Events', 'top_event', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Data Slices Relative to Advertising States
     if sponsored_feature:
         top_event = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_event = top_pool[:5]
 
-    # Latest Event
     latest_pool = News.objects.public().filter(
         category__name='Events', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -1010,80 +1022,81 @@ def event(request):
     else:
         latest_event = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_event]
-    used_ids += [n.id for n in latest_event]
-    
+    # 3. Prevent Duplications Across Interactive Blocks
+    used_ids = [n.id for n in top_event] + [n.id for n in latest_event]
     if featured_event:
         used_ids.append(featured_event.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Events', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # Random from other categories
+    # 4. Handle Discovery Footer Slices
     other_news_pool = list(
         News.objects.public().exclude(category__name='Events')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # PAGINATION
-    paginator = Paginator(news_list, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    context = {
-        'featured_event': featured_event,
-        'sponsored_feature': sponsored_feature,
-        'top_event': top_event,
-        'latest_event': latest_event,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Event',
-    }
-    return render(request, 'news/event.html', context)
+    # 5. Hand over Main Grid Query to the DRF Paginator Engine
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
+
+    serializer_context = {'request': request}
+    return Response({
+        "featured_event": NewsSerializer(featured_event, context=serializer_context).data if featured_event else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_event": NewsSerializer(top_event, many=True, context=serializer_context).data,
+        "latest_event": NewsSerializer(latest_event, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def events_frontend(request):
+    """Instantly delivers the empty wireframe shell to keep transitions fast"""
+    return render(request, 'news/event.html', {'current_category': 'Events'})
 # ------------------------------------------------------------------------
 
-
+@api_view(['GET'])
 def education(request):
     now = timezone.now()
     last_caching = now - timedelta(hours=12)
-    strict_caching = now - timedelta(days=14)
+    strict_caching = now - timedelta(days=1444)
 
-    # Featured news
+    # 1. Query Dataset Shells
     featured_education = News.objects.public().filter(
         category__name='Education', 
         is_featured=True
     ).order_by('-date_published').first()
 
-    # sponsored post
-    sponsored_feature = News.objects.sponsored().filter(category__name='Education').first()
-    
-    # TOP RANKING fetching 6 through helper function
+    sponsored_feature = News.objects.sponsored().filter(category__name='Education').first()    
     top_pool = get_top_ranking('Education', 'top_education', last_caching, strict_caching)
 
-    # filtering sponsored post
+    # 2. Extract Display Windows
     if sponsored_feature:
         top_education = [n for n in top_pool if n.id != sponsored_feature.id][:4]
     else:
         top_education = top_pool[:5]
 
-    # Latest Education
     latest_pool = News.objects.public().filter(
         category__name='Education', 
-        is_featured=False,
+        is_featured=False
     ).order_by('-date_published')[:6]
 
     if sponsored_feature:
@@ -1091,84 +1104,85 @@ def education(request):
     else:
         latest_education = latest_pool[:5]
 
-    # Prevent news from top section to news list
-    used_ids = [n.id for n in top_education]
-    used_ids += [n.id for n in latest_education]
-    
+    # 3. Deduplicate Content IDs across sections
+    used_ids = [n.id for n in top_education] + [n.id for n in latest_education]
     if featured_education:
         used_ids.append(featured_education.id)
     if sponsored_feature:
         used_ids.append(sponsored_feature.id)
     
-    # Main news list of the category
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Education', 
         is_featured=False,
-        is_sponsored=False
+        is_sponsored=False 
     ).exclude(id__in=used_ids).order_by('-date_published')
-
-    # Mini-Featured Random from Latest 20
+    
+    # 4. Pull Footer Discovery Stories
     other_news_pool = list(
         News.objects.public().exclude(category__name='Education')
         .order_by('-date_published')[:20]
         .values_list('id', flat=True)
     )
-    
     if other_news_pool:
         sample_ids = random.sample(other_news_pool, min(len(other_news_pool), 5))
         mini_featured_news = News.objects.public().filter(id__in=sample_ids).prefetch_related('category')
     else:
         mini_featured_news = []
 
-    # Pagination
-    paginator = Paginator(news_list, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # 5. Hand Over Main Feed Query to DRF Pagination Engine
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_education': featured_education,
-        'sponsored_feature': sponsored_feature,
-        'top_education': top_education,
-        'latest_education': latest_education,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Education',
-    }
-    return render(request, 'news/education.html', context)
+    serializer_context = {'request': request}
+    return Response({
+        "featured_education": NewsSerializer(featured_education, context=serializer_context).data if featured_education else None,
+        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_education": NewsSerializer(top_education, many=True, context=serializer_context).data,
+        "latest_education": NewsSerializer(latest_education, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def education_frontend(request):
+    return render(request, 'news/education.html', {'current_category': 'Education'})
 # -----------------------------------------------------------------------
 
-
+@api_view(['GET'])
 def opinion(request):
     last_caching = timezone.now() - timedelta(hours=12)
-    strict_caching = timezone.now() - timedelta(days=14) 
+    strict_caching = timezone.now() - timedelta(days=1444) 
     
+    # Gather Section Entities
     featured_opinion = News.objects.public().filter(
         category__name='Opinion', 
         is_featured=True
     ).order_by('-date_published').first()
     
-    # Top Opinion
     top_opinion = get_top_ranking('Opinion', 'top_opinion', last_caching, strict_caching)
 
-    # Latest News
     latest_opinion = News.objects.public().filter(
         category__name='Opinion', 
         is_featured=False
     ).order_by('-date_published')[:5]
 
-    # News card
-    used_ids = [n.id for n in top_opinion]
-    used_ids += [n.id for n in latest_opinion]
-    
+    # Exclude Duplicate Records
+    used_ids = [n.id for n in top_opinion] + [n.id for n in latest_opinion]
     if featured_opinion:
         used_ids.append(featured_opinion.id)
     
-    news_list = News.objects.public().filter(
+    news_list_queryset = News.objects.public().filter(
         category__name='Opinion', 
         is_featured=False
     ).exclude(id__in=used_ids).order_by('-date_published')
     
-    # 5 random from the 20 LATEST other news
+    # Handle Random Discovery Pool
     other_news_pool = list(
         News.objects.public().exclude(category__name='Opinion')
         .order_by('-date_published')[:20]
@@ -1181,17 +1195,63 @@ def opinion(request):
     else:
         mini_featured_news = []
 
-    # Pagination
-    paginator = Paginator(news_list, 10) 
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    # Process Paginated Records via DRF Engine
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
-    context = {
-        'featured_opinion': featured_opinion,
-        'top_opinion': top_opinion,
-        'latest_opinion': latest_opinion,
-        'page_obj': page_obj,
-        'mini_featured_news': mini_featured_news,
-        'current_category': 'Opinion',
-    }
-    return render(request, 'news/opinion.html', context)
+    # Build Final Serialized Payload
+    serializer_context = {'request': request}
+    return Response({
+        "featured_opinion": NewsSerializer(featured_opinion, context=serializer_context).data if featured_opinion else None,
+        "top_opinion": NewsSerializer(top_opinion, many=True, context=serializer_context).data,
+        "latest_opinion": NewsSerializer(latest_opinion, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def opinion_frontend(request):
+    # Simply hands off the skeleton. Data is loaded asynchronously.
+    return render(request, 'news/opinion.html', {'current_category': 'Opinion'})
+
+@api_view(['GET'])
+def news_by_tag(request, tag_slug):
+    # Retrieve the tag metadata object
+    tag = get_object_or_404(Tag, slug=tag_slug)
+    
+    # Query matching organic records
+    news_list_queryset = (
+        News.objects.public()
+        .filter(tags=tag)
+        .order_by('-date_published')
+    )
+
+    # Pass over to DRF Paginator Engine
+    paginator = NewsPagination()
+    paginator.page_size = 20 # Overriding default to match your original configuration constraint size of 20
+    paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
+
+    serializer_context = {'request': request}
+    return Response({
+        "tag": {
+            "name": tag.name,
+            "slug": tag.slug
+        },
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def news_by_tag_frontend(request, tag_slug):
+    return render(request, 'news/news_by_tag.html', {'tag_slug': tag_slug})

@@ -1,8 +1,7 @@
 {% extends 'main_base.html' %}
+{% load static %}
 
 {% block extra_css %}
-{% load static %}
-<link rel="stylesheet" href="{% static 'music/style.css' %}">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 {% endblock %}
 
@@ -42,15 +41,15 @@
             <p>Technology</p>
         </a>
 
-        <a href="{% url 'news:sport' %}"
-            class="category {% if request.path == '/news/category/sport/' %}active{% endif %}">
+        <a href="{% url 'news:sports' %}"
+            class="category {% if request.path == '/news/category/sports/' %}active{% endif %}">
             <div class="circle">
                 <span class="material-symbols-outlined">sports_soccer</span>
             </div>
             <p>Sport</p>
         </a>
 
-        <a href="{% url 'news:music-news' %}"
+        <a href="{% url 'news:music_news' %}"
             class="category {% if request.path == '/news/category/music-news/' %}active{% endif %}">
             <div class="circle">
                 <span class="material-symbols-outlined">music_note</span>
@@ -58,8 +57,8 @@
             <p>Music News</p>
         </a>
 
-        <a href="{% url 'news:event' %}"
-            class="category {% if request.path == '/news/category/event/' %}active{% endif %}">
+        <a href="{% url 'news:events' %}"
+            class="category {% if request.path == '/news/category/events/' %}active{% endif %}">
             <div class="circle">
                 <span class="material-symbols-outlined">event</span>
             </div>

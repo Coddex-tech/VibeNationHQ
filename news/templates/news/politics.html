@@ -1,12 +1,11 @@
 {% extends 'news_base.html' %}
-{% load news_extras %}
+{% load static %}
 {% load ads_tags %}
 
-<title>{% block title %}Politics | VibeNation{% endblock %}</title>
+{% block title %}Politics | VibeNation{% endblock %}
 
 {% block extra_css %}
-{% load static %}
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'news/news_home.css' %}">
 <link rel="stylesheet" href="{% static 'news/category_slider.css' %}">
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
@@ -15,180 +14,208 @@
 {% block content %}
 <div class="news-home-container">
 
-  <div class="heading-contain">
-    <h1>Politics</h1>
-  </div>
-
-  <section class="top-news-section">
-    <div class="news-layout">
-
-      <div class="left-trending">
-        <h3 class="subheading">Top Politics</h3>
-
-        {% if sponsored_feature %}
-        <div class="trending-item sponsored-highlight">
-          <a href="{% url 'news:news_details' sponsored_feature.slug %}" class="trending-link">
-            <div class="trending-text">
-              <span class="sponsored-label">PROMOTED BY {{ sponsored_feature.sponsor_name|upper }}</span>
-              <h4 class="sponsored-title">{{ sponsored_feature.title }}</h4>
-            </div>
-            {% if sponsored_feature.thumbnail %}
-            <img loading="lazy" src="{{ sponsored_feature.thumbnail.url }}" alt="Sponsored">
-            {% endif %}
-          </a>
-        </div>
-        {% endif %}
-
-        {% with organic_limit=sponsored_feature|yesno:":4,:5" %}
-        {% for news in top_political|slice:organic_limit %}
-        <div class="trending-item">
-          <a href="{% url 'news:news_details' news.slug %}" class="trending-link">
-            <div class="trending-text">
-              <h4>{{ news.title }}</h4>
-            </div>
-            {% if news.thumbnail %}
-            <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
-            {% endif %}
-          </a>
-        </div>
-        {% empty %}
-        {% if not sponsored_feature %}
-        <p>No trending political news yet.</p>
-        {% endif %}
-        {% endfor %}
-        {% endwith %}
-      </div>
-
-      <div class="center-featured">
-        {% if featured_political %}
-        <a href="{% url 'news:news_details' featured_political.slug %}" class="featured-link">
-          {% if featured_political.thumbnail %}
-          <img loading="lazy" src="{{ featured_political.thumbnail.url }}" alt="{{ featured_political.title }}">
-          {% endif %}
-          <h2 class="featured-headline">{{ featured_political.title }}</h2>
-        </a>
-        {% else %}
-        <div class="no-featured">No featured political news available.</div>
-        {% endif %}
-      </div>
-
-      <div class="right-latest">
-        <h3 class="subheading">Latest Politics</h3>
-        {% for news in latest_political|slice:":5" %}
-        <div class="latest-item">
-          <a href="{% url 'news:news_details' news.slug %}" class="latest-link">
-            {% if news.thumbnail %}
-            <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
-            {% endif %}
-            <div class="latest-text">
-              <h4>{{ news.title }}</h4>
-              <small>{{ news.date_published|hybrid_time }}</small>
-            </div>
-          </a>
-        </div>
-        {% empty %}
-        <p>No latest political news yet.</p>
-        {% endfor %}
-      </div>
-
+    <div class="heading-contain">
+        <h1>Politics</h1>
     </div>
-  </section>
 
-  {% if sponsored_feature %}
-  <div class="ad-disclaimer">ADVERTISEMENT</div>
-  {% endif %}
+    <section class="top-news-section">
+        <div class="news-layout">
 
+            <div class="left-trending">
+                <h3 class="subheading">Top Politics</h3>
+                <div id="sponsored-target-box"></div>
+                <div id="top-politics-box"></div>
+            </div>
+
+            <div class="center-featured" id="featured-political-box"></div>
+
+            <div class="right-latest">
+                <h3 class="subheading">Latest Politics</h3>
+                <div id="latest-politics-box"></div>
+            </div>
+
+        </div>
+    </section>
+
+    <div id="ad-disclaimer-wrapper" style="display: none;" class="ad-disclaimer">ADVERTISEMENT</div>
 </div>
 
-<!-- Mid-Content Ad Placeholder -->
-<div class="inline-ad">
-  {% show_ad 'Inline' %}
-</div>
+<div class="inline-ad">{% show_ad 'Inline' %}</div>
 
-<!-- main category grid section -->
-<section class="category-section">
-  <!-- <h2 class="category-title"><span class="icon-dot"></span> Politics</h2> -->
-
-  <div class="category-news-list">
-    {% for news in page_obj %}
-    <div class="category-news-item {% if forloop.first %}featured{% endif %}">
-      <a href="{% url 'news:news_details' news.slug %}">
-        {% if news.thumbnail %}
-        <img loading="lazy" src="{{ news.thumbnail.url }}" alt="{{ news.title }}">
-        {% endif %}
-        <div class="news-info">
-          <small style="color: red;">{{ current_category }}</small>
-          <h4>{{ news.title }}</h4>
-          <small>
-            {{ news.date_published|hybrid_time }}
-          </small>
-        </div>
-      </a>
-    </div>
-    {% empty %}
-    <p>No political news available yet.</p>
-    {% endfor %}
-  </div>
+<section class="category-section" id="politics-grid-anchor">
+    <div class="category-news-list" id="main-grid-box"></div>
 </section>
 
-<!-- PAGINATION STRUCTURE -->
-{% if page_obj.paginator.num_pages > 1 %}
-<div class="pagination">
-  {% if page_obj.has_previous %}
-  <a href="?page={{ page_obj.previous_page_number }}" class="page-link">« Prev</a>
-  {% endif %}
+<div class="pagination" id="pagination-controls-box"></div>
 
-  {% for num in page_obj.paginator.page_range %}
-  {% if num == page_obj.number %}
-  <span class="page-link active">{{ num }}</span>
-  {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %} <a href="?page={{ num }}"
-    class="page-link">{{ num }}</a>
-    {% elif num == 1 %}
-    <a href="?page=1" class="page-link">1</a>
-    {% if page_obj.number > 4 %}<span class="dots">...</span>{% endif %}
-    {% elif num == page_obj.paginator.num_pages %}
-    {% if page_obj.number < page_obj.paginator.num_pages|add:'-3' %} <span class="dots">...</span>
-      {% endif %}
-      <a href="?page={{ page_obj.paginator.num_pages }}" class="page-link">{{ page_obj.paginator.num_pages }}</a>
-      {% endif %}
-      {% endfor %}
-
-      {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}" class="page-link">Next »</a>
-      {% endif %}
-</div>
-{% endif %}
-
-<!-- Mid-Content Ad Placeholder -->
-<div class="inline-ad">
-  {% show_ad 'Inline' %}
-</div>
-
+<div class="inline-ad">{% show_ad 'Inline' %}</div>
 <hr>
-
 <h1 class="mini-featured-title">Discover More Stories</h1>
 
-<section class="mini-featured">
-  {% for item in mini_featured_news %}
-  <a href="{% url 'news:news_details' item.slug %}" class="mini-card">
-    {% if item.thumbnail %}
-    <div class="card-image">
-      <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}" loading="lazy">
-    </div>
-    {% endif %}
+<section class="mini-featured" id="mini-featured-box"></section>
 
-    <div class="card-content">
-      <span class="category-tag">{{ item.category.first.name|upper }}</span>
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        let initialUrl = "/news/api/politics/";
 
-      <div class="card-text-wrapper">
-        <h4>{{ item.title|truncatechars:55 }}</h4>
-        <p>{{ item.content|striptags|truncatewords:12 }}</p>
-      </div>
+        function loadPoliticsData(targetUrl) {
+            fetch(targetUrl)
+                .then(res => res.json())
+                .then(data => {
 
-      <span class="read-link">Read Story →</span>
-    </div>
-  </a>
-  {% endfor %}
-</section>
+                    // Render Promoted Sponsored Features
+                    let sponsoredBox = document.getElementById("sponsored-target-box");
+                    let adDisclaimer = document.getElementById("ad-disclaimer-wrapper");
 
+                    if (data.sponsored_feature) {
+                        adDisclaimer.style.display = "block";
+                        sponsoredBox.innerHTML = `
+                        <div class="trending-item sponsored-highlight">
+                          <a href="${data.sponsored_feature.absolute_url}" class="trending-link">
+                            <div class="trending-text">
+                              <span class="sponsored-label">PROMOTED BY ${data.sponsored_feature.sponsor_name.toUpperCase()}</span>
+                              <h4 class="sponsored-title">${data.sponsored_feature.title}</h4>
+                            </div>
+                            ${data.sponsored_feature.thumbnail_url ? `<img loading="lazy" src="${data.sponsored_feature.thumbnail_url}" alt="Sponsored">` : ''}
+                          </a>
+                        </div>
+                    `;
+                    } else {
+                        adDisclaimer.style.display = "none";
+                        sponsoredBox.innerHTML = "";
+                    }
+
+                    // Render Organic Trending Columns
+                    let topBox = document.getElementById("top-politics-box");
+                    if (data.top_political.length > 0) {
+                        topBox.innerHTML = data.top_political.map(news => `
+                        <div class="trending-item">
+                          <a href="${news.absolute_url}" class="trending-link">
+                            <div class="trending-text"><h4>${news.title}</h4></div>
+                            ${news.thumbnail_url ? `<img loading="lazy" src="${news.thumbnail_url}" alt="${news.title}">` : ''}
+                          </a>
+                        </div>
+                    `).join('');
+                    } else if (!data.sponsored_feature) {
+                        topBox.innerHTML = "<p>No trending politics news yet.</p>";
+                    }
+
+                    // Render Hero Component Block
+                    let featBox = document.getElementById("featured-political-box");
+                    if (data.featured_political) {
+                        featBox.innerHTML = `
+                        <a href="${data.featured_political.absolute_url}" class="featured-link">
+                          ${data.featured_political.thumbnail_url ? `<img loading="lazy" src="${data.featured_political.thumbnail_url}" alt="${data.featured_political.title}">` : ''}
+                          <h2 class="featured-headline">${data.featured_political.title}</h2>
+                        </a>
+                    `;
+                    } else {
+                        featBox.innerHTML = '<div class="no-featured">No featured political news available.</div>';
+                    }
+
+                    // Render Right Sidebar Feed Column
+                    let latestBox = document.getElementById("latest-politics-box");
+                    if (data.latest_political.length > 0) {
+                        latestBox.innerHTML = data.latest_political.map(news => `
+                        <div class="latest-item">
+                          <a href="${news.absolute_url}" class="latest-link">
+                            ${news.thumbnail_url ? `<img loading="lazy" src="${news.thumbnail_url}" alt="${news.title}">` : ''}
+                            <div class="latest-text">
+                              <h4>${news.title}</h4>
+                              <small>${news.friendly_date || ''}</small>
+                            </div>
+                          </a>
+                        </div>
+                    `).join('');
+                    } else {
+                        latestBox.innerHTML = "<p>No latest politics news yet.</p>";
+                    }
+
+                    // Render Main Dynamic Category Cards Grid
+                    let gridBox = document.getElementById("main-grid-box");
+                    let gridData = data.paginated_grid.results;
+                    if (gridData.length > 0) {
+                        gridBox.innerHTML = gridData.map((news, idx) => `
+                        <div class="category-news-item ${idx === 0 ? 'featured' : ''}">
+                          <a href="${news.absolute_url}">
+                            ${news.thumbnail_url ? `<img loading="lazy" src="${news.thumbnail_url}" alt="${news.title}">` : ''}
+                            <div class="news-info">
+                              <small style="color: red;">Politics</small>
+                              <h4>${news.title}</h4>
+                            </div>
+                          </a>
+                        </div>
+                    `).join('');
+                    } else {
+                        gridBox.innerHTML = "<p>No Politics news available yet.</p>";
+                    }
+
+                    // Discovery Footer Row Content Loop
+                    let discoveryBox = document.getElementById("mini-featured-box");
+                    if (data.mini_featured_news.length > 0) {
+                        discoveryBox.innerHTML = data.mini_featured_news.map(item => {
+                            let catName = item.category && item.category.length > 0 ? item.category[0].name.toUpperCase() : "NEWS";
+                            let textSnippet = item.content ? item.content.replace(/<[^>]*>/g, '').substring(0, 80) + '...' : '';
+                            return `
+                            <a href="${item.absolute_url}" class="mini-card">
+                                ${item.thumbnail_url ? `<div class="card-image"><img loading="lazy" src="${item.thumbnail_url}" alt="${item.title}"></div>` : ''}
+                                <div class="card-content">
+                                    <span class="category-tag">${catName}</span>
+                                    <div class="card-text-wrapper">
+                                        <h4>${item.title}</h4>
+                                        <p>${textSnippet}</p>
+                                    </div>
+                                    <span class="read-link">Read Story →</span>
+                                </div>
+                            </a>
+                        `;
+                        }).join('');
+                    }
+
+                    // Dynamic Navigation Control Processor Block
+                    let navBox = document.getElementById("pagination-controls-box");
+                    let navHTML = "";
+                    let pagConfig = data.paginated_grid;
+
+                    if (pagConfig.total_pages > 1) {
+                        if (pagConfig.previous) {
+                            navHTML += `<a href="#" data-url="${pagConfig.previous}" class="pag-trigger">« Prev</a>`;
+                        }
+                        for (let i = 1; i <= pagConfig.total_pages; i++) {
+                            if (i === 1 || i === pagConfig.total_pages || (i >= pagConfig.current_page - 2 && i <= pagConfig.current_page + 2)) {
+                                if (i === pagConfig.current_page) {
+                                    navHTML += `<strong>${i}</strong>`;
+                                } else {
+                                    navHTML += `<a href="#" data-url="${initialUrl}?page=${i}" class="pag-trigger">${i}</a>`;
+                                }
+                            } else if ((i === 2 && pagConfig.current_page > 4) || (i === pagConfig.total_pages - 1 && pagConfig.current_page < pagConfig.total_pages - 3)) {
+                                navHTML += `<span class="pagination-ellipsis">...</span>`;
+                            }
+                        }
+                        if (pagConfig.next) {
+                            navHTML += `<a href="#" data-url="${pagConfig.next}" class="pag-trigger">Next »</a>`;
+                        }
+                    }
+                    navBox.innerHTML = navHTML;
+                })
+                .catch(err => console.error("Pipeline Hydration Failure Exception:", err));
+        }
+
+        // Intercept pagination clicks and smoothly focus view onto grid anchor
+        document.getElementById("pagination-controls-box").addEventListener("click", function (e) {
+            if (e.target.classList.contains("pag-trigger")) {
+                e.preventDefault();
+                let targetEndpoint = e.target.getAttribute("data-url");
+                loadPoliticsData(targetEndpoint);
+                
+                let anchorTarget = document.getElementById("politics-grid-anchor");
+                if (anchorTarget) {
+                    anchorTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        });
+
+        loadPoliticsData(initialUrl);
+    });
+</script>
 {% endblock %}

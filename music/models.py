@@ -38,21 +38,17 @@ class Song(models.Model):
     title = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
-    category = models.CharField(max_length=100, blank=True, null=True)
     cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
     original_cover = models.ImageField(upload_to="temp_covers/", blank=True, null=True)
     genres = SortedManyToManyField('Genre', blank=True, related_name="songs")
-    group = models.CharField(max_length=50, blank=True, null=True, default='Music')
     release_date = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    download = models.PositiveBigIntegerField(default=0)
     audio_file = models.FileField(upload_to="songs/")
     artists = SortedManyToManyField('Artist', related_name="songs")
     tags = TaggableManager()
     album = models.ForeignKey('Album', on_delete=models.CASCADE, related_name='songs', null=True, blank=True)
     views = models.PositiveBigIntegerField(default=0)
-    rating_total = models.PositiveIntegerField(default=0)
-    rating_count = models.PositiveIntegerField(default=0)
+    download = models.PositiveBigIntegerField(default=0)
     duration = models.CharField(max_length=10, blank=True)
 
     def save(self, *args, **kwargs):
@@ -110,14 +106,12 @@ class Song(models.Model):
 class DJ(models.Model):
     dj_name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True, blank=True) # Changed to blank=True for auto-gen
-    genre = models.CharField(max_length=100, blank=True, null=True, default="Mixtape")
+    genres = SortedManyToManyField('Genre', blank=True, related_name="Mix")
     artists = SortedManyToManyField('Artist', related_name='mixtapes')
     dj_file = models.FileField(upload_to="mixtapes/")
-    group = models.CharField(max_length=10, default="Mixtape")
     dj_cover = models.ImageField(upload_to="djs/")
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    category = models.ForeignKey(Genre, on_delete=models.SET_NULL, null=True, blank=True, related_name="djs")
     duration = models.CharField(max_length=10, blank=True)
 
     def save(self, *args, **kwargs):
@@ -129,10 +123,19 @@ class DJ(models.Model):
             self.dj_cover = handle_webp_compression(self.dj_cover, self.dj_name)
 
         # Calculate Duration
-        if self.dj_file and not self.duration:
+        if self.dj_file and (not self.duration or self.duration == "0:00"):
             try:
                 from mutagen.mp3 import MP3
-                audio = MP3(self.dj_file.path) 
+                from django.core.files.base import ContentFile
+                import io
+
+                # Seek back to the beginning of the stream to ensure it reads completely
+                self.dj_file.seek(0)
+                
+                # Wrap file data stream into an in-memory bytes processor 
+                file_copy = io.BytesIO(self.dj_file.read())
+                audio = MP3(file_copy)
+                
                 total_seconds = int(audio.info.length)
                 
                 hours = total_seconds // 3600
@@ -143,6 +146,10 @@ class DJ(models.Model):
                     self.duration = f"{hours}:{minutes:02d}:{seconds:02d}"
                 else:
                     self.duration = f"{minutes}:{seconds:02d}"
+                    
+                # Reset stream head position so Django can upload the file data safely next
+                self.dj_file.seek(0)
+                
             except Exception as e:
                 print(f"Error extracting duration: {e}")
                 self.duration = "0:00"

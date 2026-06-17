@@ -11,7 +11,6 @@ Discover the best of African music — Afrobeat, Amapiano, Highlife, and more fr
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'music/song_card.css' %}">
-<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
 {% endblock %}
 
@@ -27,49 +26,73 @@ Discover the best of African music — Afrobeat, Amapiano, Highlife, and more fr
 {% if page_obj %}
 <div class="card-container-grid">
   {% with section="african_music" %}
-  {% for song in page_obj %}
-  <a class="card-link" href="{% url 'song_detail' song.slug %}"
-    aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <!-- Thumbnail (left) -->
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
+    {% for song in page_obj %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
 
-    <!-- Right content -->
-    <div class="card-body">
-      <!-- Tag pill -->
-      <span class="tag-pill">{{ song.group }}</span>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in item.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in item.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
 
-      <!-- Title -->
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        <p>{{ song.title }} -
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
           {% for artist in song.artists.all %}
-          {{ artist.name }}{% if not forloop.last %}, {% endif %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
           {% endfor %}
-        </p>
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
   {% endwith %}
 </div>
 
-<!-- PAGINATION -->
 <div class="pagination">
   {% if page_obj.has_previous %}
-  <a href="?q={{ title }}&page={{ page_obj.previous_page_number }}">Prev</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% else %}
+      <a href="?page={{ page_obj.previous_page_number }}">« Prev</a>
+    {% endif %}
   {% endif %}
 
   {% for num in page_obj.paginator.page_range %}
-  {% if page_obj.number == num %}
-  <strong>{{ num }}</strong>
-  {% else %}
-  <a href="?q={{ title }}&page={{ num }}">{{ num }}</a>
-  {% endif %}
+    {# 1. Check if the page number should be visible #}
+    {% if num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:-2 and num <= page_obj.number|add:2 %}
+      {% if page_obj.number == num %}
+        <strong>{{ num }}</strong>
+      {% else %}
+        {% if request.GET.q %}
+          <a href="?q={{ request.GET.q }}&page={{ num }}">{{ num }}</a>
+        {% else %}
+          <a href="?page={{ num }}">{{ num }}</a>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+
+    {% if num == 2 and page_obj.number > 4 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
+
+    {% if num == page_obj.paginator.num_pages|add:-1 and page_obj.number < page_obj.paginator.num_pages|add:-3 %}
+      <span class="pagination-ellipsis">...</span>
+    {% endif %}
   {% endfor %}
 
   {% if page_obj.has_next %}
-  <a href="?q={{ title }}&page={{ page_obj.next_page_number }}">Next</a>
+    {% if request.GET.q %}
+      <a href="?q={{ request.GET.q }}&page={{ page_obj.next_page_number }}">Next »</a>
+    {% else %}
+      <a href="?page={{ page_obj.next_page_number }}">Next »</a>
+    {% endif %}
   {% endif %}
 </div>
 
@@ -81,17 +104,18 @@ Discover the best of African music — Afrobeat, Amapiano, Highlife, and more fr
 <h3>Artists</h3>
 <ul>
   {% for artist in artists %}
-  <li>{{ artist.name }}</li>
+    <li>{{ artist.name }}</li>
   {% endfor %}
 </ul>
 {% endif %}
 
 <style>
   h1 {
-    background-color: rgb(7, 51, 51);
-    color: white;
+    background-color: var(--main-colour);
+    color: var(--primary-text-colour);
     padding: 2px 5px;
     width: fit-content;
+    font-family: var(--heading-font);
   }
 </style>
 

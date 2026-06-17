@@ -10,7 +10,6 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'music/song_card.css' %}">
-<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
 <link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
 {% endblock %}
 
@@ -24,27 +23,34 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
 <h5><span class="bullet active-bullet"></span>Trending Now</h5>
 <h6><span class="dot"></span>Updated every 24 hours</h6>
 <div class="card-container-grid">
-{% with section="trending_now" %}
-  {% for song in trending_now %}
-  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
-    <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        {{ song.title }} -
-        {% for artist in song.artists.all %}
-        {{ artist.name }}{% if not forloop.last %}, {% endif %}
-        {% endfor %}
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
-{% endwith %}
+  {% with section="trending_now" %}
+    {% for song in trending_now %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
+          {% for artist in song.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
+  {% endwith %}
 </div>
 
-<!-- Mid-Content Ad Placeholder -->
 <div class="inline-ad">
   {% show_ad 'Music Inline' %}
 </div>
@@ -53,27 +59,34 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
 
 <h5>Trending This Week</h5>
 <div class="card-container-grid">
-{%with section="trending_week" %}
-  {% for song in trending_week %}
-  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
-    <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        {{ song.title }} -
-        {% for artist in song.artists.all %}
-        {{ artist.name }}{% if not forloop.last %}, {% endif %}
-        {% endfor %}
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
-{% endwith %}
+  {% with section="trending_week" %}
+    {% for song in trending_week %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
+          {% for artist in song.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
+  {% endwith %}
 </div>
 
-<!-- Mid-Content Ad Placeholder -->
 <div class="inline-ad">
   {% show_ad 'Music Inline' %}
 </div>
@@ -83,27 +96,34 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
 <h5>Trending This Month</h5>
 <h6><span class="dot"></span>Updated every 30 days</h6>
 <div class="card-container-grid">
-{% with section="trending_month" %}
-  {% for song in trending_month %}
-  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
-    <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        {{ song.title }} -
-        {% for artist in song.artists.all %}
-        {{ artist.name }}{% if not forloop.last %}, {% endif %}
-        {% endfor %}
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
-{% endwith %}
+  {% with section="trending_month" %}
+    {% for song in trending_month %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
+          {% for artist in song.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
+  {% endwith %}
 </div>
 
-<!-- Mid-Content Ad Placeholder -->
 <div class="inline-ad">
   {% show_ad 'Music Inline' %}
 </div>
@@ -112,35 +132,43 @@ Explore the hottest and most played songs on VibeNation — the beats everyone i
 
 <h5>All-Time Trending</h5>
 <div class="card-container-grid">
-{% with section="trending_overall" %}
-  {% for song in trending_songs %}
-  <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-    <div class="card-thumb" aria-hidden="true">
-      <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-    </div>
-    <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
-      <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-        {{ song.title }} -
-        {% for artist in song.artists.all %}
-        {{ artist.name }}{% if not forloop.last %}, {% endif %}
-        {% endfor %}
-      </h2>
-    </div>
-  </a>
-  {% endfor %}
-{% endwith %}
+  {% with section="trending_overall" %}
+    {% for song in trending_songs %}
+    <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+      <div class="card-thumb" aria-hidden="true">
+        <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+      </div>
+      <div class="card-body">
+        <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+        </span>
+        <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+          {{ song.title }} -
+          {% for artist in song.artists.all %}
+            {{ artist.name }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </h2>
+      </div>
+    </a>
+    {% endfor %}
+  {% endwith %}
 </div>
 
-
 <style>
-  /* === TRENDING HEADER (now h5) === */
+/* === TRENDING HEADER === */
 h5 {
   background: none;
-  color: teal;
+  color: var(--main-button);
+  font-family: var(--heading-font);
   font-weight: 600;
-  font-size: 1.1rem;           /* smaller than h3 for subtle look */
-  border-left: 3px solid teal; /* slightly thinner border */
+  font-size: 1.1rem;
+  border-left: 3px solid var(--main-button);
   padding-left: 8px;
   margin-bottom: 5px;
   width: fit-content;
@@ -157,19 +185,15 @@ h5::after {
   bottom: -3px;
   width: 0;
   height: 2px;
-  background-color: teal;
+  background-color: var(--main-button);
   animation: underlineSlide 1s ease-out forwards;
   animation-delay: 0.4s;
 }
 
 /* Underline animation */
 @keyframes underlineSlide {
-  from {
-    width: 0;
-  }
-  to {
-    width: 100%;
-  }
+  from { width: 0; }
+  to { width: 100%; }
 }
 
 /* Fade-up animation */
@@ -187,7 +211,8 @@ h5::after {
 /* === SUBTEXT BELOW HEADER === */
 h6 {
   display: inline;
-  color: rgb(61, 60, 60);
+  color: var(--text-muted);
+  font-family: var(--body-font);
   font-weight: 400;
   margin-left: 8px;
 }
@@ -197,7 +222,7 @@ h6 {
   display: inline-block;
   width: 8px;
   height: 8px;
-  background-color: teal;
+  background-color: var(--main-button);
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: middle;
@@ -209,7 +234,7 @@ h6 {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: teal;
+  background-color: var(--main-button);
   margin-right: 8px;
   vertical-align: middle;
 }
@@ -217,27 +242,24 @@ h6 {
 /* Glow animation for active bullet */
 .active-bullet {
   animation: glowPulse 1.5s ease-in-out infinite;
-  box-shadow: 0 0 6px teal;
+  box-shadow: 0 0 6px var(--brand-teal-glow);
 }
 
 /* Keyframes for glowing bullet */
 @keyframes glowPulse {
   0% {
-    box-shadow: 0 0 3px teal;
+    box-shadow: 0 0 3px var(--brand-teal-glow);
     transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 10px teal;
+    box-shadow: 0 0 10px var(--brand-teal-glow);
     transform: scale(1.2);
   }
   100% {
-    box-shadow: 0 0 3px teal;
+    box-shadow: 0 0 3px var(--brand-teal-glow);
     transform: scale(1);
   }
 }
-
-
-
 </style>
 
 {% endblock %}

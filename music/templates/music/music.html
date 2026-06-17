@@ -35,7 +35,15 @@ VibeNation – Your source for the latest music, DJ mixes, videos, and entertain
     </div>
 
     <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
         {{ song.title }} -
         {% for artist in song.artists.all %}
@@ -70,7 +78,15 @@ VibeNation – Your source for the latest music, DJ mixes, videos, and entertain
       <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
         {{ song.title }} -
         {% for artist in song.artists.all %}
@@ -105,7 +121,15 @@ VibeNation – Your source for the latest music, DJ mixes, videos, and entertain
       <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
         {{ song.title }} -
         {% for artist in song.artists.all %}
@@ -140,7 +164,15 @@ VibeNation – Your source for the latest music, DJ mixes, videos, and entertain
       <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
     </div>
     <div class="card-body">
-      <span class="tag-pill">{{ song.group }}</span>
+      <span class="tag-pill">
+        {% if "Gospel" in song.genres.all|stringformat:"s" %}
+        Gospel
+        {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+        Mixtape
+        {% else %}
+        Music
+        {% endif %}
+      </span>
       <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
         {{ song.dj_name }} -
         {% for artist in song.artists.all %}

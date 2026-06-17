@@ -5,71 +5,88 @@
 {% block extra_css %}
 {% load static %}
 <link rel="stylesheet" href="{% static 'music/song_card.css' %}">
-<link rel="stylesheet" href="{% static 'music/pagination.css' %}">
 {% endblock %}
 
 {% block content %}
 
 <section class="tagged-songs-section">
-    <h2 class="tagged-title">Songs tagged with “{{ tag.name }}”</h2>
+  <h2 class="tagged-title">Songs tagged with “{{ tag.name }}”</h2>
 
-    {% if songs %}
-    <div class="song-cards-container">
+  {% if songs %}
+  <div class="song-cards-container">
     {% with section="songs_tag" %}
-        {% for song in songs %}
-        <a class="card-link" href="{% url 'music:song_detail' song.slug %}"
-            aria-labelledby="song-title-{{ section }}-{{ song.id }}">
-            <!-- Thumbnail (left) -->
-            <div class="card-thumb" aria-hidden="true">
-                <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
-            </div>
+      {% for song in songs %}
+      <a class="card-link" href="{% url 'music:song_detail' song.slug %}" aria-labelledby="song-title-{{ section }}-{{ song.id }}">
+        <div class="card-thumb" aria-hidden="true">
+          <img loading="lazy" src="{{ song.media.url }}" alt="{{ song.title }}">
+        </div>
 
-            <!-- Right content -->
-            <div class="card-body">
-                <!-- Tag pill -->
-                {% if song.group %}
-                <span class="tag-pill">{{ song.group }}</span>
-                {% endif %}
-
-                <!-- Title -->
-                <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
-                    <p>{{ song.title }} -
-                        {% for artist in song.artists.all %}
-                        {{ artist.name }}{% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                    </p>
-                </h2>
-            </div>
-        </a>
-        {% endfor %}
+        <div class="card-body">
+            <span class="tag-pill">
+            {% if "Gospel" in song.genres.all|stringformat:"s" %}
+            Gospel
+            {% elif "Mixtape" in song.genres.all|stringformat:"s" %}
+            Mixtape
+            {% else %}
+            Music
+            {% endif %}
+            </span>
+          <h2 id="song-title-{{ section }}-{{ song.id }}" class="card-title">
+            {{ song.title }} -
+            {% for artist in song.artists.all %}
+              {{ artist.name }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+          </h2>
+        </div>
+      </a>
+      {% endfor %}
     {% endwith %}
-    </div>
-    {% else %}
+  </div>
+  {% else %}
     <p>No songs found for this tag.</p>
+  {% endif %}
+
+  <div class="pagination">
+    {% if songs.has_previous %}
+      {% if request.GET.q %}
+        <a href="?q={{ request.GET.q }}&page={{ songs.previous_page_number }}">« Prev</a>
+      {% else %}
+        <a href="?page={{ songs.previous_page_number }}">« Prev</a>
+      {% endif %}
     {% endif %}
 
-    <!-- Pagination -->
-    <div class="pagination">
-        {% if songs.has_previous %}
-        <a href="?page={{ songs.previous_page_number }}">Prev</a>
-        {% endif %}
-
-        {% for num in songs.paginator.page_range %}
+    {% for num in songs.paginator.page_range %}
+      {# 1. Check if the page number should be visible #}
+      {% if num == 1 or num == songs.paginator.num_pages or num >= songs.number|add:-2 and num <= songs.number|add:2 %}
         {% if songs.number == num %}
-        <strong>{{ num }}</strong>
+          <strong>{{ num }}</strong>
         {% else %}
-        <a href="?page={{ num }}">{{ num }}</a>
+          {% if request.GET.q %}
+            <a href="?q={{ request.GET.q }}&page={{ num }}">{{ num }}</a>
+          {% else %}
+            <a href="?page={{ num }}">{{ num }}</a>
+          {% endif %}
         {% endif %}
-        {% endfor %}
+      {% endif %}
 
-        {% if songs.has_next %}
-        <a href="?page={{ songs.next_page_number }}">Next</a>
-        {% endif %}
-    </div>
+      {# 2. Separate blocks handle the ellipses formatting cleanly #}
+      {% if num == 2 and songs.number > 4 %}
+        <span class="pagination-ellipsis">...</span>
+      {% endif %}
 
+      {% if num == songs.paginator.num_pages|add:-1 and songs.number < songs.paginator.num_pages|add:-3 %}
+        <span class="pagination-ellipsis">...</span>
+      {% endif %}
+    {% endfor %}
 
-
-
+    {% if songs.has_next %}
+      {% if request.GET.q %}
+        <a href="?q={{ request.GET.q }}&page={{ songs.next_page_number }}">Next »</a>
+      {% else %}
+        <a href="?page={{ songs.next_page_number }}">Next »</a>
+      {% endif %}
+    {% endif %}
+  </div>
 </section>
 
 {% endblock %}

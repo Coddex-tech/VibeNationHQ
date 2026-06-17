@@ -13,6 +13,8 @@ class ArtistAdmin(UnfoldModelAdmin):
     search_fields = ('name',)
     ordering = ('-created_at',)
 
+    prepopulated_fields = {"slug": ("name",)}
+
     def song_count(self, obj):
         return obj.songs.count()
     song_count.short_description = "Songs"
@@ -25,7 +27,7 @@ class SongAdmin(UnfoldModelAdmin):
     filter_horizontal = ('artists', 'genres')
     search_fields = ('title', 'artists__name', 'album__title')
     list_filter_submit = True
-    list_filter = ('category', 'genres', 'release_date')
+    list_filter = ('genres', 'release_date')
 
     @admin.display(description="Artists")
     def get_artists(self, obj):
@@ -40,9 +42,6 @@ class SongAdmin(UnfoldModelAdmin):
             return ", ".join([genres.name for genres in obj.genres.all()])
         return "-"
 
-    @admin.display(description="Category", ordering="category")
-    def display_category(self, obj):
-        return obj.category.name if obj.category else "-"
 
     def get_actions(self, request):
         actions = super().get_actions(request)
@@ -59,7 +58,7 @@ class SongAdmin(UnfoldModelAdmin):
         elif obj.cover_image:
             img_url = obj.cover_image.url
         else:
-            # 3. Final Fallback: Styled text badge
+            # Final Fallback: Styled text badge
             return format_html(
                 '<span class="flex items-center justify-center w-12 h-12 rounded bg-gray-100 text-gray-400 text-[10px] font-bold uppercase border border-gray-200">No Cover</span>'
             )
@@ -102,7 +101,7 @@ class DJAdmin(UnfoldModelAdmin):
     list_display = ('dj_name', 'get_artists', 'created_at', 'dj_cover_preview')
     list_display_links = ('dj_name',)
     prepopulated_fields = {"slug": ("dj_name",)}
-    filter_horizontal = ('artists',)
+    filter_horizontal = ('artists', 'genres')
     
     @admin.display(description="Artists")
     def get_artists(self, obj):
@@ -144,7 +143,6 @@ class MusicCommentAdmin(UnfoldModelAdmin):
     list_filter = ('is_approved', 'created_at')
     search_fields = ('name', 'content', 'song__title')
     ordering = ('-created_at',)
-    # Allows quick checking/unchecking right from the table grid row
     list_editable = ('is_approved',)
 
     def get_readonly_fields(self, request, obj=None):

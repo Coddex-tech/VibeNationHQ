@@ -1,59 +1,330 @@
 {% extends 'news_base.html' %}
-{% load news_extras %}
+{% load static %}
 
-<title>{% block title %}Related-tags | VibeNation{% endblock %}</title>
+{% block title %}News Tag Archive | VibeNation{% endblock %}
 
 {% block content %}
-<div class="tag-page">
-  <h2>News tagged under "{{ tag.name }}"</h2>
+<style>
+  /* Base Layout Wrap */
+  .tag-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    background-color: var(--bg-dark-deep);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
 
-  <div class="tagged-news-grid">
-    {% for item in tagged_news %}
-    <div class="news-card">
-      <a href="{% url 'news_details' item.slug %}">
-        <img loading="lazy" src="{{ item.image.url }}" alt="{{ item.title }}">
-        <h3>{{ item.title }}</h3>
-      </a>
-      <p>
-        {{ news.date_published|hybrid_time }}
-      </p>
-    </div>
-    {% empty %}
-    <p>No news found for this tag.</p>
-    {% endfor %}
-  </div>
+  /* Header Design */
+  .tag-header {
+    border-bottom: 1px solid var(--text-main);
+    padding-bottom: 30px;
+    margin-bottom: 40px;
+  }
 
-  <style>
-    .tag-page {
-      padding: 20px;
+  .tag-badge {
+    display: inline-block;
+    background-color: rgba(0, 128, 128, 0.15);
+    color: var(--brand-teal-glow);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(0, 128, 128, 0.3);
+  }
+
+  .tag-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #ffffff;
+    margin: 0 0 8px 0;
+  }
+
+  .tag-title span {
+    color: var(--brand-teal-glow);
+    position: relative;
+  }
+
+  .tag-meta-count {
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .tag-meta-count strong {
+    color: #ffffff;
+  }
+
+  /* Grid Layout Engine */
+  .tagged-news-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 30px;
+  }
+
+  /* Premium Card Design */
+  .news-card {
+    background-color: var(--bg-dark-card);
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--text-main);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .card-link-wrapper {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .image-wrapper {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    background-color: var(--bg-dark-card);
+  }
+
+  .image-wrapper img {
+    object-fit: cover;
+    transition: transform 0.5s ease;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Interactions / Hover Animations */
+  .news-card:hover {
+    transform: translateY(-6px);
+    border-color: var(--brand-teal-glow);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .news-card:hover img {
+    transform: scale(1.04);
+  }
+
+  .news-card:hover .card-title {
+    color: var(--brand-teal-glow);
+  }
+
+  /* Card Context Body */
+  .card-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+  }
+
+  .card-title {
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--primary-text-colour);
+    margin: 0 0 16px 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    transition: color 0.2s ease;
+  }
+
+  /* Metadata Footer alignment */
+  .card-footer {
+    margin-top: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: var(--text-muted);
+    border-top: 2px solid var(--text-main);
+    padding-top: 12px;
+  }
+
+  .date-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .date-badge svg {
+    color: var(--text-muted);
+  }
+
+  .read-more {
+    font-weight: 600;
+    color: var(--brand-teal-glow);
+    transition: transform 0.2s ease;
+  }
+
+  .news-card:hover .read-more {
+    transform: translateX(3px);
+  }
+
+  /* Empty State Treatment */
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 60px 20px;
+    background-color: var(--bg-dark-card);
+    border: 1px dashed var(--text-main);
+    border-radius: 14px;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .empty-state h3 {
+    font-size: 20px;
+    color: var(--text-primary);
+    margin: 0 0 8px 0;
+  }
+
+  .empty-state p {
+    color: var(--text-muted);
+    max-width: 400px;
+    margin: 0 auto;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Responsive Adjustments */
+  @media (max-width: 768px) {
+    .tag-container {
+      padding: 24px 16px;
     }
 
-    .tag-page h2 {
-      color: #008080;
-      margin-bottom: 20px;
-      font-size: 22px;
+    .tag-title {
+      font-size: 26px;
     }
 
     .tagged-news-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
       gap: 20px;
     }
+  }
+</style>
+<!-- ================== END OF PAGE STYLE ================== -->
 
-    .news-card img {
-      width: 100%;
-      border-radius: 10px;
+<div class="tag-container" id="tag-archive-anchor">
+
+  <header class="tag-header">
+    <div class="tag-badge"># Tag Archive</div>
+    <h1 class="tag-title">
+      Showing news for <span id="tag-title-display">...</span>
+    </h1>
+    <div class="tag-meta-count">
+      Total Articles: <strong id="total-articles-count">0</strong>
+    </div>
+  </header>
+
+  <main class="tagged-news-grid" id="tagged-grid-box"></main>
+
+  <div class="pagination" id="pagination-controls-box"></div>
+
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    // Inject the initial view parameter variable cleanly from Django context scope
+    const tagSlug = "{{ tag_slug|escapejs }}";
+    let initialUrl = `/news/api/tags/${tagSlug}/`;
+
+    function loadTaggedNews(targetUrl) {
+      fetch(targetUrl)
+        .then(res => res.json())
+        .then(data => {
+          // Update Meta Headers Info Strings
+          document.getElementById("tag-title-display").textContent = data.tag.name;
+          document.title = `News tagged with "${data.tag.name}" | VibeNation`;
+          document.getElementById("total-articles-count").textContent = data.paginated_grid.count;
+
+          let gridBox = document.getElementById("tagged-grid-box");
+          let gridData = data.paginated_grid.results;
+
+          if (gridData.length > 0) {
+            gridBox.innerHTML = gridData.map(news => `
+                        <article class="news-card">
+                          <a href="${news.absolute_url}" class="card-link-wrapper">
+                            <div class="image-wrapper">
+                              ${news.thumbnail_url ? `<img loading="lazy" src="${news.thumbnail_url}" alt="${news.title}">` : ''}
+                            </div>
+                            
+                            <div class="card-body">
+                              <h3 class="card-title">${news.title}</h3>
+                              <div class="card-footer">
+                                <span class="date-badge">
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                  </svg>
+                                  ${news.friendly_date || ''}
+                                </span>
+                                <span class="read-more">Read →</span>
+                              </div>
+                            </div>
+                          </a>
+                        </article>
+                    `).join('');
+          } else {
+            gridBox.innerHTML = `
+                        <div class="empty-state">
+                          <div class="empty-icon">📭</div>
+                          <h3>No news articles found</h3>
+                          <p>We couldn't find any news attached to the tag "#${data.tag.name}". Check back later!</p>
+                        </div>
+                    `;
+          }
+
+          // Dynamic Navigation Triggers Generation Block
+          let navBox = document.getElementById("pagination-controls-box");
+          let navHTML = "";
+          let pagConfig = data.paginated_grid;
+
+          if (pagConfig.total_pages > 1) {
+            if (pagConfig.previous) {
+              navHTML += `<a href="#" data-url="${pagConfig.previous}" class="pag-trigger">Prev</a>`;
+            }
+            for (let i = 1; i <= pagConfig.total_pages; i++) {
+              if (i === 1 || i === pagConfig.total_pages || (i >= pagConfig.current_page - 2 && i <= pagConfig.current_page + 2)) {
+                if (i === pagConfig.current_page) {
+                  navHTML += `<strong>${i}</strong>`;
+                } else {
+                  navHTML += `<a href="#" data-url="${initialUrl}?page=${i}" class="pag-trigger">${i}</a>`;
+                }
+              } else if ((i === 2 && pagConfig.current_page > 4) || (i === pagConfig.total_pages - 1 && pagConfig.current_page < pagConfig.total_pages - 3)) {
+                navHTML += `<span class="pagination-ellipsis">...</span>`;
+              }
+            }
+            if (pagConfig.next) {
+              navHTML += `<a href="#" data-url="${pagConfig.next}" class="pag-trigger">Next</a>`;
+            }
+          }
+          navBox.innerHTML = navHTML;
+        })
+        .catch(err => console.error("Pipeline Hydration Failure Exception:", err));
     }
 
-    .news-card h3 {
-      font-size: 18px;
-      margin-top: 10px;
-      color: #333;
-    }
+    // Intercept pagination clicks and scroll up smoothly
+    document.getElementById("pagination-controls-box").addEventListener("click", function (e) {
+      if (e.target.classList.contains("pag-trigger")) {
+        e.preventDefault();
+        let targetEndpoint = e.target.getAttribute("data-url");
+        loadTaggedNews(targetEndpoint);
 
-    .news-card .date {
-      font-size: 14px;
-      color: #777;
-    }
-  </style>
-  {% endblock %}
+        let anchorTarget = document.getElementById("tag-archive-anchor");
+        if (anchorTarget) {
+          anchorTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    });
+
+    loadTaggedNews(initialUrl);
+  });
+</script>
+{% endblock %}
