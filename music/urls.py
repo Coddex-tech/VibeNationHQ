@@ -4,12 +4,15 @@ from . import views
 app_name = "music"
 urlpatterns = [
     path('', views.music, name="music_nav"),
+
+    path("songs-test/<slug:slug>/", views.song_detailss, name="song_detail"),
+    path("mixtape/<slug:slug>/", views.song_detailss, name="dj_detail"),
+
     path("songs/<slug:slug>/", views.song_detail, name="song_detail"), # for song detail page
     path('song/<int:song_id>/load-comments/',
          views.load_more_music_comments, name='load_more_music_comments'), # comment
     path('load-music-replies/<int:comment_id>/',
          views.load_more_music_replies, name='load_more_music_replies'), # Reply
-    path("music/mixtape/<slug:slug>", views.song_detail, name="mixtapes"), # for mixtapes detail page same with song
     path('search/', views.search, name='search'),
     path('newest-song/', views.latest_music, name="newest-song"),
     path('gospel-song/', views.gospel, name="gospel-song"),

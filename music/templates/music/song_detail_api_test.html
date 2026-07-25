@@ -1,0 +1,22 @@
+{% extends 'music_base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="{% static 'music/song_card.css' %}">
+<link rel="stylesheet" href="{% static 'music/song_detail.css' %}">
+<link rel="stylesheet" href="{% static 'news/news_comment.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="vibe-divider"></div>
+<div id="music-detail-page"></div>
+
+<script src="{% static 'js/song_detail.js' %}"></script>
+<script src="{% static 'js/music_comment.js' %}"></script>
+
+{% endblock %}

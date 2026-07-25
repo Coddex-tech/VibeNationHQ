@@ -28,7 +28,7 @@ def music(request):
     # Fetch all songs with artists prefetched to avoid duplication
     all_songs = Song.objects.prefetch_related('artists').distinct()
     all_djs = DJ.objects.all()[:21]
-    gospels = Song.objects.filter(genres__name="Gospel")[:21]
+    gospels = Song.objects.filter(genres__name="Gospel", is_active=True)[:21]
 
     # newest songs
     newest_songs = all_songs.order_by('-release_date')[:21]
@@ -67,7 +67,7 @@ def music(request):
 def latest_music(request):
     SongArtistBridge = Song.artists.through
     all_songs = Song.objects.filter(
-        Exists(SongArtistBridge.objects.filter(song_id=OuterRef('pk')))
+        Exists(SongArtistBridge.objects.filter(song_id=OuterRef('pk'))), is_active=True
     ).prefetch_related('artists').order_by('-release_date')
     newest_songs = all_songs.order_by('-release_date') # all song
 
@@ -90,7 +90,8 @@ def latest_music(request):
 # =======================================================================
 def gospel(request):
     all_gospels = Song.objects.filter(
-        genres__name="Gospel"
+        genres__name="Gospel",
+        is_active=True
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_gospels, 10)  
@@ -223,7 +224,7 @@ def album(request):
 
 def album_detail(request, slug):
     album = get_object_or_404(Album, slug=slug)
-    songs = Song.objects.filter(album=album).distinct()  # ensures no duplicates
+    songs = Song.objects.filter(album=album, is_active=True).distinct()  # ensures no duplicates
     return render(request, 'music/album_detail.html', {'album': album, 'songs': songs})
 
 
@@ -233,7 +234,7 @@ def album_detail(request, slug):
 # =======================================================================
 def african_music(request):
     all_africas = Song.objects.filter(
-        category="Africa"
+        category="Africa", is_active=True
     ).prefetch_related('artists').order_by('-release_date')
 
     paginator = Paginator(all_africas, 15)
@@ -255,6 +256,11 @@ def african_music(request):
 # =======================================================================
 # SONG DETAIL PAGE
 # =======================================================================
+# music/views.py
+def song_detailss(request, slug):
+    
+    return render(request, 'music/song_detail_api_test.html')
+    
 @ratelimit(key=get_cloudflare_ip, rate='3/m', method='POST', block=False)
 def song_detail(request, slug):
     obj = Song.objects.filter(slug=slug).select_related('album').prefetch_related('artists').first()
@@ -440,7 +446,7 @@ def song_detail(request, slug):
     else:
         comment_filter['dj'] = obj
 
-    music_comments = MusicComment.objects.filter(**comment_filter).prefetch_related('replies').order_by('-created_at')[:10]
+    music_comments = MusicComment.objects.filter(**comment_filter).prefetch_related('replies').order_by('-created_at')[:5]
 
     display_title = obj.dj_name if is_dj else obj.title
 
@@ -622,7 +628,7 @@ def download_song(request, slug):
 def songs_by_tag(request, tag_slug):
     tag = get_object_or_404(Tag, slug=tag_slug)
 
-    songs_list = Song.objects.filter(tags=tag)\
+    songs_list = Song.objects.filter(tags=tag, is_active=True)\
         .select_related('album')\
         .prefetch_related('artists', 'tags')\
         .order_by('-release_date')

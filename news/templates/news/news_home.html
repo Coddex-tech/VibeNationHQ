@@ -1,6 +1,5 @@
 {% extends 'news_base.html' %}
 {% load static %}
-{% load news_extras %}
 {% load ads_tags %}
 
 <title>{% block title %}News Portal |Vibenation{% endblock %}</title>
@@ -79,7 +78,7 @@
             {% endif %}
             <div class="latest-text">
               <h4>{{ news.title }}</h4>
-              <small>{{ news.date_published|hybrid_time }}</small>
+              <small>{{ news.date_published }}</small>
             </div>
           </a>
         </div>

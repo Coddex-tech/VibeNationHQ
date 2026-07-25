@@ -1,0 +1,153 @@
+{% extends 'news_base.html' %}
+{% load static %}
+{% load ads_tags %}
+
+{% block title %}<span id="meta-title-hook">Loading...</span> | VibeNation{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'news/news_details.css' %}">
+<link rel="stylesheet" href="{% static 'news/news_comment.css' %}">
+<link rel="stylesheet" href="{% static 'css/ads_style.css' %}">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+
+<div class="inline-ad">
+  {% show_ad 'Music Inline' %}
+</div>
+
+<div class="sponsored-tag" id="sponsored-badge-shell" style="display: none;">
+  <span class="badge">Sponsored Content</span>
+</div>
+
+<div class="news-detail-container">
+  <div class="share-sidebar-rail">
+    <div class="share-icons-group" id="dynamic-share-rail"></div>
+  </div>
+
+  <div class="news-detail-content">
+    <h1 class="headline" id="article-headline">Loading headline...</h1>
+
+    <div class="meta-wrapper">
+      <div class="meta-left">
+        <span class="meta-label">Posted by</span>
+        <div class="author-chip">
+          <span class="material-symbols-outlined profile-picture">account_circle</span>
+          <span class="author-name" id="article-author">...</span>
+        </div>
+      </div>
+      <div class="meta-right">
+        <span class="meta-date" id="article-date">...</span>
+      </div>
+    </div>
+
+    <div class="main-category-bar">
+      <div class="category-scroll-wrapper" id="detail-category-bar-box"></div>
+    </div>
+
+    <div class="news-image-box">
+      <img loading="lazy" id="article-main-image" style="display: none;" alt="Article Thumbnail">
+      <p class="image-caption" id="article-image-caption"></p>
+    </div>
+
+    <div class="mobile-ticker">
+      <span class="ticker-label">TRENDING:</span>
+      <marquee behavior="scroll" direction="left" id="dynamic-ticker-box"></marquee>
+    </div>
+
+    <div class="article-body" id="article-core-body">
+      <p>Fetching article content cleanly...</p>
+    </div>
+
+    <div class="news-tags">
+      <h3 style="color: teal;">Related topics:</h3>
+      <div id="article-tags-box"></div>
+    </div>
+
+    <div class="inline-ad">
+      {% show_ad 'Music Inline' %}
+    </div>
+
+    <div class="comments-wrapper">
+      <h3 class="vn-comments-title" id="main-comments-header-title">Comments</h3>
+
+      <form method="post" class="vn-comment-form" id="api-comment-form">
+        {% csrf_token %}
+        <input type="hidden" name="parent_id" id="parent_id" value="">
+        
+        <p>
+          <label for="id_name">Name:</label>
+          <input type="text" name="name" maxlength="50" required id="id_name" placeholder="Your name">
+        </p>
+        <p>
+          <label for="id_content">Comment:</label>
+          <textarea name="content" cols="40" rows="4" required id="id_content" placeholder="Write your comment..."></textarea>
+        </p>
+
+        <div class="vn-hidden-field" style="display:none !important;" aria-hidden="true">
+          <input type="text" name="user_website" tabindex="-1" autocomplete="off">
+        </div>
+
+        <div class="vn-form-actions">
+          <button type="submit" class="vn-comment-submit">Post</button>
+          <a href="javascript:void(0)" id="cancel-reply-btn" class="vn-cancel-btn" style="display: none;">✕ CANCEL REPLY</a>
+        </div>
+      </form>
+
+      <div class="vn-comments-list" id="main-comments-container"></div>
+
+      <div class="text-center mt-4" style="text-align: center; display: none;" id="load-more-comments-wrapper">
+        <button id="load-more-comments-btn" class="vn-comment-submit">
+          Load More Comments
+        </button>
+      </div>
+    </div>
+
+    <div class="article-ad">
+      {% show_ad 'Music In-Article' %}
+    </div>
+
+    <div class="music-break-box">
+      <h4 class="subheading">🔥 NEW MUSIC ON VIBENATION</h4>
+      <div class="mini-song-grid" id="mini-song-grid-box"></div>
+    </div>
+
+    <div class="inline-ad">
+      {% show_ad 'Inline' %}
+    </div>
+
+    <div class="article-footer-meta">
+      <div class="related-news">
+        <div class="footer-header">
+          <h3 class="footer-label">You Might Also Like</h3>
+          <div class="footer-line"></div>
+        </div>
+        <div class="related-grid" id="related-news-grid-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <aside class="zone-sidebar">
+    <div class="sidebar-ad-wrapper">
+        {% show_ad 'Sidebar' %}
+    </div>
+
+    <div class="sidebar-trending">
+        <h4 class="sidebar-title">MOST READ</h4>
+        <div class="trending-list" id="sidebar-trending-box"></div>
+    </div>
+
+    <div class="sidebar-categories">
+        <h4 class="sidebar-title">EXPLORE TOPICS</h4>
+        <div class="category-tags" id="sidebar-categories-box"></div>
+    </div>
+  </aside>
+</div>
+
+{% block scripts %}
+<script src="{% static 'js/news_detail_render.js' %}"></script>
+<script src="{% static 'js/news_comment.js' %}"></script>
+{% endblock %}
+
+{% endblock %}

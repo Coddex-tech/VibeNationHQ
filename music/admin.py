@@ -25,9 +25,18 @@ class SongAdmin(UnfoldModelAdmin):
     list_display_links = ('title',)
     prepopulated_fields = {"slug": ("title",)}
     filter_horizontal = ('artists', 'genres')
-    search_fields = ('title', 'artists__name', 'album__title')
+    search_fields = ('title', 'artists__name', 'album__title', 'genres__name')
     list_filter_submit = True
     list_filter = ('genres', 'release_date')
+
+    # def go_to_live(self, obj):
+    #     url = obj.get_absolute_url()
+    #     return format_html(
+    #         '<a href="{}" target="_blank" class='
+    #         '"bg-primary-600 text-white px-3 py-1 rounded-full text-xs font-bold hover:bg-primary-700 transition-colors">'
+    #         'VIEW</a>', url
+    #     )
+    # go_to_live.short_description = 'Live'
 
     @admin.display(description="Artists")
     def get_artists(self, obj):
@@ -96,10 +105,23 @@ class SongAdmin(UnfoldModelAdmin):
             </div>
         ''')
 
+    fieldsets = (
+        ("Main Content", {
+            "fields": ("title", "slug", "description", "artists", "genres", "tags"),
+        }),
+        ("Meta Data & SEO", {
+            "fields": ("cover_image", "original_cover", "audio_file", "duration"),
+        }),
+        ("Metrics", {
+            "fields": ("album", "views", "download", "is_active")
+        }),
+    )
+
 # Apply similar logic to DJAdmin to keep it safe
 class DJAdmin(UnfoldModelAdmin):
     list_display = ('dj_name', 'get_artists', 'created_at', 'dj_cover_preview')
     list_display_links = ('dj_name',)
+    search_fields = ('dj_name', 'artists__name', 'genres__name')
     prepopulated_fields = {"slug": ("dj_name",)}
     filter_horizontal = ('artists', 'genres')
     

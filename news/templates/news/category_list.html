@@ -10,63 +10,152 @@
 <div class="category-page-container">
 
    <header class="category-header">
-      <h1 class="category-title">Topic: <span>{{ category.name }}</span></h1>
-      <p class="category-count">{{ news_items.paginator.count }} Stories found</p>
+      <h1 class="category-title">Topic: <span id="category-name-display">...</span></h1>
+      <p class="category-count"><span id="stories-count-display">0</span> Stories found</p>
    </header>
 
    <div class="mid-ad">
       {% show_ad 'Inline' %}
    </div>
 
-   <div class="category-main-layout">
-      <main class="category-grid">
-         {% for item in news_items %}
-         <article class="news-card">
-            <a href="{% url 'news:news_details' item.slug %}" class="card-image-link">
-               <div class="card-image-wrapper">
-                  {% if item.thumbnail %}
-                  <img loading="lazy" src="{{ item.thumbnail.url }}" alt="{{ item.title }}">
-                  {% else %}
-                  <img loading="lazy" src="{% static 'images/default-news.jpg' %}" alt="VibeNation News">
-                  {% endif %}
-                  <span class="card-badge">{{ category.name }}</span>
-               </div>
-            </a>
-            <div class="card-content">
-               <div class="card-meta">
-                  <span class="card-author">By {{ item.author }}</span>
-                  <span class="card-date">{{ item.date_published|date:"M d, Y" }}</span>
-               </div>
-               <h2 class="card-title">
-                  <a href="{% url 'news:news_details' item.slug %}">{{ item.title }}</a>
-               </h2>
-               <p class="card-excerpt">{{ item.description|truncatewords:20 }}</p>
-            </div>
-         </article>
-         {% empty %}
-         <div class="empty-state">
-            <p>No news stories found in this category yet. Stay tuned!</p>
-         </div>
-         {% endfor %}
-
-         {% if news_items.has_other_pages %}
-         <nav class="pagination">
-            {% if news_items.has_previous %}
-            <a href="?page={{ news_items.previous_page_number }}" class="page-link">&laquo; Prev</a>
-            {% endif %}
-
-            <span class="current-page">Page {{ news_items.number }} of {{ news_items.paginator.num_pages }}</span>
-
-            {% if news_items.has_next %}
-            <a href="?page={{ news_items.next_page_number }}" class="page-link">Next &raquo;</a>
-            {% endif %}
-         </nav>
-         {% endif %}
+   <div class="category-main-layout" id="category-page-anchor">
+      <main class="category-content-area">
+         <div class="category-grid" id="main-grid-box"></div>
+         <nav class="pagination" id="pagination-controls-box"></nav>
       </main>
 
       <aside class="zone-sidebar">
-         {% include 'news/sidebar_snippet.html' %}
+         <div class="sidebar-ad-wrapper">
+            {% show_ad 'Sidebar' %}
+         </div>
+
+         <div class="sidebar-trending">
+            <h4 class="sidebar-title">MOST READ</h4>
+            <div class="trending-list" id="sidebar-trending-box"></div>
+         </div>
+
+         <div class="sidebar-categories">
+            <h4 class="sidebar-title">EXPLORE TOPICS</h4>
+            <div class="category-tags" id="sidebar-categories-box"></div>
+         </div>
       </aside>
    </div>
 </div>
+
+<script>
+   document.addEventListener("DOMContentLoaded", function () {
+      const categorySlug = "{{ category_slug|escapejs }}";
+      let initialUrl = `/news/api/category-list/${categorySlug}/`;
+      const defaultImage = "{% static 'images/Media_cover_placeholder.webp' %}";
+
+      function loadCategoryData(targetUrl) {
+         fetch(targetUrl)
+            .then(res => res.json())
+            .then(data => {
+               // Set page and header values dynamically
+               document.getElementById("category-name-display").textContent = data.category.name;
+               document.title = `Topic: ${data.category.name} | VibeNation`;
+               document.getElementById("stories-count-display").textContent = data.paginated_grid.count;
+
+               // Render Main Grid List
+               let gridBox = document.getElementById("main-grid-box");
+               let gridData = data.paginated_grid.results;
+
+               if (gridData.length > 0) {
+                  gridBox.innerHTML = gridData.map(item => `
+                        <article class="news-card">
+                           <a href="${item.absolute_url}" class="card-image-link">
+                              <div class="card-image-wrapper">
+                                 <img loading="lazy" src="${item.thumbnail_url || defaultImage}" alt="${item.title}">
+                                 <span class="card-badge">${data.category.name}</span>
+                              </div>
+                           </a>
+                           <div class="card-content">
+                              <div class="card-meta">
+                                 <span class="card-author">By ${item.author ? item.author.username : 'VibeNation'}</span>
+                                 <span class="card-date">${item.friendly_date || ''}</span>
+                              </div>
+                              <h2 class="card-title">
+                                 <a href="${item.absolute_url}">${item.title}</a>
+                              </h2>
+                              <p class="card-excerpt">${item.content ? item.content.replace(/<[^>]*>/g, '').substring(0, 120) + '...' : ''}</p>
+                           </div>
+                        </article>
+                    `).join('');
+               } else {
+                  gridBox.innerHTML = `
+                        <div class="empty-state">
+                           <p>No news stories found in this category yet. Stay tuned!</p>
+                        </div>
+                    `;
+               }
+
+               // Hydrate Dynamic Trending Sidebar
+               let trendingBox = document.getElementById("sidebar-trending-box");
+               if (data.trending_news.length > 0) {
+                  trendingBox.innerHTML = data.trending_news.map((item, index) => `
+                        <div class="trending-item">
+                            <a href="${item.absolute_url}" class="trending-link">
+                                <span class="rank-number">${index + 1}</span>
+                                <div class="trending-text">
+                                    <h4>${item.title}</h4>
+                                </div>
+                                ${item.thumbnail_url ? `
+                                <div class="trending-img-container">
+                                    <img loading="lazy" src="${item.thumbnail_url}" alt="${item.title}">
+                                </div>` : ''}
+                            </a>
+                        </div>
+                    `).join('');
+               } else {
+                  trendingBox.innerHTML = "<p style='padding: 10px;'>No popular stories this week.</p>";
+               }
+
+               // Hydrate Dynamic Explore Topics Tag Stream 
+               let catBox = document.getElementById("sidebar-categories-box");
+               if (data.all_categories.length > 0) {
+                  catBox.innerHTML = data.all_categories.map(cat => `
+                        <a href="/news/category-list/${cat.slug}/" class="cat-tag">
+                            ${cat.name}
+                            <span class="cat-count">${cat.news_count || 0}</span>
+                        </a>
+                    `).join('');
+               }
+
+               // Render Simple Next / Prev Pagination Bar Structure
+               let navBox = document.getElementById("pagination-controls-box");
+               let navHTML = "";
+               let pagConfig = data.paginated_grid;
+
+               if (pagConfig.total_pages > 1) {
+                  if (pagConfig.previous) {
+                     navHTML += `<a href="#" data-url="${pagConfig.previous}" class="page-link pag-trigger">&laquo; Prev</a>`;
+                  }
+                  navHTML += `<span class="current-page">Page ${pagConfig.current_page} of ${pagConfig.total_pages}</span>`;
+                  if (pagConfig.next) {
+                     navHTML += `<a href="#" data-url="${pagConfig.next}" class="page-link pag-trigger">Next &raquo;</a>`;
+                  }
+               }
+               navBox.innerHTML = navHTML;
+            })
+            .catch(err => console.error("Category Pipeline Resolution Crash Log:", err));
+      }
+
+      // Intercept navigation page jumps
+      document.getElementById("pagination-controls-box").addEventListener("click", function (e) {
+         if (e.target.classList.contains("pag-trigger")) {
+            e.preventDefault();
+            let targetEndpoint = e.target.getAttribute("data-url");
+            loadCategoryData(targetEndpoint);
+
+            let anchorTarget = document.getElementById("category-page-anchor");
+            if (anchorTarget) {
+               anchorTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+         }
+      });
+
+      loadCategoryData(initialUrl);
+   });
+</script>
 {% endblock %}

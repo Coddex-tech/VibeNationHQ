@@ -50,6 +50,7 @@ class Song(models.Model):
     views = models.PositiveBigIntegerField(default=0)
     download = models.PositiveBigIntegerField(default=0)
     duration = models.CharField(max_length=10, blank=True)
+    is_active = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
         if not self.slug:

@@ -45,8 +45,14 @@ urlpatterns = [
     # STAFF PORTAL - We name this 'staff'
     path('vibe-crew-login-2026/', staff_admin_site.urls),
 
+    path("api/v1/", include("music.api_urls")),
+
     path('', include(('news.urls', 'news'), namespace='news')),
     path('music/', include(('music.urls', 'music'), namespace='music')),
+
+    path('api/news/', include('news.api_urls')),
+    path('api/music/', include('music.api_urls')),
+
     path('ads/', include('ads.urls')),
     
     path('ckeditor5/', include('django_ckeditor_5.urls')),

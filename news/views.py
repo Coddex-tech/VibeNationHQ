@@ -1,25 +1,26 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from .models import News, Category, NewsView, NewsComment
+from .models import News, Category, NewsView
 from music.models import Song
 from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django_ratelimit.decorators import ratelimit
+
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+
 from taggit.models import Tag
 from django.utils import timezone
 from datetime import timedelta
 from django.core.cache import cache
 from django.db.models import Count, Q, F
-from .serializers import NewsSerializer
+from .serializers import CategorySerializer, NewsHomeSerializer
+from music.serializers import SongCardSerializer
 import random
 import re
 from .forms import NewsCommentForm
-from django.template.loader import render_to_string
-from django.http import JsonResponse, HttpResponseRedirect
-from django_ratelimit.decorators import ratelimit
 from utils.security import get_cloudflare_ip
 from collections import defaultdict
-from ads.utils import insert_dynamic_ads
 
 # ============== HELPER FUNCTION ================
 def get_top_ranking(category_name, cache_key, last_caching, strict_caching):
@@ -49,20 +50,21 @@ def get_top_ranking(category_name, cache_key, last_caching, strict_caching):
 # ========= END OF HELPER FUNCTION ========
 
 class NewsPagination(PageNumberPagination):
-    page_size = 1
+    page_size = 10
 
-def homepage(request):
+@api_view(['GET'])
+def homepage_api(request):
     now = timezone.now()
-    last_caching = timezone.now() - timedelta(hours=12)
-    strict_caching = timezone.now() - timedelta(days=1444)
+    last_caching = now - timedelta(hours=12)
+    strict_caching = now - timedelta(days=1444)
+    one_week_ago = now - timedelta(days=7)
 
+    # 1. Fetch Songs & Featured Blocks
     latest_songs = Song.objects.prefetch_related('artists').all().order_by('-release_date')[:12]
     global_featured = News.objects.public().filter(is_featured=True).order_by('-date_published').first()
-
-    # SPONSORED POST
     sponsored_feature = News.objects.sponsored().first()
     
-    # TOP NEWS
+    # 2. Top News Caching Logic
     top_news_pool = cache.get('top_news_pool')
     current_ranking_query = News.objects.public().filter(
         is_featured=False,
@@ -82,35 +84,30 @@ def homepage(request):
     else:
         top_news = top_news_pool[:5]
 
-    # LATEST NEWS
+    # 3. Latest News Flow
     latest_pool = News.objects.public().filter(is_featured=False).order_by('-date_published')[:6]
     if sponsored_feature:
         latest_news = [n for n in latest_pool if n.id != sponsored_feature.id][:5]
     else:
         latest_news = latest_pool[:5]
 
+    # 4. Optimized Category Feed Dictionary Map Grouping
     target_categories = [
         'Sports', 'Opinion', 'Education', 'Foreign News', 'Events', 
-        'Music News', 'Celebrity Gossip', 'Technology', 'Lifestyle', 
-        'Politics', 'Entertainment'
+        'Music News', 'Celebrity Gossip', 'Technology', 'Lifestyle', 'Politics', 'Entertainment'
     ]
-
     all_category_news = News.objects.public().filter(
         category__name__in=target_categories,
         is_featured=False
     ).prefetch_related('category').order_by('-date_published').distinct()
 
-    # Grouping logic for manyformany
     news_by_cat = defaultdict(list)
     for article in all_category_news:
         for cat in article.category.all():
-            cat_name = cat.name
-            if cat_name in target_categories:
-                if article not in news_by_cat[cat_name]:
-                    news_by_cat[cat_name].append(article)
+            if cat.name in target_categories and article not in news_by_cat[cat.name]:
+                news_by_cat[cat.name].append(article)
 
-    # TRENDING MUSIC
-    one_week_ago = timezone.now() - timedelta(days=7)
+    # 5. Trending Music Caching Block
     trending_now = cache.get('trending_now')
     if not trending_now:
         trending_now = Song.objects.annotate(
@@ -118,27 +115,38 @@ def homepage(request):
         ).order_by('-recent_views')[:4]
         cache.set('trending_now', list(trending_now), 1800)
 
-    context = {
-        'latest_songs': latest_songs,
-        'global_featured': global_featured,
-        'sponsored_feature': sponsored_feature,
-        'top_news': top_news,
-        'latest_news': latest_news,
-        'sport': news_by_cat['Sports'][:5],
-        'opinion': news_by_cat['Opinion'][:10],
-        'education': news_by_cat['Education'][:5],
-        'foreign_news': news_by_cat['Foreign News'][:5],
-        'events': news_by_cat['Events'][:10],
-        'music_news': news_by_cat['Music News'][:5],
-        'celebrity_gossip': news_by_cat['Celebrity Gossip'][:5],
-        'technology': news_by_cat['Technology'][:5],
-        'lifestyle': news_by_cat['Lifestyle'][:10],
-        'politics': news_by_cat['Politics'][:5],
-        'entertainment': news_by_cat['Entertainment'][:5],
-        'now': now,
-        'trending_music': trending_now,
-    }
-    return render(request, 'homepage.html', context)
+    # Context Serialization Pass Assembly
+    ctx = {'request': request}
+    
+    return Response({
+        "hero_blocks": {
+            "global_featured": NewsHomeSerializer(global_featured, context=ctx).data if global_featured else None,
+            "sponsored_feature": NewsHomeSerializer(sponsored_feature, context=ctx).data if sponsored_feature else None,
+            "top_news": NewsHomeSerializer(top_news, many=True, context=ctx).data,
+            "latest_news": NewsHomeSerializer(latest_news, many=True, context=ctx).data,
+        },
+        "music_feeds": {
+            "latest_songs": SongCardSerializer(latest_songs, many=True, context=ctx).data,
+            "trending_music": SongCardSerializer(trending_now, many=True, context=ctx).data,
+        },
+        "categorized_feeds": {
+            "sports": NewsHomeSerializer(news_by_cat['Sports'][:5], many=True, context=ctx).data,
+            "opinion": NewsHomeSerializer(news_by_cat['Opinion'][:10], many=True, context=ctx).data,
+            "education": NewsHomeSerializer(news_by_cat['Education'][:5], many=True, context=ctx).data,
+            "foreign_news": NewsHomeSerializer(news_by_cat['Foreign News'][:5], many=True, context=ctx).data,
+            "events": NewsHomeSerializer(news_by_cat['Events'][:10], many=True, context=ctx).data,
+            "music_news": NewsHomeSerializer(news_by_cat['Music News'][:5], many=True, context=ctx).data,
+            "celebrity_gossip": NewsHomeSerializer(news_by_cat['Celebrity Gossip'][:5], many=True, context=ctx).data,
+            "technology": NewsHomeSerializer(news_by_cat['Technology'][:5], many=True, context=ctx).data,
+            "lifestyle": NewsHomeSerializer(news_by_cat['Lifestyle'][:10], many=True, context=ctx).data,
+            "politics": NewsHomeSerializer(news_by_cat['Politics'][:5], many=True, context=ctx).data,
+            "entertainment": NewsHomeSerializer(news_by_cat['Entertainment'][:5], many=True, context=ctx).data,
+        }
+    })
+
+def homepage(request):
+    """Saves CPU cycle configurations by instantly serving the wireframe body script canvas."""
+    return render(request, 'homepage.html')
 # ----------------------------------------------------------------------||
 
 def news_home(request):
@@ -219,64 +227,78 @@ def news_home(request):
     return render(request, 'news/news_home.html', context)
 # ----------------------------------------------------------------------------||
 
-def category_news(request, slug):
+@api_view(['GET'])
+def category_news_api(request, slug):
     last_week = timezone.now() - timedelta(days=7)
     category = get_object_or_404(Category, slug=slug)
     
+    # Base Query for this specific category
     news_list_qs = News.objects.public().filter(
         category=category, 
         is_published=True
     ).distinct().order_by('-date_published') 
 
+    # Track first article ID to exclude from trending matching original logic
     first_article_id = None
     if news_list_qs.exists():
         first_article_id = news_list_qs.first().id
 
-    # Pagination
-    paginator = Paginator(news_list_qs, 10)
-    page_number = request.GET.get('page')
-    news_items = paginator.get_page(page_number)
-
-    trending_news = News.objects.public().filter(
+    # Trending Sidebar logic
+    trending_news_qs = News.objects.public().filter(
         is_published=True, 
         date_published__gte=last_week
     )
-
     if first_article_id:
-        trending_news = trending_news.exclude(id=first_article_id)
+        trending_news_qs = trending_news_qs.exclude(id=first_article_id)
+    trending_news = trending_news_qs.order_by('-views')[:5]
 
-    trending_news = trending_news.order_by('-views')[:5]
-
+    # All Categories Sidebar Widget logic
     all_categories = Category.objects.exclude(slug='').annotate(
         news_count=Count('news')
     ).order_by('-news_count')[:10]
 
-    context = {
-        'category': category,
-        'news_items': news_items,
-        'trending_news': trending_news,
-        'all_categories': all_categories,
-    }
-    return render(request, 'news/category_list.html', context)
+    # Handle Grid Pagination via DRF
+    paginator = NewsPagination()
+    paginated_queryset = paginator.paginate_queryset(news_list_qs, request)
 
+    serializer_context = {'request': request}
+    return Response({
+        "category": {
+            "name": category.name,
+            "slug": category.slug
+        },
+        "trending_news": NewsSerializer(trending_news, many=True, context=serializer_context).data,
+        "all_categories": CategorySerializer(all_categories, many=True, context=serializer_context).data,
+        "paginated_grid": {
+            "count": paginator.page.paginator.count,
+            "next": paginator.get_next_link(),
+            "previous": paginator.get_previous_link(),
+            "current_page": paginator.page.number,
+            "total_pages": paginator.page.paginator.num_pages,
+            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+        }
+    })
+
+def category_news_frontend(request, slug):
+    return render(request, 'news/category_list.html', {'category_slug': slug})
 
 # ================================================================
 # Enforces 3 comment submissions per minute based on their unique Cloudflare IP
+
 @ratelimit(key=get_cloudflare_ip, rate='3/m', method='POST', block=False)
 def news_detail(request, slug):
-    last_week = timezone.now() - timedelta(days=7)
-    News.objects.filter(slug=slug).update(views=F('views') + 1)
-    news = get_object_or_404(News.objects.prefetch_related('category', 'tags'), slug=slug)
+    """
+    GET: Serves the optimized HTML wireframe instantly shell.
+    POST: Processes secure async comment submissions with fallback security.
+    """
+    # Force _base_manager lookup to ensure visibility flags don't 404 under testing
+    news = get_object_or_404(News._base_manager, slug=slug)
 
-    article_content = insert_dynamic_ads(news.content)
-    NewsView.objects.create(news=news)
-
-    # ==================== COMMENT ==============
+    # ==================== HANDLE ASYNC COMMENT POSTS ================
     if request.method == 'POST':
-
         is_staff = request.user.is_authenticated and request.user.is_staff
 
-        # Rate Limit Guard
+        # 1. Rate Limit Guard
         if not is_staff:
             was_limited = getattr(request, 'limited', False)
             if was_limited:
@@ -285,29 +307,24 @@ def news_detail(request, slug):
                     "message": "🔥 Slow down! You are posting too fast. Please wait a minute."
                 }, status=429)
 
-        # Honeypot
+        # 2. Honeypot check
         honeypot_value = request.POST.get('user_website', '')
         if honeypot_value:
-            return JsonResponse({
-                "status": "success",
-                "message": "Comment submitted successfully."
-            })
+            return JsonResponse({"status": "success", "message": "Comment submitted successfully."})
 
-        # AUTOMATED IP BLOCK INTEGRATION
+        # 3. Automated IP Footprint Monitoring via Cloudflare Proxies
         if not is_staff:
-            # Resolve client IP matching your Cloudflare config strategy
             x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
             client_ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR')
             
-            # Run cache monitor check
             from utils.monitor_ip import monitor_and_filter_ip
             if monitor_and_filter_ip(client_ip, action_type="comment"):
                 return JsonResponse({
                     "status": "error",
-                    "message": "🚫 Access Denied. Your IP footprint has been blacklisted for 24 hours due to spam behavior."
+                    "message": "🚫 Access Denied. Your IP footprint has been blacklisted due to spam behavior."
                 }, status=403)
 
-        # Link filter
+        # 4. Content Text Link Filtering (Spam Prevention)
         content_submitted = request.POST.get('content', '')
         if not is_staff:
             link_pattern = r'(https?://|www\.|<a\s+href|\[url\])'
@@ -317,12 +334,12 @@ def news_detail(request, slug):
                     "message": "Links are not allowed in comments."
                 }, status=400)
 
+        # 5. Form Processing Engine
         form = NewsCommentForm(request.POST)
         if form.is_valid():
             comment = form.save(commit=False)
             comment.news = news
 
-            # ================= IDENTITY RULE =================
             if is_staff:
                 comment.user = request.user
                 comment.name = request.user.get_full_name() or request.user.username
@@ -330,7 +347,6 @@ def news_detail(request, slug):
                 forbidden_flags = ["admin", "vibenation", "staff", "moderator", "editor", "boss"]
                 if any(flag in str(comment.name).lower() for flag in forbidden_flags):
                     comment.name = "Anonymous Fan"
-            # ==========================================================
 
             parent_id = request.POST.get('parent_id')
             if parent_id:
@@ -338,149 +354,42 @@ def news_detail(request, slug):
 
             comment.save()
 
-            # Render HTML
+            # Fix: Serialize the freshly built comment object using DRF
+            from news.serializers import NewsCommentSerializer, NewsReplySerializer
             if comment.parent_id:
-                html_content = render_to_string(
-                    'news/partials/news_reply.html',
-                    {'reply': comment},
-                    request=request
-                )
+                comment_data = NewsReplySerializer(comment).data
+                # Inject root identifier so front-end knows exactly which thread element to append to
+                # If your model has a specific tracking method for root_id, use that, otherwise fallback to parent_id
+                comment_data['root_comment_id'] = comment.parent_id 
             else:
-                html_content = render_to_string(
-                    'news/partials/news_comment.html',
-                    {'comment': comment},
-                    request=request
-                )
+                comment_data = NewsCommentSerializer(comment).data
 
-            # ================= JSON RESPONSE =================
             response = JsonResponse({
                 "status": "success",
+                "id": comment.id,
                 "message": "Comment posted successfully!",
-                "html": html_content,
-                "parent_id": comment.parent_id,
-                "root_comment_id": comment.root_comment.id,
-                "commenter_name": comment.name,
+                "comment_data": comment_data
             })
 
-            # COOKIE FIX
             if not is_staff:
-                response.set_cookie(
-                    'last_commenter_name',
-                    comment.name,
-                    max_age=60 * 60 * 24 * 30
-                )
-
+                response.set_cookie('last_commenter_name', comment.name, max_age=60 * 60 * 24 * 30)
             return response
 
-        else:
-            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                return JsonResponse({
-                    "status": "error",
-                    "errors": form.errors
-                }, status=400)
-            message.error(request, "There was an error with your comment submission")
-            return HttpResponseRedirect(request.path)
+        return JsonResponse({"status": "error", "errors": form.errors}, status=400)
 
-    # ==================== GET REQUEST ====================
-    if request.user.is_authenticated and request.user.is_staff:
-        form = NewsCommentForm()
-    else:
-        last_name = request.COOKIES.get('last_commenter_name', '')
-        form = NewsCommentForm(initial={'name': last_name} if last_name else None)
+    # ==================== GET REQUEST (PURE HTML WIREFRAME) ====================
+    # Atomically increment views on initial shell load
+    News._base_manager.filter(pk=news.pk).update(views=F('views') + 1)
+    try:
+        NewsView.objects.create(news=news)
+    except Exception:
+        pass
 
-    # Sidebar data
-    trending_news = (
-        News.objects.public()
-        .filter(date_published__gte=last_week)
-        .exclude(id=news.id)
-        .order_by('-views')[:5]
-    )
+    # Provide initial fallback commenter properties inside context
+    last_name = request.COOKIES.get('last_commenter_name', '')
+    form = NewsCommentForm(initial={'name': last_name} if last_name else None)
 
-    recent_songs = Song.objects.all().order_by('-release_date')[:4]
-
-    all_categories = Category.objects.annotate(
-        news_count=Count('news')
-    ).order_by('-news_count')[:10]
-
-    related_news = (
-        News.objects.public()
-        .filter(category__in=news.category.all())
-        .exclude(id=news.id)
-        .order_by('-date_published')
-        .distinct()[:6]
-    )
-
-    comments_qs = (
-        NewsComment.objects
-        .filter(news=news, parent__isnull=True, is_approved=True)
-        .prefetch_related('replies')
-        .order_by('-created_at')
-    )
-
-    paginator = Paginator(comments_qs, 3)
-    page_number = request.GET.get('page', 1)
-    comments = paginator.get_page(page_number)
-
-    context = {
-        'news': news,
-        'related_news': related_news,
-        'trending_news': trending_news,
-        'recent_songs': recent_songs,
-        'all_categories': all_categories,
-        'comments': comments,
-        'form': form,
-        'article_content': article_content,
-    }
-
-    return render(request, 'news/news_detail.html', context)
-# ------------------------------------------------------------------------------
-
-
-COMMENTS_PER_LOAD = 10
-REPLIES_PER_LOAD = 3
-
-def load_more_comments(request, news_id):
-    offset = int(request.GET.get('offset', 0))
-    news = get_object_or_404(News, id=news_id)
-
-    all_parents = NewsComment.objects.filter(
-        news=news, parent__isnull=True, is_approved=True
-    ).order_by('-created_at')
-
-    next_batch = all_parents[offset : offset + COMMENTS_PER_LOAD]
-    
-    html_output = ""
-    for comment in next_batch:
-        # FIXED PATH: news/partials/
-        html_output += render_to_string(
-            'news/partials/news_comment.html',
-            {'comment': comment},
-            request=request)
-
-    return JsonResponse({
-        'html': html_output,
-        'has_more': all_parents.count() > (offset + COMMENTS_PER_LOAD)
-    })
-#=================================================================
-
-def load_more_replies(request, comment_id):
-    offset = int(request.GET.get('offset', 0))
-    comment = get_object_or_404(NewsComment, id=comment_id)
-
-    all_replies = comment.get_all_replies()
-    replies = all_replies[offset : offset + REPLIES_PER_LOAD]
-
-    # FIXED PATH: news/partials/
-    html = render_to_string(
-        'news/partials/reply_list.html',
-        {'replies': replies},
-        request=request
-    )
-
-    return JsonResponse({
-        'html': html,
-        'has_more': len(all_replies) > (offset + REPLIES_PER_LOAD)
-    })
+    return render(request, 'news/news_detail_api_test.html', {'slug': slug, 'form': form})
 
 
 
@@ -1234,7 +1143,7 @@ def news_by_tag(request, tag_slug):
 
     # Pass over to DRF Paginator Engine
     paginator = NewsPagination()
-    paginator.page_size = 20 # Overriding default to match your original configuration constraint size of 20
+    paginator.page_size = 20 # Overriding default for Tag
     paginated_queryset = paginator.paginate_queryset(news_list_queryset, request)
 
     serializer_context = {'request': request}

@@ -1,4 +1,3 @@
-{% load news_extras %}
 <div class="comment-item {% if comment.is_verified_staff %}staff-entry{% endif %}" id="comment-{{ comment.id }}">
   <div class="comment-left">
     {% if comment.is_verified_staff %}
@@ -25,7 +24,7 @@
     <p class="comment-text">{{ comment.content }}</p>
 
     <div class="comment-meta">
-      <span>{{ comment.created_at|hybrid_time }}</span>
+      <span>{{ comment.created_at }}</span>
       <a href="javascript:void(0)"
         onclick="handleReplyClick('{{ comment.id }}', '{{ comment.display_name|upper }}')">Reply</a>
     </div>

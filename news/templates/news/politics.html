@@ -155,6 +155,7 @@
                     if (data.mini_featured_news.length > 0) {
                         discoveryBox.innerHTML = data.mini_featured_news.map(item => {
                             let catName = item.category && item.category.length > 0 ? item.category[0].name.toUpperCase() : "NEWS";
+                            let titleSnippet = item.title ? item.title.replace(/<[^>]>*>/g, '').substring(0, 60) + '...' : '';
                             let textSnippet = item.content ? item.content.replace(/<[^>]*>/g, '').substring(0, 80) + '...' : '';
                             return `
                             <a href="${item.absolute_url}" class="mini-card">
@@ -162,7 +163,7 @@
                                 <div class="card-content">
                                     <span class="category-tag">${catName}</span>
                                     <div class="card-text-wrapper">
-                                        <h4>${item.title}</h4>
+                                        <h4>${titleSnippet}</h4>
                                         <p>${textSnippet}</p>
                                     </div>
                                     <span class="read-link">Read Story →</span>

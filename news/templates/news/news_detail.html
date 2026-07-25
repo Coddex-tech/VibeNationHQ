@@ -1,5 +1,4 @@
 {% extends 'news_base.html' %}
-{% load news_extras %}
 {% load static %}
 {% load ads_tags %}
 
@@ -149,7 +148,7 @@ entertainment news and updates on VibeNation.{% endblock %}
 
   <div class="meta-right">
     <span class="meta-date">
-      {{ news.date_published|hybrid_time }}
+      {{ news.date_published }}
     </span>
   </div>
 
