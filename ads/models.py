@@ -3,9 +3,14 @@ from music.compress_image import handle_webp_compression
 from django.utils.text import slugify
 
 class AdZone(models.Model):
-    """Defines WHERE the ad goes (e.g., 'Sidebar', 'Header', 'Post Middle')"""
     name = models.CharField(max_length=100, unique=True)
-    
+    slug = models.SlugField(max_length=100, unique=True, blank=True, null=True)
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
 
