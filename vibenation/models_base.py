@@ -1,5 +1,42 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
+
+class PublishableManager(models.Manager):
+    def public(self):
+        return self.filter(
+            is_published=True,
+            date_published__lte=timezone.now()
+        )
+
+    def sponsored(self):
+        """
+        Returns currently active sponsored content.
+        """
+        now = timezone.now()
+
+        return self.public().filter(
+            models.Q(is_sponsored=True)
+            & (
+                models.Q(expires_at__gt=now)
+                | models.Q(expires_at__isnull=True)
+            )
+        )
+
+    def regular(self):
+        """
+        Returns normal content plus sponsored content
+        whose sponsorship has expired.
+        """
+        now = timezone.now()
+
+        return self.public().filter(
+            models.Q(is_sponsored=False)
+            | (
+                models.Q(is_sponsored=True)
+                & models.Q(expires_at__lte=now)
+            )
+        )
 
 class BaseComment(models.Model):
     # Secure Auth Link — ONLY populated for logged-in backend staff

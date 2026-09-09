@@ -1,5 +1,6 @@
 from django.urls import path
 from news.api_views import (
+    HomePageAPIView,
     NewsHomeAPIView,
     NewsDetailAPIView,
     SidebarDataAPIView,
@@ -8,15 +9,7 @@ from news.api_views import (
     CommentRepliesChunkAPIView,
     CategoryNewsAPIView,
     NewsByTagAPIView,
-    EntertainmentAPIView,
-    PoliticsAPIView,
-    LifestyleAPIView,
-    TechnologyAPIView,
-    MusicNewsAPIView,
-    SportsAPIView,
-    EventsAPIView,
-    EducationAPIView,
-    OpinionAPIView
+    CategoryHomeAPIView
     )
 
 app_name = 'news_api'
@@ -24,8 +17,8 @@ app_name = 'news_api'
 urlpatterns = [
     # HOMEPAGE
     path(
-        "home/",
-        NewsHomeAPIView.as_view(),
+        "homepage/",
+        HomePageAPIView.as_view(),
         name="news-home-api"
     ),
 
@@ -50,71 +43,14 @@ urlpatterns = [
         name="news-by-tag-api",
     ),
 
-    # ENTERTAINMENT
     path(
-        "entertainment/",
-        EntertainmentAPIView.as_view(),
-        name="entertainment-api"
-    ),
-
-    # POLITICS
-    path(
-        "politics/",
-        PoliticsAPIView.as_view(),
-        name="politics-api"
-    ),
-
-    # LIFESTYLE
-    path(
-        "lifestyle/",
-        LifestyleAPIView.as_view(),
-        name="lifestyle-api"
-    ),
-
-    # TECHNOLOGY
-    path(
-        "technology/",
-        TechnologyAPIView.as_view(),
-        name="technology-api"
-    ),
-
-    # MUSIC NEWS
-    path(
-        "music-news/",
-        MusicNewsAPIView.as_view(),
-        name="music-news-api"
-    ),
-
-    # SPORTS
-    path(
-        "sports/",
-        SportsAPIView.as_view(),
-        name="sports-api"
-    ),
-
-    # EVENTS
-    path(
-        "events/",
-        EventsAPIView.as_view(),
-        name="events-api"
-    ),
-
-    # EDUCATION
-    path(
-        "education/",
-        EducationAPIView.as_view(),
-        name="education-api"
-    ),
-
-    # OPINION
-    path(
-        "music-news/",
-        OpinionAPIView.as_view(),
-        name="opinion-api"
+        "<slug:slug>/",
+        CategoryHomeAPIView.as_view(),
+        name="category-home-api",
     ),
 
     # Fetch main article details by slug
-     path('<slug:slug>/', 
+     path('article/<slug:slug>/', 
          NewsDetailAPIView.as_view(), 
          name='api_news_detail'),
 

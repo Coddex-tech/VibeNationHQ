@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from vibenation.models_base import BaseComment # Clean core import
+from vibenation.models_base import BaseComment, PublishableManager # Clean core import
 from django.utils.text import slugify
 from sortedm2m.fields import SortedManyToManyField
 from taggit_autosuggest.managers import TaggableManager
@@ -31,33 +31,6 @@ class IpBlock(models.Model):
         verbose_name = "IpBlock"
         verbose_name_plural = "Blocked IP Address"
 
-class NewsManager(models.Manager):
-    def public(self):
-        return self.filter(
-            is_published=True, 
-            date_published__lte=timezone.now()
-        )
-    
-    def sponsored(self):
-        """
-        Strictly pulls active sponsored items
-        """
-        now = timezone.now()
-        return self.public().filter(
-            models.Q(is_sponsored=True) & 
-            (models.Q(expires_at__gt=now) | models.Q(expires_at__isnull=True))
-        )
-
-    def regular_news(self):
-        """
-        HIGH PERFORMANCE READ: Pulls standard news AND any expired 
-        sponsored posts together seamlessly. Zero database stress.
-        """
-        now = timezone.now()
-        return self.public().filter(
-            models.Q(is_sponsored=False) | 
-            (models.Q(is_sponsored=True) & models.Q(expires_at__lte=now))
-        )
 
 class Category(models.Model):
     name = models.CharField(max_length=50, unique=True)
@@ -95,7 +68,7 @@ class News(models.Model):
     is_published = models.BooleanField(default=True)
 
     # CONNECT THE MANAGER
-    objects = NewsManager() 
+    objects = PublishableManager()
 
     def __str__(self):
         return self.title

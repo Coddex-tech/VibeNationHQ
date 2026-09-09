@@ -14,8 +14,7 @@ from django.utils import timezone
 from datetime import timedelta
 from django.core.cache import cache
 from django.db.models import Count, Q, F
-from .serializers import CategorySerializer, NewsHomeSerializer
-from music.serializers import SongCardSerializer
+from .serializers import CategorySerializer, NewsCardSerializer, NewsDetailSerializer
 import random
 import re
 from .forms import NewsCommentForm
@@ -55,92 +54,286 @@ class NewsPagination(PageNumberPagination):
 @api_view(['GET'])
 def homepage_api(request):
     now = timezone.now()
+
     last_caching = now - timedelta(hours=12)
     strict_caching = now - timedelta(days=1444)
     one_week_ago = now - timedelta(days=7)
 
+    # =========================================================
     # 1. Fetch Songs & Featured Blocks
-    latest_songs = Song.objects.prefetch_related('artists').all().order_by('-release_date')[:12]
-    global_featured = News.objects.public().filter(is_featured=True).order_by('-date_published').first()
-    sponsored_feature = News.objects.sponsored().first()
-    
+    # =========================================================
+
+    latest_songs = (
+        Song.objects
+        .prefetch_related('artists')
+        .all()
+        .order_by('-release_date')[:12]
+    )
+
+    global_featured = (
+        News.objects
+        .public()
+        .filter(is_featured=True)
+        .order_by('-date_published')
+        .first()
+    )
+
+    sponsored_feature = (
+        News.objects
+        .sponsored()
+        .first()
+    )
+
+    # =========================================================
     # 2. Top News Caching Logic
+    # =========================================================
+
     top_news_pool = cache.get('top_news_pool')
-    current_ranking_query = News.objects.public().filter(
-        is_featured=False,
-        is_sponsored=False,
-        date_published__gte=strict_caching
-    ).annotate(
-        recent_views=Count('views_log', filter=Q(views_log__created_at__gte=last_caching))
-    ).order_by('-recent_views', '-views', '-date_published')[:10]
+
+    current_ranking_query = (
+        News.objects
+        .public()
+        .filter(
+            is_featured=False,
+            is_sponsored=False,
+            date_published__gte=strict_caching
+        )
+        .annotate(
+            recent_views=Count(
+                'views_log',
+                filter=Q(
+                    views_log__created_at__gte=last_caching
+                )
+            )
+        )
+        .order_by(
+            '-recent_views',
+            '-views',
+            '-date_published'
+        )[:10]
+    )
 
     new_ranking = list(current_ranking_query)
-    if not top_news_pool or (new_ranking and new_ranking[0].recent_views > 0):
+
+    if not top_news_pool or (
+        new_ranking and new_ranking[0].recent_views > 0
+    ):
         top_news_pool = new_ranking
-        cache.set('top_news_pool', top_news_pool, None)
+
+        cache.set(
+            'top_news_pool',
+            top_news_pool,
+            None
+        )
 
     if sponsored_feature:
-        top_news = [n for n in top_news_pool if n.id != sponsored_feature.id][:4]
+        top_news = [
+            news
+            for news in top_news_pool
+            if news.id != sponsored_feature.id
+        ][:4]
     else:
         top_news = top_news_pool[:5]
 
+    # =========================================================
     # 3. Latest News Flow
-    latest_pool = News.objects.public().filter(is_featured=False).order_by('-date_published')[:6]
+    # =========================================================
+
+    latest_pool = (
+        News.objects
+        .public()
+        .filter(is_featured=False)
+        .order_by('-date_published')[:6]
+    )
+
     if sponsored_feature:
-        latest_news = [n for n in latest_pool if n.id != sponsored_feature.id][:5]
+        latest_news = [
+            news
+            for news in latest_pool
+            if news.id != sponsored_feature.id
+        ][:5]
     else:
         latest_news = latest_pool[:5]
 
-    # 4. Optimized Category Feed Dictionary Map Grouping
+    # =========================================================
+    # 4. Category Feed Dictionary Map Grouping
+    # =========================================================
+
     target_categories = [
-        'Sports', 'Opinion', 'Education', 'Foreign News', 'Events', 
-        'Music News', 'Celebrity Gossip', 'Technology', 'Lifestyle', 'Politics', 'Entertainment'
+        'Sports',
+        'Opinion',
+        'Education',
+        'Foreign News',
+        'Events',
+        'Music News',
+        'Celebrity Gossip',
+        'Technology',
+        'Lifestyle',
+        'Politics',
+        'Entertainment'
     ]
-    all_category_news = News.objects.public().filter(
-        category__name__in=target_categories,
-        is_featured=False
-    ).prefetch_related('category').order_by('-date_published').distinct()
+
+    all_category_news = (
+        News.objects
+        .public()
+        .filter(
+            category__name__in=target_categories,
+            is_featured=False
+        )
+        .prefetch_related('category')
+        .order_by('-date_published')
+        .distinct()
+    )
 
     news_by_cat = defaultdict(list)
+
     for article in all_category_news:
         for cat in article.category.all():
-            if cat.name in target_categories and article not in news_by_cat[cat.name]:
+            if (
+                cat.name in target_categories
+                and article not in news_by_cat[cat.name]
+            ):
                 news_by_cat[cat.name].append(article)
 
+    # =========================================================
     # 5. Trending Music Caching Block
-    trending_now = cache.get('trending_now')
-    if not trending_now:
-        trending_now = Song.objects.annotate(
-            recent_views=Count('song_views', filter=Q(song_views__timestamp__gte=one_week_ago))
-        ).order_by('-recent_views')[:4]
-        cache.set('trending_now', list(trending_now), 1800)
+    # =========================================================
 
-    # Context Serialization Pass Assembly
-    ctx = {'request': request}
-    
+    trending_now = cache.get('trending_now')
+
+    if not trending_now:
+        trending_now = (
+            Song.objects
+            .annotate(
+                recent_views=Count(
+                    'song_views',
+                    filter=Q(
+                        song_views__timestamp__gte=one_week_ago
+                    )
+                )
+            )
+            .order_by('-recent_views')[:4]
+        )
+
+        trending_now = list(trending_now)
+
+        cache.set(
+            'trending_now',
+            trending_now,
+            1800
+        )
+
+    # =========================================================
+    # 6. Serializer Context
+    # =========================================================
+
+    ctx = {
+        'request': request
+    }
+
+    # =========================================================
+    # 7. Return Homepage Response
+    # =========================================================
+
     return Response({
-        "hero_blocks": {
-            "global_featured": NewsHomeSerializer(global_featured, context=ctx).data if global_featured else None,
-            "sponsored_feature": NewsHomeSerializer(sponsored_feature, context=ctx).data if sponsored_feature else None,
-            "top_news": NewsHomeSerializer(top_news, many=True, context=ctx).data,
-            "latest_news": NewsHomeSerializer(latest_news, many=True, context=ctx).data,
+        'hero_blocks': {
+            'global_featured': (
+                NewsDetailSerializer(
+                    global_featured,
+                    context=ctx
+                ).data
+                if global_featured
+                else None
+            ),
+
+            'sponsored_feature': (
+                NewsCardSerializer(
+                    sponsored_feature,
+                    context=ctx
+                ).data
+                if sponsored_feature
+                else None
+            ),
+
+            'top_news': NewsCardSerializer(
+                top_news,
+                many=True,
+                context=ctx
+            ).data,
+
+            'latest_news': NewsCardSerializer(
+                latest_news,
+                many=True,
+                context=ctx
+            ).data,
         },
-        "music_feeds": {
-            "latest_songs": SongCardSerializer(latest_songs, many=True, context=ctx).data,
-            "trending_music": SongCardSerializer(trending_now, many=True, context=ctx).data,
-        },
-        "categorized_feeds": {
-            "sports": NewsHomeSerializer(news_by_cat['Sports'][:5], many=True, context=ctx).data,
-            "opinion": NewsHomeSerializer(news_by_cat['Opinion'][:10], many=True, context=ctx).data,
-            "education": NewsHomeSerializer(news_by_cat['Education'][:5], many=True, context=ctx).data,
-            "foreign_news": NewsHomeSerializer(news_by_cat['Foreign News'][:5], many=True, context=ctx).data,
-            "events": NewsHomeSerializer(news_by_cat['Events'][:10], many=True, context=ctx).data,
-            "music_news": NewsHomeSerializer(news_by_cat['Music News'][:5], many=True, context=ctx).data,
-            "celebrity_gossip": NewsHomeSerializer(news_by_cat['Celebrity Gossip'][:5], many=True, context=ctx).data,
-            "technology": NewsHomeSerializer(news_by_cat['Technology'][:5], many=True, context=ctx).data,
-            "lifestyle": NewsHomeSerializer(news_by_cat['Lifestyle'][:10], many=True, context=ctx).data,
-            "politics": NewsHomeSerializer(news_by_cat['Politics'][:5], many=True, context=ctx).data,
-            "entertainment": NewsHomeSerializer(news_by_cat['Entertainment'][:5], many=True, context=ctx).data,
+
+        'categorized_feeds': {
+            'sports': NewsCardSerializer(
+                news_by_cat['Sports'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'opinion': NewsCardSerializer(
+                news_by_cat['Opinion'][:10],
+                many=True,
+                context=ctx
+            ).data,
+
+            'education': NewsCardSerializer(
+                news_by_cat['Education'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'foreign_news': NewsCardSerializer(
+                news_by_cat['Foreign News'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'events': NewsCardSerializer(
+                news_by_cat['Events'][:10],
+                many=True,
+                context=ctx
+            ).data,
+
+            'music_news': NewsCardSerializer(
+                news_by_cat['Music News'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'celebrity_gossip': NewsCardSerializer(
+                news_by_cat['Celebrity Gossip'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'technology': NewsCardSerializer(
+                news_by_cat['Technology'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'lifestyle': NewsCardSerializer(
+                news_by_cat['Lifestyle'][:10],
+                many=True,
+                context=ctx
+            ).data,
+
+            'politics': NewsCardSerializer(
+                news_by_cat['Politics'][:5],
+                many=True,
+                context=ctx
+            ).data,
+
+            'entertainment': NewsCardSerializer(
+                news_by_cat['Entertainment'][:5],
+                many=True,
+                context=ctx
+            ).data,
         }
     })
 
@@ -267,7 +460,7 @@ def category_news_api(request, slug):
             "name": category.name,
             "slug": category.slug
         },
-        "trending_news": NewsSerializer(trending_news, many=True, context=serializer_context).data,
+        "trending_news": NewsCardSerializer(trending_news, many=True, context=serializer_context).data,
         "all_categories": CategorySerializer(all_categories, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
@@ -275,7 +468,7 @@ def category_news_api(request, slug):
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -471,18 +664,18 @@ def entertainment(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_entertainment": NewsSerializer(featured_entertainment, context=serializer_context).data if featured_entertainment else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_entertainment": NewsSerializer(top_entertainment, many=True, context=serializer_context).data,
-        "latest_entertainment": NewsSerializer(latest_entertainment, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_entertainment": NewsCardSerializer(featured_entertainment, context=serializer_context).data if featured_entertainment else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_entertainment": NewsCardSerializer(top_entertainment, many=True, context=serializer_context).data,
+        "latest_entertainment": NewsCardSerializer(latest_entertainment, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -553,18 +746,18 @@ def politics(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_political": NewsSerializer(featured_political, context=serializer_context).data if featured_political else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_political": NewsSerializer(top_political, many=True, context=serializer_context).data,
-        "latest_political": NewsSerializer(latest_political, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_political": NewsCardSerializer(featured_political, context=serializer_context).data if featured_political else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_political": NewsCardSerializer(top_political, many=True, context=serializer_context).data,
+        "latest_political": NewsCardSerializer(latest_political, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -635,18 +828,18 @@ def lifestyle(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_lifestyle": NewsSerializer(featured_lifestyle, context=serializer_context).data if featured_lifestyle else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_lifestyle": NewsSerializer(top_lifestyle, many=True, context=serializer_context).data,
-        "latest_lifestyle": NewsSerializer(latest_lifestyle, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_lifestyle": NewsCardSerializer(featured_lifestyle, context=serializer_context).data if featured_lifestyle else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_lifestyle": NewsCardSerializer(top_lifestyle, many=True, context=serializer_context).data,
+        "latest_lifestyle": NewsCardSerializer(latest_lifestyle, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -716,18 +909,18 @@ def technology(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_technology": NewsSerializer(featured_technology, context=serializer_context).data if featured_technology else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_technology": NewsSerializer(top_technology, many=True, context=serializer_context).data,
-        "latest_technology": NewsSerializer(latest_technology, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_technology": NewsCardSerializer(featured_technology, context=serializer_context).data if featured_technology else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_technology": NewsCardSerializer(top_technology, many=True, context=serializer_context).data,
+        "latest_technology": NewsCardSerializer(latest_technology, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -797,18 +990,18 @@ def music_news(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_music_news": NewsSerializer(featured_music_news, context=serializer_context).data if featured_music_news else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_music_news": NewsSerializer(top_music_news, many=True, context=serializer_context).data,
-        "latest_music_news": NewsSerializer(latest_music_news, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_music_news": NewsCardSerializer(featured_music_news, context=serializer_context).data if featured_music_news else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_music_news": NewsCardSerializer(top_music_news, many=True, context=serializer_context).data,
+        "latest_music_news": NewsCardSerializer(latest_music_news, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -880,18 +1073,18 @@ def sports(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_sport": NewsSerializer(featured_sport, context=serializer_context).data if featured_sport else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_sport": NewsSerializer(top_sport, many=True, context=serializer_context).data,
-        "latest_sport": NewsSerializer(latest_sport, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_sport": NewsCardSerializer(featured_sport, context=serializer_context).data if featured_sport else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_sport": NewsCardSerializer(top_sport, many=True, context=serializer_context).data,
+        "latest_sport": NewsCardSerializer(latest_sport, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -962,18 +1155,18 @@ def events(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_event": NewsSerializer(featured_event, context=serializer_context).data if featured_event else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_event": NewsSerializer(top_event, many=True, context=serializer_context).data,
-        "latest_event": NewsSerializer(latest_event, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_event": NewsCardSerializer(featured_event, context=serializer_context).data if featured_event else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_event": NewsCardSerializer(top_event, many=True, context=serializer_context).data,
+        "latest_event": NewsCardSerializer(latest_event, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -1044,18 +1237,18 @@ def education(request):
 
     serializer_context = {'request': request}
     return Response({
-        "featured_education": NewsSerializer(featured_education, context=serializer_context).data if featured_education else None,
-        "sponsored_feature": NewsSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
-        "top_education": NewsSerializer(top_education, many=True, context=serializer_context).data,
-        "latest_education": NewsSerializer(latest_education, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_education": NewsCardSerializer(featured_education, context=serializer_context).data if featured_education else None,
+        "sponsored_feature": NewsCardSerializer(sponsored_feature, context=serializer_context).data if sponsored_feature else None,
+        "top_education": NewsCardSerializer(top_education, many=True, context=serializer_context).data,
+        "latest_education": NewsCardSerializer(latest_education, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -1111,17 +1304,17 @@ def opinion(request):
     # Build Final Serialized Payload
     serializer_context = {'request': request}
     return Response({
-        "featured_opinion": NewsSerializer(featured_opinion, context=serializer_context).data if featured_opinion else None,
-        "top_opinion": NewsSerializer(top_opinion, many=True, context=serializer_context).data,
-        "latest_opinion": NewsSerializer(latest_opinion, many=True, context=serializer_context).data,
-        "mini_featured_news": NewsSerializer(mini_featured_news, many=True, context=serializer_context).data,
+        "featured_opinion": NewsCardSerializer(featured_opinion, context=serializer_context).data if featured_opinion else None,
+        "top_opinion": NewsCardSerializer(top_opinion, many=True, context=serializer_context).data,
+        "latest_opinion": NewsCardSerializer(latest_opinion, many=True, context=serializer_context).data,
+        "mini_featured_news": NewsCardSerializer(mini_featured_news, many=True, context=serializer_context).data,
         "paginated_grid": {
             "count": paginator.page.paginator.count,
             "next": paginator.get_next_link(),
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 
@@ -1158,7 +1351,7 @@ def news_by_tag(request, tag_slug):
             "previous": paginator.get_previous_link(),
             "current_page": paginator.page.number,
             "total_pages": paginator.page.paginator.num_pages,
-            "results": NewsSerializer(paginated_queryset, many=True, context=serializer_context).data
+            "results": NewsCardSerializer(paginated_queryset, many=True, context=serializer_context).data
         }
     })
 

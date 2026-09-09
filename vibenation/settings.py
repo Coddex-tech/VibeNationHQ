@@ -355,33 +355,277 @@ UNFOLD = {
                 "items": [
                     {
                         "title": "Songs",
-                        "link": reverse_lazy("admin:music_song_changelist"),
+                        "link": reverse_lazy(
+                            "admin:music_song_changelist"
+                        ),
                         "icon": "music_note",
-                        "permission": lambda r: r.user.has_perm("music.view_song")
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_song"
+                        ),
                     },
                     {
-                        "title": "Artists", 
-                        "link": reverse_lazy("admin:music_artist_changelist"), 
-                        "icon": "person", 
-                        "permission": lambda r: r.user.has_perm("music.view_artist")
+                        "title": "Artists",
+                        "link": reverse_lazy(
+                            "admin:music_artist_changelist"
+                        ),
+                        "icon": "person",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_artist"
+                        ),
                     },
                     {
-                        "title": "Albums", 
-                        "link": reverse_lazy("admin:music_album_changelist"), 
-                        "icon": "album", 
-                        "permission": lambda r: r.user.has_perm("music.view_album")
+                        "title": "Albums",
+                        "link": reverse_lazy(
+                            "admin:music_album_changelist"
+                        ),
+                        "icon": "album",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_album"
+                        ),
                     },
                     {
-                        "title": "DJs", 
-                        "link": reverse_lazy("admin:music_dj_changelist"), 
-                        "icon": "headphones", 
-                        "permission": lambda r: r.user.has_perm("music.view_dj")
+                        "title": "Album Tracks",
+                        "link": reverse_lazy(
+                            "admin:music_albumtrack_changelist"
+                        ),
+                        "icon": "format_list_numbered",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_albumtrack"
+                        ),
                     },
                     {
-                        "title": "Music Comments", 
-                        "link": reverse_lazy("admin:music_musiccomment_changelist"), 
-                        "icon": "forum", 
-                        "permission": lambda r: r.user.has_perm("music.view_musiccomment")
+                        "title": "Genres",
+                        "link": reverse_lazy(
+                            "admin:music_genre_changelist"
+                        ),
+                        "icon": "style",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_genre"
+                        ),
+                    },
+                ],
+            },
+
+            # ====================================================
+            # MUSIC ENGAGEMENT
+            # ====================================================
+
+            {
+                "title": "Music Engagement",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Song Ratings",
+                        "link": reverse_lazy(
+                            "admin:music_songrating_changelist"
+                        ),
+                        "icon": "star",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_songrating"
+                        ),
+                    },
+                    {
+                        "title": "Album Ratings",
+                        "link": reverse_lazy(
+                            "admin:music_albumrating_changelist"
+                        ),
+                        "icon": "star_rate",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_albumrating"
+                        ),
+                    },
+                    {
+                        "title": "Song Favorites",
+                        "link": reverse_lazy(
+                            "admin:music_songfavorite_changelist"
+                        ),
+                        "icon": "favorite",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_songfavorite"
+                        ),
+                    },
+                    {
+                        "title": "Album Favorites",
+                        "link": reverse_lazy(
+                            "admin:music_albumfavorite_changelist"
+                        ),
+                        "icon": "favorite",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_albumfavorite"
+                        ),
+                    },
+                    {
+                        "title": "Artist Follows",
+                        "link": reverse_lazy(
+                            "admin:music_artistfollow_changelist"
+                        ),
+                        "icon": "person_add",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_artistfollow"
+                        ),
+                    },
+                ],
+            },
+
+            # ====================================================
+            # EDITORIAL
+            # ====================================================
+
+            {
+                "title": "Editorial",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Articles",
+                        "link": reverse_lazy(
+                            "admin:music_editorialarticle_changelist"
+                        ),
+                        "icon": "article",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialarticle"
+                        ),
+                    },
+                    {
+                        "title": "Article Likes",
+                        "link": reverse_lazy(
+                            "admin:music_editorialarticlelike_changelist"
+                        ),
+                        "icon": "thumb_up",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialarticlelike"
+                        ),
+                    },
+                    {
+                        "title": "Article Comments",
+                        "link": reverse_lazy(
+                            "admin:music_editorialcomment_changelist"
+                        ),
+                        "icon": "comment",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialcomment"
+                        ),
+                    },
+                    {
+                        "title": "Comment Likes",
+                        "link": reverse_lazy(
+                            "admin:music_editorialcommentlike_changelist"
+                        ),
+                        "icon": "favorite",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialcommentlike"
+                        ),
+                    },
+                ],
+            },
+
+            # ====================================================
+            # COMMUNITY
+            # ====================================================
+
+            {
+                "title": "Community",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Community Posts",
+                        "link": reverse_lazy(
+                            "admin:music_communitypost_changelist"
+                        ),
+                        "icon": "forum",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypost"
+                        ),
+                    },
+                    {
+                        "title": "Post Likes",
+                        "link": reverse_lazy(
+                            "admin:music_communitypostlike_changelist"
+                        ),
+                        "icon": "thumb_up",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypostlike"
+                        ),
+                    },
+                    {
+                        "title": "Post Comments",
+                        "link": reverse_lazy(
+                            "admin:music_communitypostcomment_changelist"
+                        ),
+                        "icon": "comment",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypostcomment"
+                        ),
+                    },
+                    {
+                        "title": "Comment Likes",
+                        "link": reverse_lazy(
+                            "admin:music_communitypostcommentlike_changelist"
+                        ),
+                        "icon": "favorite",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypostcommentlike"
+                        ),
+                    },
+                    {
+                        "title": "User Follows",
+                        "link": reverse_lazy(
+                            "admin:music_userfollow_changelist"
+                        ),
+                        "icon": "group",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_userfollow"
+                        ),
+                    },
+                ],
+            },
+
+            # ====================================================
+            # MODERATION
+            # ====================================================
+
+            {
+                "title": "Moderation",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Article Reports",
+                        "link": reverse_lazy(
+                            "admin:music_editorialarticlereport_changelist"
+                        ),
+                        "icon": "flag",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialarticlereport"
+                        ),
+                    },
+                    {
+                        "title": "Post Reports",
+                        "link": reverse_lazy(
+                            "admin:music_communitypostreport_changelist"
+                        ),
+                        "icon": "flag",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypostreport"
+                        ),
+                    },
+                    {
+                        "title": "Comment Reports",
+                        "link": reverse_lazy(
+                            "admin:music_editorialcommentreport_changelist"
+                        ),
+                        "icon": "flag",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_editorialcommentreport"
+                        ),
+                    },
+                    {
+                        "title": "Community Comment Reports",
+                        "link": reverse_lazy(
+                            "admin:music_communitypostcommentreport_changelist"
+                        ),
+                        "icon": "flag",
+                        "permission": lambda request: request.user.has_perm(
+                            "music.view_communitypostcommentreport"
+                        ),
                     },
                 ],
             },

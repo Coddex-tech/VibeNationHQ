@@ -27,7 +27,8 @@ from news.serializers import (
     NewsReplySerializer,
     CategorySerializer,
     NewsHomeSerializer,
-    NewsCardSerializer
+    NewsCardSerializer,
+    MoreNewsSerializer
 )
 
 # ================== HELPER FUNCTION =================
@@ -64,13 +65,15 @@ def get_top_ranking(category_name, cache_key, last_caching, strict_caching):
 # =========== END OF HELPER FUNCTION ==============
 
 class NewsPagination(PageNumberPagination):
-    page_size = 10
+    page_size = 2
 
-class NewsHomeAPIView(APIView):
+class HomePageAPIView(APIView):
     permission_classes = [AllowAny]
+
     """
     Fetching the News Home contents
     """
+
     def get(self, request):
         now = timezone.now()
 
@@ -100,9 +103,7 @@ class NewsHomeAPIView(APIView):
         )
 
         # Top News Cache
-        top_news_pool = cache.get(
-            'top_news_pool'
-        )
+        top_news_pool = cache.get('top_news_pool')
 
         current_ranking_query = (
             News.objects
@@ -133,6 +134,7 @@ class NewsHomeAPIView(APIView):
             new_ranking and new_ranking[0].recent_views > 0
         ):
             top_news_pool = new_ranking
+
             cache.set(
                 'top_news_pool',
                 top_news_pool,
@@ -201,63 +203,48 @@ class NewsHomeAPIView(APIView):
                     news_by_cat[cat.name].append(article)
 
         # Serializer Context
-                # Serializer Context
         ctx = {
-            "request": request
+            'request': request
         }
 
-
         homepage_data = {
-
             # Hero blocks
-            "global_featured": global_featured,
-
-            "sponsored_feature": sponsored_feature,
-
-            "top_news": top_news,
-
-            "latest_news": latest_news,
-
+            'global_featured': global_featured,
+            'sponsored_feature': sponsored_feature,
+            'top_news': top_news,
+            'latest_news': latest_news,
 
             # Music feeds
-            "latest_songs": latest_songs,
+            'latest_songs': latest_songs,
 
             # Category feeds
-            "categorized_feeds": {
-                "sports":
-                    news_by_cat['Sports'][:5],
+            'categorized_feeds': {
+                'sports': news_by_cat['Sports'][:5],
 
-                "opinion":
-                    news_by_cat['Opinion'][:10],
+                'opinion': news_by_cat['Opinion'][:10],
 
-                "education":
-                    news_by_cat['Education'][:5],
+                'education': news_by_cat['Education'][:5],
 
-                "foreign_news":
-                    news_by_cat['Foreign News'][:5],
+                'foreign_news': news_by_cat['Foreign News'][:5],
 
-                "events":
-                    news_by_cat['Events'][:10],
+                'events': news_by_cat['Events'][:10],
 
-                "music_news":
-                    news_by_cat['Music News'][:5],
+                'music_news': news_by_cat['Music News'][:5],
 
-                "celebrity_gossip":
+                'celebrity_gossip':
                     news_by_cat['Celebrity Gossip'][:5],
 
-                "technology":
-                    news_by_cat['Technology'][:5],
+                'technology': news_by_cat['Technology'][:5],
 
-                "lifestyle":
-                    news_by_cat['Lifestyle'][:10],
+                'lifestyle': news_by_cat['Lifestyle'][:10],
 
-                "politics":
-                    news_by_cat['Politics'][:5],
+                'politics': news_by_cat['Politics'][:5],
 
-                "entertainment":
+                'entertainment':
                     news_by_cat['Entertainment'][:5],
             }
         }
+
         serializer = NewsHomeSerializer(
             homepage_data,
             context=ctx
@@ -268,6 +255,9 @@ class NewsHomeAPIView(APIView):
 
 class NewsHomeAPIView(APIView):
     permission_classes = [AllowAny]
+    """
+    Fetching the News Home contents
+    """
     def get(self, request):
         now = timezone.now()
         last_caching = now - timedelta(hours=12)
@@ -483,7 +473,7 @@ class CategoryNewsAPIView(APIView):
         # Pagination
         paginator = NewsPagination()
 
-        paginated_queryset = paginator.paginate_queryset(
+        paginated_news = paginator.paginate_queryset(
             news_list_qs,
             request
         )
@@ -518,7 +508,7 @@ class CategoryNewsAPIView(APIView):
                 "total_pages": paginator.page.paginator.num_pages,
 
                 "results": NewsCardSerializer(
-                    paginated_queryset,
+                    paginated_news,
                     many=True,
                     context=ctx,
                 ).data,
@@ -570,45 +560,72 @@ class NewsByTagAPIView(ListAPIView):
 class CategoryHomeAPIView(APIView):
     permission_classes = [AllowAny]
 
-    category_name = None
-    cache_key = None
     has_sponsored = True
 
-    def get(self, request):
+    def get(self, request, slug):
         now = timezone.now()
 
         last_caching = now - timedelta(hours=12)
         strict_caching = now - timedelta(days=1444)
 
-        # Featured article
+        # Get category
+        category = (
+            Category.objects
+            .filter(slug=slug)
+            .first()
+        )
+
+        if not category:
+            return Response(
+                {
+                    "detail": "Category not found."
+                },
+                status=404
+            )
+
+        category_name = category.name
+
+        # Cache key based on category
+        cache_key = f"top_{category.slug}"
+
+        # --------------------------------------------------
+        # FEATURED ARTICLE
+        # --------------------------------------------------
+
         featured = (
             News.objects
             .public()
             .filter(
-                category__name=self.category_name,
+                category=category,
                 is_featured=True
             )
             .order_by("-date_published")
             .first()
         )
 
-        # Sponsored article
+        # --------------------------------------------------
+        # SPONSORED ARTICLE
+        # --------------------------------------------------
+
         if self.has_sponsored:
             sponsored = (
                 News.objects
                 .sponsored()
                 .filter(
-                    category__name=self.category_name
+                    category=category
                 )
                 .first()
             )
         else:
             sponsored = None
 
-        # Top ranking cache
+        # --------------------------------------------------
+        # TOP NEWS
+        # --------------------------------------------------
+
         top_pool = get_top_ranking(
-            self.category_name,
-            self.cache_key,
+            category_name,
+            cache_key,
             last_caching,
             strict_caching
         )
@@ -621,12 +638,15 @@ class CategoryHomeAPIView(APIView):
         else:
             top_news = top_pool[:5]
 
-        # Latest news
+        # --------------------------------------------------
+        # LATEST NEWS
+        # --------------------------------------------------
+
         latest_pool = (
             News.objects
             .public()
             .filter(
-                category__name=self.category_name,
+                category=category,
                 is_featured=False
             )
             .order_by("-date_published")[:6]
@@ -640,7 +660,6 @@ class CategoryHomeAPIView(APIView):
         else:
             latest_news = latest_pool[:5]
 
-        # Prevent duplicate articles
         used_ids = (
             [n.id for n in top_news] +
             [n.id for n in latest_news]
@@ -652,71 +671,60 @@ class CategoryHomeAPIView(APIView):
         if sponsored:
             used_ids.append(sponsored.id)
 
-        # Main grid queryset
         news_queryset = (
             News.objects
             .public()
             .filter(
-                category__name=self.category_name,
+                category=category,
                 is_featured=False,
                 is_sponsored=False
             )
-            .exclude(
-                id__in=used_ids
-            )
+            # .exclude(
+            #     id__in=used_ids
+            # )
             .order_by("-date_published")
         )
 
-        # Random discovery news
-        other_news_pool = list(
+        more_news_pool = list(
             News.objects
             .public()
-            .exclude(
-                category__name=self.category_name
-            )
+            .exclude(id__in=used_ids)
+            .prefetch_related("category")
             .order_by("-date_published")[:20]
-            .values_list(
-                "id",
-                flat=True
-            )
         )
 
-        if other_news_pool:
-            sample_ids = random.sample(
-                other_news_pool,
-                min(
-                    len(other_news_pool),
-                    5
-                )
+        more_news = (
+            random.sample(
+                more_news_pool,
+                min(len(more_news_pool), 10)
             )
+            if more_news_pool
+            else []
+        )
 
-            mini_featured = (
-                News.objects
-                .public()
-                .filter(
-                    id__in=sample_ids
-                )
-                .prefetch_related(
-                    "category"
-                )
-            )
-        else:
-            mini_featured = []
-
-        # Pagination
         paginator = NewsPagination()
-        paginated_queryset = paginator.paginate_queryset(
+
+        paginated_news = paginator.paginate_queryset(
             news_queryset,
             request
         )
+
+        # --------------------------------------------------
+        # SERIALIZER CONTEXT
+        # --------------------------------------------------
 
         ctx = {
             "request": request
         }
 
+        # --------------------------------------------------
+        # RESPONSE
+        # --------------------------------------------------
+
         return Response({
             "category": {
-                "name": self.category_name
+                "name": category_name,
+                "slug": category.slug
             },
 
             "featured":
@@ -747,12 +755,15 @@ class CategoryHomeAPIView(APIView):
                     context=ctx
                 ).data,
 
-            "mini_featured_news":
-                NewsCardSerializer(
-                    mini_featured,
+            "more_news":
+                MoreNewsSerializer(
+                    more_news,
                     many=True,
                     context=ctx
                 ).data,
+
+            # Mini featured news intentionally left out for now.
+            # We will add the random discovery section later.
 
             "paginated_grid": {
                 "count":
@@ -772,49 +783,12 @@ class CategoryHomeAPIView(APIView):
 
                 "results":
                     NewsCardSerializer(
-                        paginated_queryset,
+                        paginated_news,
                         many=True,
                         context=ctx
                     ).data
             }
         })
-
-class EntertainmentAPIView(CategoryHomeAPIView):
-    category_name = "Entertainment"
-    cache_key = "top_entertainment"
-
-class PoliticsAPIView(CategoryHomeAPIView):
-    category_name = "Politics"
-    cache_key = "top_political"
-
-class LifestyleAPIView(CategoryHomeAPIView):
-    category_name = "Lifestyle"
-    cache_key = "top_lifestyle"
-
-class TechnologyAPIView(CategoryHomeAPIView):
-    category_name = "Technology"
-    cache_key = "top_technology"
-
-class MusicNewsAPIView(CategoryHomeAPIView):
-    category_name = "Music News"
-    cache_key = "top_music_news"
-
-class SportsAPIView(CategoryHomeAPIView):
-    category_name = "Sports"
-    cache_key = "top_sport"
-
-class EventsAPIView(CategoryHomeAPIView):
-    category_name = "Events"
-    cache_key = "top_event"
-
-class EducationAPIView(CategoryHomeAPIView):
-    category_name = "Education"
-    cache_key = "top_education"
-
-class OpinionAPIView(CategoryHomeAPIView):
-    category_name = "Opinion"
-    cache_key = "top_opinion"
-    has_sponsored = False
 
 # =======================
 # NEWS DETAILS

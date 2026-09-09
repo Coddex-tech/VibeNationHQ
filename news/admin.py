@@ -1,12 +1,10 @@
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from django.contrib import admin
 from django import forms
-from django.utils.html import format_html, escape
+from django.utils.html import format_html
 from django.utils import timezone
-from django.urls import reverse
-from django.utils.safestring import mark_safe
 from vibenation.status_condition import get_status_badge
-import json
+
 # Models
 from .models import News, Category, NewsComment, IpBlock
 # Standard filters used to prevent E115 System Check errors

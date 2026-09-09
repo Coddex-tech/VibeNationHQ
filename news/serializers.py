@@ -4,7 +4,6 @@ from django.conf import settings
 
 from utils.date_time_extra import format_hybrid_time
 from .models import News, Category, NewsComment
-from music.serializers import SongCardSerializer
 
 User = get_user_model()
 
@@ -74,17 +73,6 @@ class NewsHomeSerializer(serializers.Serializer):
             ).data,
         }
 
-
-    def get_music_feeds(self, obj):
-        ctx = self.context
-        return {
-            "latest_songs": SongCardSerializer(
-                obj.get("latest_songs"),
-                many=True,
-                context=ctx
-            ).data,
-        }
-
     def get_categorized_feeds(self, obj):
         ctx = self.context
         return {
@@ -127,6 +115,48 @@ class NewsCardSerializer(serializers.ModelSerializer):
         return format_hybrid_time(
             obj.date_published
         )
+
+class MoreNewsSerializer(serializers.ModelSerializer):
+    category = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
+    friendly_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = News
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "category",
+            "friendly_date",
+            "thumbnail_url",
+        ]
+
+    def get_category(self, obj):
+        category = obj.category.first()
+
+        if not category:
+            return None
+
+        return {
+            "name": category.name,
+            "slug": category.slug,
+        }
+
+    def get_thumbnail_url(self, obj):
+            """Ensures absolute image target resolution regardless of environment."""
+            if obj.thumbnail:
+                request = self.context.get('request')
+                if request is not None:
+                    return request.build_absolute_uri(obj.thumbnail.url)
+                return obj.thumbnail.url
+            return None
+        
+
+    def get_friendly_date(self, obj):
+            return format_hybrid_time(
+                obj.date_published
+            )
 
 # ============= NEW OPTIMIZING ============
 class NewsReplySerializer(serializers.ModelSerializer):
