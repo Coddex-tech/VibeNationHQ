@@ -25,7 +25,6 @@ from music.sitemaps import SongSitemap
 from news.sitemaps import NewsSitemap
 from vibenation.sitemaps import StaticViewSitemap
 
-from music import views
 from .admin_site import admin_site, staff_admin_site
 
 def fake_admin(request):
@@ -45,26 +44,21 @@ urlpatterns = [
     # STAFF PORTAL - We name this 'staff'
     path('vibe-crew-login-2026/', staff_admin_site.urls),
 
-    path("api/v1/", include("music.api_urls")),
 
     path('', include(('news.urls', 'news'), namespace='news')),
-    path('music/', include(('music.urls', 'music'), namespace='music')),
+    
+    path('ads/', include('ads.urls')),
+
+    path("api/v1/music/", include("music.api.urls")),
 
     path('api/news/', include('news.api_urls')),
-    path('api/music/', include('music.api_urls')),
-
-    path('ads/', include('ads.urls')),
+    
+    path("api/ads/", include("ads.api_urls")),
+    
     
     path('ckeditor5/', include('django_ckeditor_5.urls')),
     path('taggit_autosuggest/', include('taggit_autosuggest.urls')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
-
-    path("about/", views.about, name="about"),
-    path("contact/", views.contact, name="contact"),
-    path("privacy/", views.privacy, name="privacy"),
-    path("service/", views.service, name="service"),
-    path("dmca/", views.dmca, name="dmca"),
-    path("advertise-with-us/", views.advertise, name="advertise"),
     path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
 ]
 
