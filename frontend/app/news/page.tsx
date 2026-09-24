@@ -1,8 +1,6 @@
 import HeroNewsSection from '@/components/NewsHeroSection';
-import HorizontalMusicFeed from '@/components/HorizontalMusicFeed';
 import CategoryNewsGrid from '@/components/CategoryNewsGrid';
 import HorizontalNewsCarousel from '@/components/HorizontalNewsCarousel';
-import CategoryNavigation from '@/components/CategoryNavigation';
 
 async function getHomepageData() {
   try {
@@ -30,13 +28,11 @@ export default async function HomePage() {
     );
   }
 
-  const { hero_blocks, music_feeds } = data;
+  const { hero_blocks } = data;
 
   return (
     /* Expanded max-width up to 1600px with minimal side padding */
     <main className="max-w-[1600px] mx-auto px-2 sm:px-4 py-4">
-      
-      <CategoryNavigation mode='homepage' />
 
       {/* 3-Column Hero Section */}
       <HeroNewsSection
@@ -46,15 +42,12 @@ export default async function HomePage() {
         latestNews={hero_blocks?.latest_news || []}
       />
 
-      {/* Single-Line Scrollable Music Feed */}
-      {music_feeds?.latest_songs && (
-        <HorizontalMusicFeed
-          title="Latest Music Releases"
-          songs={music_feeds.latest_songs}
-        />
-      )}
-
-      {/* Homepage Category grid list */}
+      {/* News Homepage Category grid list */}
+      <CategoryNewsGrid
+        categoryTitle="Music News"
+        newsList={data.categorized_feeds.music_news}
+      />
+      
       <CategoryNewsGrid
         categoryTitle="Politics"
         newsList={data.categorized_feeds.politics}
@@ -73,11 +66,6 @@ export default async function HomePage() {
       <CategoryNewsGrid
         categoryTitle="Sports"
         newsList={data.categorized_feeds.sports}
-      />
-
-      <CategoryNewsGrid
-        categoryTitle="Music News"
-        newsList={data.categorized_feeds.music_news}
       />
 
       <CategoryNewsGrid

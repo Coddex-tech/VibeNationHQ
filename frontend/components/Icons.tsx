@@ -90,9 +90,9 @@ export function ScaleIcon({ className = "w-5 h-5" }: { className?: string }) {
 export function LockIcon({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-      <rect x="4" y="10" width="16" height="11" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10V7a4 4 0 018 0v3"/>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v3"/>
+      <rect x="4" y="10" width="16" height="11" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 10V7a4 4 0 018 0v3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v3" />
     </svg>
   );
 }
@@ -275,6 +275,150 @@ export function RadioIcon({ className = "w-5 h-5" }: { className?: string }) {
       <path
         strokeLinecap="round"
         d="M8.46 8.46a5 5 0 000 7.08M15.54 8.46a5 5 0 010 7.08M5.64 5.64a9 9 0 000 12.72M18.36 5.64a9 9 0 010 12.72"
+      />
+    </svg>
+  );
+}
+
+export function GoogleIcon({ className = '' }: { className?: string; }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        fill="#4285F4"
+        d="M21.35 12.27c0-.74-.07-1.45-.21-2.13H12v4.03h5.24a4.48 4.48 0 01-1.94 2.94v2.44h3.14c1.84-1.69 2.91-4.18 2.91-7.28z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 21.75c2.63 0 4.84-.87 6.45-2.36l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.69-1.72-5.46-4.03H3.3v2.52A9.75 9.75 0 0012 21.75z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M6.54 13.84A5.86 5.86 0 016.24 12c0-.64.11-1.26.3-1.84V7.64H3.3A9.75 9.75 0 002.25 12c0 1.57.38 3.06 1.05 4.36l3.24-2.52z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 6.13c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.17 14.63 2.25 12 2.25a9.75 9.75 0 00-8.7 5.39l3.24 2.52C7.31 7.85 9.46 6.13 12 6.13z"
+      />
+    </svg>
+  );
+}
+
+export function EyeIcon({ className = ''}: { className?: string; }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.75 12s3.3-6 9.25-6 9.25 6 9.25 6-3.3 6-9.25 6-9.25-6-9.25-6z"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="2.75"
+      />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ className = ''}: { className?: string; }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 3l18 18"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10.58 10.58a2 2 0 102.84 2.84"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.88 4.24A10.7 10.7 0 0112 4c5.05 0 8.44 3.36 9.75 6.04a4.1 4.1 0 01.25 1.96"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M6.61 6.61C4.99 7.7 3.85 9.18 3.25 10.04a3.87 3.87 0 000 3.92C4.55 16.64 7.95 20 13 20a10.5 10.5 0 004.39-.94"
+      />
+    </svg>
+  );
+}
+
+export function PhoneIcon({ className = ''}: { className?: string; }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+    >
+      <rect
+        x="6.5"
+        y="2.75"
+        width="11"
+        height="18.5"
+        rx="2"
+      />
+
+      <path
+        strokeLinecap="round"
+        d="M10 5.5h4"
+      />
+
+      <circle
+        cx="12"
+        cy="18"
+        r="0.75"
+        fill="currentColor"
+        stroke="none"
+      />
+    </svg>
+  );
+}
+
+export function ArrowLeftIcon({ className = ''}: { className?: string; }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19 12H5"
+      />
+
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 19l-7-7 7-7"
       />
     </svg>
   );

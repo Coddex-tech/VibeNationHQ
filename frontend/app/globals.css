@@ -3,30 +3,99 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
+  /* Typography */
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), monospace;
 
-  --color-brand-teal: #032b2b;
-  --color-brand-teal-light: #0a4f4f;
-  --color-brand-gold: #eab308;
+  /* Brand */
+  --color-brand-teal: #00a884;
+  --color-brand-teal-hover: #00b890;
   --color-brand-cyan: #06b6d4;
-  --color-brand-accent: #00a884;
+  --color-brand-gold: #eab308;
+
+  /* Light */
+  --color-light-bg: #e7e9eb;
+  --color-light-surface: #ffffff;
+  --color-light-surface-soft: #f5f7f7;
+  --color-light-border: #d9dede;
+
+  --color-light-text: #171a1a;
+  --color-light-text-muted: #5f6868;
+  --color-light-text-soft: #7b8383;
+
+  /* Dark */
+  --color-dark-bg: #18191a;
+  --color-dark-surface: #1f2223;
+  --color-dark-surface-soft: #252929;
+  --color-dark-border: #343a3a;
+
+  --color-dark-text: #f0f3f2;
+  --color-dark-text-muted: #a7b0ae;
+  --color-dark-text-soft: #7f8987;
 }
 
 html {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
-  background-color: #f8fafc;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+
+  background-color: var(--color-light-bg);
+  color: var(--color-light-text);
+
+  scroll-behavior: smooth;
 }
 
 body {
   min-height: 100vh;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: var(--color-light-bg);
+  color: var(--color-light-text);
+
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
 }
 
 html.dark,
 html.dark body {
-  background-color: #020617;
-  color: #f8fafc;
+  background-color: var(--color-dark-bg);
+  color: var(--color-dark-text);
+}
+
+::selection {
+  background-color: rgb(0 168 132 / 20%);
+  color: var(--color-light-text);
+}
+
+.dark ::selection {
+  background-color: rgb(0 168 132 / 30%);
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #b8c0be transparent;
+}
+
+.dark * {
+  scrollbar-color: #4a5351 transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand-teal);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
