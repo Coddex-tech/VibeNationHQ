@@ -1,6 +1,6 @@
-import HeroNewsSection from '@/components/NewsHeroSection';
-import CategoryNewsGrid from '@/components/CategoryNewsGrid';
-import HorizontalNewsCarousel from '@/components/HorizontalNewsCarousel';
+import HeroNewsSection from '@/components/news/NewsHeroSection';
+import CategoryNewsGrid from '@/components/news/CategoryNewsGrid';
+import HorizontalNewsCarousel from '@/components/news/HorizontalNewsCarousel';
 
 async function getHomepageData() {
   try {

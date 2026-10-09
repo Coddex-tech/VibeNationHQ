@@ -192,7 +192,6 @@ export default function CategoryCarouselSection({
                                     src={imageUrl}
                                     alt={article.title}
                                     fill
-                                    unoptimized
                                     sizes="
                                         (max-width: 640px) 260px,
                                         (max-width: 768px) 280px,

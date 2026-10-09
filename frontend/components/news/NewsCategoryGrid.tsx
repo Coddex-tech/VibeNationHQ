@@ -124,7 +124,6 @@ export default function FeaturedArticlesGrid({
                                     src={imageUrl}
                                     alt={article.title}
                                     fill
-                                    unoptimized
                                     sizes="
                                         (max-width: 640px) 115px,
                                         (max-width: 768px) 135px,

@@ -13,6 +13,7 @@ import {
 } from '@/components/Icons';
 import { ApiError, apiRequest } from '@/lib/api';
 import HomeNav from '@/components/special/HomeNav';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 type CurrentUserResponse = {
   user: {
@@ -50,7 +51,7 @@ export default function AccountPage() {
         if (error instanceof ApiError) {
           setError(
             error.data?.detail ??
-              'Unable to load your account right now.',
+            'Unable to load your account right now.',
           );
         } else {
           setError(
@@ -113,8 +114,9 @@ export default function AccountPage() {
   };
 
   return (
-    <div
-      className="
+    <ProtectedRoute>
+      <div
+        className="
         min-h-screen
         bg-light-bg
         text-light-text
@@ -122,60 +124,60 @@ export default function AccountPage() {
         dark:bg-dark-bg
         dark:text-dark-text
       "
-    >
-      <HomeNav />
+      >
+        <HomeNav />
 
-      <main
-        className="
+        <main
+          className="
           mx-auto w-full max-w-6xl
           px-4 py-8
           sm:px-6 sm:py-10
           lg:px-8 lg:py-12
         "
-      >
-        <FadeIn>
-          <div className="max-w-2xl">
-            <p
-              className="
+        >
+          <FadeIn>
+            <div className="max-w-2xl">
+              <p
+                className="
                 text-sm font-semibold
                 text-brand-teal-dark
                 dark:text-brand-teal-light
               "
-            >
-              Your account
-            </p>
+              >
+                Your account
+              </p>
 
-            <h1
-              className="
+              <h1
+                className="
                 mt-2
                 text-3xl font-black tracking-tight
                 text-light-text
                 dark:text-dark-text
                 sm:text-4xl
               "
-            >
-              Account
-            </h1>
+              >
+                Account
+              </h1>
 
-            <p
-              className="
+              <p
+                className="
                 mt-3 text-sm leading-6
                 text-light-text-muted
                 dark:text-dark-text-muted
                 sm:text-base
               "
-            >
-              Manage your VibeNationHQ account,
-              security, and personal information.
-            </p>
-          </div>
-        </FadeIn>
+              >
+                Manage your VibeNationHQ account,
+                security, and personal information.
+              </p>
+            </div>
+          </FadeIn>
 
-        {error && (
-          <FadeIn className="mt-8">
-            <div
-              role="alert"
-              className="
+          {error && (
+            <FadeIn className="mt-8">
+              <div
+                role="alert"
+                className="
                 rounded-xl
                 border border-red-200
                 bg-red-50
@@ -186,16 +188,16 @@ export default function AccountPage() {
                 dark:bg-red-500/10
                 dark:text-red-300
               "
-            >
-              {error}
-            </div>
-          </FadeIn>
-        )}
+              >
+                {error}
+              </div>
+            </FadeIn>
+          )}
 
-        {isLoading ? (
-          <FadeIn className="mt-8">
-            <div
-              className="
+          {isLoading ? (
+            <FadeIn className="mt-8">
+              <div
+                className="
                 rounded-2xl
                 border border-light-border
                 bg-light-surface
@@ -204,39 +206,39 @@ export default function AccountPage() {
                 dark:bg-dark-surface
                 sm:p-8
               "
-            >
-              <div className="animate-pulse">
-                <div
-                  className="
+              >
+                <div className="animate-pulse">
+                  <div
+                    className="
                     h-6 w-40 rounded-lg
                     bg-light-surface-muted
                     dark:bg-dark-surface-muted
                   "
-                />
+                  />
 
-                <div
-                  className="
+                  <div
+                    className="
                     mt-4 h-4 w-64 rounded
                     bg-light-surface-muted
                     dark:bg-dark-surface-muted
                   "
-                />
+                  />
 
-                <div
-                  className="
+                  <div
+                    className="
                     mt-8 h-20 rounded-xl
                     bg-light-surface-soft
                     dark:bg-dark-surface-soft
                   "
-                />
+                  />
+                </div>
               </div>
-            </div>
-          </FadeIn>
-        ) : user ? (
-          <div className="mt-8 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
-            <FadeIn>
-              <section
-                className="
+            </FadeIn>
+          ) : user ? (
+            <div className="mt-8 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+              <FadeIn>
+                <section
+                  className="
                   overflow-hidden
                   rounded-2xl
                   border border-light-border
@@ -246,9 +248,9 @@ export default function AccountPage() {
                   dark:bg-dark-surface
                   dark:shadow-black/10
                 "
-              >
-                <div
-                  className="
+                >
+                  <div
+                    className="
                     border-b
                     border-light-border-soft
                     bg-light-surface-soft
@@ -257,10 +259,10 @@ export default function AccountPage() {
                     dark:bg-dark-surface-soft
                     sm:px-6
                   "
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="
                         flex h-14 w-14 shrink-0
                         items-center justify-center
                         rounded-2xl
@@ -270,41 +272,41 @@ export default function AccountPage() {
                         dark:bg-brand-teal/15
                         dark:text-brand-teal-light
                       "
-                    >
-                      {user.username
-                        .charAt(0)
-                        .toUpperCase()}
-                    </div>
+                      >
+                        {user.username
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
 
-                    <div className="min-w-0">
-                      <h2
-                        className="
+                      <div className="min-w-0">
+                        <h2
+                          className="
                           truncate text-lg font-bold
                           text-light-text
                           dark:text-dark-text
                         "
-                      >
-                        {user.username}
-                      </h2>
+                        >
+                          {user.username}
+                        </h2>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 truncate text-sm
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        {user.email}
-                      </p>
+                        >
+                          {user.email}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="divide-y divide-light-border-soft dark:divide-dark-border-soft">
-                  {/* Email */}
-                  <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
-                    <div
-                      className="
+                  <div className="divide-y divide-light-border-soft dark:divide-dark-border-soft">
+                    {/* Email */}
+                    <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+                      <div
+                        className="
                         flex h-10 w-10 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -313,24 +315,24 @@ export default function AccountPage() {
                         dark:bg-dark-surface-soft
                         dark:text-dark-text-muted
                       "
-                    >
-                      <MailIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <MailIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p
-                          className="
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className="
                             text-sm font-semibold
                             text-light-text
                             dark:text-dark-text
                           "
-                        >
-                          Email address
-                        </p>
+                          >
+                            Email address
+                          </p>
 
-                        <span
-                          className="
+                          <span
+                            className="
                             inline-flex items-center gap-1
                             rounded-full
                             bg-brand-teal/10
@@ -340,28 +342,28 @@ export default function AccountPage() {
                             dark:bg-brand-teal/15
                             dark:text-brand-teal-light
                           "
-                        >
-                          <CheckCircleIcon className="h-3.5 w-3.5" />
-                          Verified
-                        </span>
-                      </div>
+                          >
+                            <CheckCircleIcon className="h-3.5 w-3.5" />
+                            Verified
+                          </span>
+                        </div>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 break-all text-sm
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        {user.email}
-                      </p>
+                        >
+                          {user.email}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Phone */}
-                  <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
-                    <div
-                      className="
+                    {/* Phone */}
+                    <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+                      <div
+                        className="
                         flex h-10 w-10 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -370,25 +372,25 @@ export default function AccountPage() {
                         dark:bg-dark-surface-soft
                         dark:text-dark-text-muted
                       "
-                    >
-                      <PhoneIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <PhoneIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p
-                          className="
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className="
                             text-sm font-semibold
                             text-light-text
                             dark:text-dark-text
                           "
-                        >
-                          Phone number
-                        </p>
+                          >
+                            Phone number
+                          </p>
 
-                        {user.phone?.is_verified && (
-                          <span
-                            className="
+                          {user.phone?.is_verified && (
+                            <span
+                              className="
                               inline-flex items-center gap-1
                               rounded-full
                               bg-brand-teal/10
@@ -398,33 +400,33 @@ export default function AccountPage() {
                               dark:bg-brand-teal/15
                               dark:text-brand-teal-light
                             "
-                          >
-                            <CheckCircleIcon className="h-3.5 w-3.5" />
-                            Verified
-                          </span>
-                        )}
-                      </div>
+                            >
+                              <CheckCircleIcon className="h-3.5 w-3.5" />
+                              Verified
+                            </span>
+                          )}
+                        </div>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 text-sm
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        {user.phone
-                          ? formatPhoneNumber(
+                        >
+                          {user.phone
+                            ? formatPhoneNumber(
                               user.phone.phone_number,
                             )
-                          : 'Not added'}
-                      </p>
+                            : 'Not added'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Account status */}
-                  <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
-                    <div
-                      className="
+                    {/* Account status */}
+                    <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+                      <div
+                        className="
                         flex h-10 w-10 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -433,39 +435,39 @@ export default function AccountPage() {
                         dark:bg-dark-surface-soft
                         dark:text-dark-text-muted
                       "
-                    >
-                      <ShieldCheckIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <ShieldCheckIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="
                           text-sm font-semibold
                           text-light-text
                           dark:text-dark-text
                         "
-                      >
-                        Account status
-                      </p>
+                        >
+                          Account status
+                        </p>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 text-sm
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        {user.is_active === false
-                          ? 'Inactive'
-                          : 'Active'}
-                      </p>
+                        >
+                          {user.is_active === false
+                            ? 'Inactive'
+                            : 'Active'}
+                        </p>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Member since */}
-                  <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
-                    <div
-                      className="
+                    {/* Member since */}
+                    <div className="flex items-start gap-4 px-5 py-5 sm:px-6">
+                      <div
+                        className="
                         flex h-10 w-10 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -474,44 +476,44 @@ export default function AccountPage() {
                         dark:bg-dark-surface-soft
                         dark:text-dark-text-muted
                       "
-                    >
-                      <LockIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <LockIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className="
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className="
                           text-sm font-semibold
                           text-light-text
                           dark:text-dark-text
                         "
-                      >
-                        Member since
-                      </p>
+                        >
+                          Member since
+                        </p>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 text-sm
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        {formatDate(
-                          user.date_joined ??
+                        >
+                          {formatDate(
+                            user.date_joined ??
                             user.created_at,
-                        )}
-                      </p>
+                          )}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </section>
-            </FadeIn>
+                </section>
+              </FadeIn>
 
-            <div className="space-y-5">
-              <FadeIn>
-                <Link
-                  href="/settings/security"
-                  className="
+              <div className="space-y-5">
+                <FadeIn>
+                  <Link
+                    href="/settings/security"
+                    className="
                     group block
                     rounded-2xl
                     border border-light-border
@@ -528,10 +530,10 @@ export default function AccountPage() {
                     dark:hover:border-brand-teal/30
                     sm:p-6
                   "
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="
                         flex h-11 w-11 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -539,35 +541,35 @@ export default function AccountPage() {
                         text-brand-teal
                         dark:bg-brand-teal/15
                       "
-                    >
-                      <ShieldCheckIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <ShieldCheckIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0">
-                      <h2
-                        className="
+                      <div className="min-w-0">
+                        <h2
+                          className="
                           text-base font-bold
                           text-light-text
                           dark:text-dark-text
                         "
-                      >
-                        Security
-                      </h2>
+                        >
+                          Security
+                        </h2>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 text-sm leading-5
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        Manage your password,
-                        phone, email, Google connection,
-                        and active sessions.
-                      </p>
+                        >
+                          Manage your password,
+                          phone, email, Google connection,
+                          and active sessions.
+                        </p>
 
-                      <span
-                        className="
+                        <span
+                          className="
                           mt-4 inline-flex
                           text-xs font-bold
                           text-brand-teal-dark
@@ -575,18 +577,18 @@ export default function AccountPage() {
                           group-hover:text-brand-teal
                           dark:text-brand-teal-light
                         "
-                      >
-                        Manage security
-                      </span>
+                        >
+                          Manage security
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </FadeIn>
+                  </Link>
+                </FadeIn>
 
-              <FadeIn>
-                <Link
-                  href="/settings"
-                  className="
+                <FadeIn>
+                  <Link
+                    href="/settings"
+                    className="
                     group block
                     rounded-2xl
                     border border-light-border
@@ -602,10 +604,10 @@ export default function AccountPage() {
                     dark:shadow-black/10
                     sm:p-6
                   "
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className="
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className="
                         flex h-11 w-11 shrink-0
                         items-center justify-center
                         rounded-xl
@@ -614,34 +616,34 @@ export default function AccountPage() {
                         dark:bg-dark-surface-soft
                         dark:text-dark-text-muted
                       "
-                    >
-                      <LockIcon className="h-5 w-5" />
-                    </div>
+                      >
+                        <LockIcon className="h-5 w-5" />
+                      </div>
 
-                    <div className="min-w-0">
-                      <h2
-                        className="
+                      <div className="min-w-0">
+                        <h2
+                          className="
                           text-base font-bold
                           text-light-text
                           dark:text-dark-text
                         "
-                      >
-                        Settings
-                      </h2>
+                        >
+                          Settings
+                        </h2>
 
-                      <p
-                        className="
+                        <p
+                          className="
                           mt-1 text-sm leading-5
                           text-light-text-muted
                           dark:text-dark-text-muted
                         "
-                      >
-                        Manage your account preferences
-                        and VibeNationHQ experience.
-                      </p>
+                        >
+                          Manage your account preferences
+                          and VibeNationHQ experience.
+                        </p>
 
-                      <span
-                        className="
+                        <span
+                          className="
                           mt-4 inline-flex
                           text-xs font-bold
                           text-brand-teal-dark
@@ -649,19 +651,19 @@ export default function AccountPage() {
                           group-hover:text-brand-teal
                           dark:text-brand-teal-light
                         "
-                      >
-                        Open settings
-                      </span>
+                        >
+                          Open settings
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </FadeIn>
+                  </Link>
+                </FadeIn>
 
-              <FadeIn>
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="
+                <FadeIn>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="
                     flex w-full items-center justify-center
                     rounded-xl
                     border border-light-border
@@ -682,14 +684,15 @@ export default function AccountPage() {
                     dark:hover:bg-red-500/10
                     dark:hover:text-red-400
                   "
-                >
-                  Sign out
-                </button>
-              </FadeIn>
+                  >
+                    Sign out
+                  </button>
+                </FadeIn>
+              </div>
             </div>
-          </div>
-        ) : null}
-      </main>
-    </div>
+          ) : null}
+        </main>
+      </div>
+    </ProtectedRoute>
   );
 }

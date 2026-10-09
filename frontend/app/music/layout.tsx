@@ -1,4 +1,4 @@
-import CategoryNavigation from '@/components/CategoryNavigation';
+import HomeNav from "@/components/special/HomeNav";
 
 export default function NewsLayout({
     children,
@@ -7,8 +7,7 @@ export default function NewsLayout({
 }) {
     return (
         <>
-            <CategoryNavigation mode="music" />
-
+        <HomeNav />
             {children}
         </>
     );

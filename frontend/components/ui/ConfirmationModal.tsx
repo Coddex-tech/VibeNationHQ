@@ -1,6 +1,11 @@
+
 'use client';
 
-import { useEffect } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 
 import { AlertTriangleIcon } from '@/components/Icons';
 
@@ -31,16 +36,92 @@ export default function ConfirmationModal({
   onConfirm,
   onCancel,
 }: ConfirmationModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const isLoadingRef = useRef(isLoading);
+  const onCancelRef = useRef(onCancel);
+
+  // Keep event handlers current without repeatedly
+  // attaching keyboard listeners.
   useEffect(() => {
-    if (!open || isLoading) {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
+
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
+
+  const handleCancel = useCallback(() => {
+    if (isLoadingRef.current) {
       return;
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    onCancelRef.current();
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+
+    const dialog = dialogRef.current;
+
+    cancelButtonRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        onCancel();
+        if (!isLoadingRef.current) {
+          event.preventDefault();
+          handleCancel();
+        }
+
+        return;
       }
-    };
+
+      if (event.key !== 'Tab' || !dialog) {
+        return;
+      }
+
+      const focusableElements =
+        dialog.querySelectorAll<HTMLElement>(
+          [
+            'button:not(:disabled)',
+            'input:not(:disabled)',
+            'select:not(:disabled)',
+            'textarea:not(:disabled)',
+            'a[href]',
+            '[tabindex]:not([tabindex="-1"])',
+          ].join(','),
+        );
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last =
+        focusableElements[focusableElements.length - 1];
+
+      if (
+        event.shiftKey &&
+        document.activeElement === first
+      ) {
+        event.preventDefault();
+        last.focus();
+      } else if (
+        !event.shiftKey &&
+        document.activeElement === last
+      ) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
 
     document.addEventListener(
       'keydown',
@@ -52,8 +133,10 @@ export default function ConfirmationModal({
         'keydown',
         handleKeyDown,
       );
+
+      previousFocus?.focus();
     };
-  }, [open, isLoading, onCancel]);
+  }, [open, handleCancel]);
 
   if (!open) {
     return null;
@@ -68,8 +151,8 @@ export default function ConfirmationModal({
       className="
         fixed inset-0 z-[100]
         flex items-end justify-center
-        bg-black/50
-        p-0
+        overflow-y-auto
+        bg-black/50 p-0
         backdrop-blur-[2px]
         sm:items-center
         sm:p-4
@@ -80,18 +163,19 @@ export default function ConfirmationModal({
           event.target === event.currentTarget &&
           !isLoading
         ) {
-          onCancel();
+          handleCancel();
         }
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirmation-modal-title"
         aria-describedby="confirmation-modal-description"
         className="
-          w-full
-          max-h-[90vh]
+          my-auto
+          w-full max-h-[90vh]
           overflow-y-auto
           rounded-t-2xl
           border border-light-border
@@ -105,6 +189,7 @@ export default function ConfirmationModal({
         "
       >
         <div className="p-5 sm:p-6">
+          {/* Header */}
           <div className="flex items-start gap-4">
             <div
               className={`
@@ -125,15 +210,16 @@ export default function ConfirmationModal({
                     `
                 }
               `}
+              aria-hidden="true"
             >
               {icon ?? defaultIcon}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 pt-0.5">
               <h2
                 id="confirmation-modal-title"
                 className="
-                  text-base font-bold
+                  text-lg font-bold
                   text-light-text
                   dark:text-dark-text
                 "
@@ -144,7 +230,7 @@ export default function ConfirmationModal({
               <p
                 id="confirmation-modal-description"
                 className="
-                  mt-2 text-sm leading-6
+                  mt-1.5 text-sm leading-6
                   text-light-text-muted
                   dark:text-dark-text-muted
                 "
@@ -154,21 +240,24 @@ export default function ConfirmationModal({
             </div>
           </div>
 
+          {/* Optional custom content */}
           {children && (
             <div className="mt-5">
               {children}
             </div>
           )}
 
+          {/* Actions */}
           <div
             className="
-              mt-6 flex flex-col-reverse gap-2
+              mt-6 flex flex-col-reverse gap-3
               sm:flex-row sm:justify-end
             "
           >
             <button
+              ref={cancelButtonRef}
               type="button"
-              onClick={onCancel}
+              onClick={handleCancel}
               disabled={isLoading}
               className="
                 inline-flex min-h-11
@@ -176,11 +265,15 @@ export default function ConfirmationModal({
                 rounded-xl
                 border border-light-border
                 bg-light-surface
-                px-4 py-2
+                px-4 py-3
                 text-sm font-semibold
                 text-light-text
-                transition-colors
+                transition-colors duration-200
                 hover:bg-light-surface-soft
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-brand-teal
+                focus-visible:ring-offset-2
                 disabled:cursor-not-allowed
                 disabled:opacity-60
                 sm:w-auto
@@ -199,13 +292,15 @@ export default function ConfirmationModal({
               disabled={isLoading}
               className={`
                 inline-flex min-h-11
-                w-full items-center justify-center
+                w-full items-center justify-center gap-2
                 rounded-xl
-                border
-                px-4 py-2
-                text-sm font-bold
+                border px-5 py-3
+                text-sm font-semibold
                 text-white
-                transition-all duration-200
+                transition-colors duration-200
+                focus-visible:outline-none
+                focus-visible:ring-2
+                focus-visible:ring-offset-2
                 disabled:cursor-not-allowed
                 disabled:opacity-60
                 sm:w-auto
@@ -215,6 +310,7 @@ export default function ConfirmationModal({
                       border-red-600
                       bg-red-600
                       hover:bg-red-700
+                      focus-visible:ring-red-500
                       dark:border-red-500
                       dark:bg-red-500
                       dark:hover:bg-red-600
@@ -223,6 +319,7 @@ export default function ConfirmationModal({
                       border-brand-teal
                       bg-brand-teal
                       hover:bg-brand-teal-dark
+                      focus-visible:ring-brand-teal
                       dark:border-brand-teal
                       dark:bg-brand-teal
                       dark:hover:bg-brand-teal-dark
@@ -230,6 +327,18 @@ export default function ConfirmationModal({
                 }
               `}
             >
+              {isLoading && (
+                <span
+                  aria-hidden="true"
+                  className="
+                    h-4 w-4 animate-spin
+                    rounded-full
+                    border-2 border-white/40
+                    border-t-white
+                  "
+                />
+              )}
+
               {isLoading
                 ? 'Please wait...'
                 : confirmLabel}

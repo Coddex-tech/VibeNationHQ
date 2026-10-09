@@ -91,7 +91,6 @@ export default function HorizontalNewsCarousel({
                                         src={getNewsImg(item)}
                                         alt={item.title}
                                         fill
-                                        unoptimized
                                         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 25vw"
                                         className="object-cover transition-transform duration-500 group-hover/card:scale-105"
                                     />

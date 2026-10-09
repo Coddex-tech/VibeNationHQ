@@ -1,5 +1,3 @@
-// app/(auth)/login/page.tsx
-
 'use client';
 
 import Link from 'next/link';
@@ -17,6 +15,7 @@ import {
   MailIcon,
   ShieldCheckIcon,
 } from '@/components/Icons';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { ApiError, apiRequest } from '@/lib/api';
 
 type LoginResponse = {
@@ -38,6 +37,8 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const { refreshAuth } = useAuth();
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -47,6 +48,23 @@ export default function LoginPage() {
 
   const resetSuccessful =
     searchParams.get('reset') === 'success';
+
+  const getSafeNextPath = () => {
+    const nextPath = searchParams.get('next');
+
+    if (!nextPath) {
+      return '/';
+    }
+
+    if (
+      !nextPath.startsWith('/') ||
+      nextPath.startsWith('//')
+    ) {
+      return '/account';
+    }
+
+    return nextPath;
+  };
 
   const handleSubmit = async (
     event: React.FormEvent<HTMLFormElement>,
@@ -68,7 +86,9 @@ export default function LoginPage() {
         },
       );
 
-      router.push('/account');
+      await refreshAuth();
+
+      router.push(getSafeNextPath());
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data;

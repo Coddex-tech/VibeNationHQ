@@ -52,7 +52,6 @@ export default function HeroNewsSection({
                                 alt={globalFeatured.title}
                                 fill
                                 priority
-                                unoptimized
                                 sizes="(max-width: 1024px) 100vw, 42vw"
                                 className="object-cover transition-transform duration-700 group-hover:scale-105 opacity-60 group-hover:opacity-75"
                             />
@@ -133,7 +132,6 @@ export default function HeroNewsSection({
                                             src={imgUrl}
                                             alt={article.title}
                                             fill
-                                            unoptimized
                                             sizes="64px"
                                             className="object-cover transition-transform duration-300 group-hover:scale-105"
                                         />
@@ -181,7 +179,6 @@ export default function HeroNewsSection({
                                         }
                                         alt={article.title}
                                         fill
-                                        unoptimized
                                         sizes="64px"
                                         className="object-cover transition-transform duration-300 group-hover:scale-105"
                                     />

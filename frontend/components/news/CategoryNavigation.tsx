@@ -1,26 +1,20 @@
 'use client';
 
-import { useRef, useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+    ChevronRight,
+    Cpu,
     Film,
+    GraduationCap,
     Landmark,
     Leaf,
-    Cpu,
-    Trophy,
-    Music,
-    Calendar,
-    GraduationCap,
     MessageSquare,
-    Flame,
-    Disc,
-    Headphones,
-    Globe2,
-    Church,
-    ChevronRight,
-    Sparkles,
+    Music,
+    Trophy,
     Vote,
+    Calendar,
 } from 'lucide-react';
 
 export interface CategoryItem {
@@ -32,7 +26,6 @@ export interface CategoryItem {
 
 /* =========================================================
    NEWS CATEGORIES
-   Used throughout /news/*
 ========================================================= */
 
 const NEWS_CATEGORIES: CategoryItem[] = [
@@ -99,135 +92,15 @@ const NEWS_CATEGORIES: CategoryItem[] = [
 ];
 
 /* =========================================================
-   MUSIC CATEGORIES
-   Used throughout /music/*
+   NEWS CATEGORY NAVIGATION
 ========================================================= */
 
-const MUSIC_CATEGORIES: CategoryItem[] = [
-    {
-        name: 'Latest Music',
-        slug: 'latest-music',
-        icon: <Music className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Gospel',
-        slug: 'gospel',
-        icon: <Church className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Trending',
-        slug: 'trending',
-        icon: <Flame className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Albums',
-        slug: 'albums',
-        icon: <Disc className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'DJ Mix',
-        slug: 'dj-mix',
-        icon: <Headphones className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'African Music',
-        slug: 'african-music',
-        icon: <Globe2 className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-];
-
-/* =========================================================
-   HOMEPAGE CATEGORIES
-   Curated selection shown on /
-========================================================= */
-
-const HOMEPAGE_CATEGORIES: CategoryItem[] = [
-    {
-        name: 'Politics',
-        slug: 'politics',
-        icon: <Vote className="w-5 h-5" />,
-        basePath: '/news',
-    },
-    {
-        name: 'Entertainment',
-        slug: 'entertainment',
-        icon: <Film className="w-5 h-5" />,
-        basePath: '/news',
-    },
-    {
-        name: 'Latest Music',
-        slug: 'latest-music',
-        icon: <Music className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Trending',
-        slug: 'trending',
-        icon: <Flame className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Sports',
-        slug: 'sports',
-        icon: <Trophy className="w-5 h-5" />,
-        basePath: '/news',
-    },
-    {
-        name: 'African Music',
-        slug: 'african-music',
-        icon: <Globe2 className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Celebrity Gossip',
-        slug: 'celebrity-gossip',
-        icon: <Sparkles className="w-5 h-5" />,
-        basePath: '/news',
-    },
-    {
-        name: 'Gospel',
-        slug: 'gospel',
-        icon: <Church className="w-5 h-5" />,
-        basePath: '/music/category',
-    },
-    {
-        name: 'Music News',
-        slug: 'music-news',
-        icon: <Music className="w-5 h-5" />,
-        basePath: '/news',
-    },
-];
-
-/* =========================================================
-   CATEGORY CONFIGURATION
-========================================================= */
-
-const CATEGORY_CONFIG = {
-    homepage: HOMEPAGE_CATEGORIES,
-    news: NEWS_CATEGORIES,
-    music: MUSIC_CATEGORIES,
-} as const;
-
-interface CategoryNavigationProps {
-    mode?: keyof typeof CATEGORY_CONFIG;
-}
-
-export default function CategoryNavigation({
-    mode = 'homepage',
-}: CategoryNavigationProps) {
+export default function CategoryNavigation() {
     const pathname = usePathname();
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const [canScrollRight, setCanScrollRight] = useState(true);
-
-    const categories = CATEGORY_CONFIG[mode];
 
     const checkScroll = () => {
         if (!scrollRef.current) return;
@@ -254,25 +127,35 @@ export default function CategoryNavigation({
         window.addEventListener('resize', checkScroll);
 
         return () => {
-            element.removeEventListener('scroll', checkScroll);
-            window.removeEventListener('resize', checkScroll);
+            element.removeEventListener(
+                'scroll',
+                checkScroll
+            );
+
+            window.removeEventListener(
+                'resize',
+                checkScroll
+            );
         };
-    }, [mode]);
+    }, []);
 
     return (
         <nav
-            aria-label="Category Navigation"
-            className="w-full my-6"
+            aria-label="News category navigation"
+            className="my-6 w-full"
         >
             <div
                 className="
                     relative w-full
-                    bg-slate-100/80 dark:bg-slate-900/60
-                    border border-slate-200/80 dark:border-slate-800
                     rounded-2xl
-                    p-3 sm:p-4
+                    border border-slate-200/80
+                    bg-slate-100/80
+                    p-3
                     shadow-xs
                     backdrop-blur-md
+                    dark:border-slate-800
+                    dark:bg-slate-900/60
+                    sm:p-4
                 "
             >
                 {/* Category Track */}
@@ -280,20 +163,22 @@ export default function CategoryNavigation({
                     ref={scrollRef}
                     className="
                         flex items-center
-                        gap-3 sm:gap-4 lg:gap-2
-                        lg:justify-between
+                        gap-3
                         overflow-x-auto
-                        scrollbar-none
-                        py-1 px-1
+                        px-1 py-1
                         snap-x
                         scroll-smooth
+                        scrollbar-none
+                        sm:gap-4
+                        lg:justify-between
+                        lg:gap-2
                     "
                     style={{
                         scrollbarWidth: 'none',
                         msOverflowStyle: 'none',
                     }}
                 >
-                    {categories.map((category) => {
+                    {NEWS_CATEGORIES.map((category) => {
                         const targetHref =
                             `${category.basePath}/${category.slug}`;
 
@@ -304,49 +189,60 @@ export default function CategoryNavigation({
                             <Link
                                 key={`${category.basePath}-${category.slug}`}
                                 href={targetHref}
+                                aria-current={
+                                    isActive
+                                        ? 'page'
+                                        : undefined
+                                }
                                 className="
                                     group
-                                    flex flex-col
-                                    items-center
+                                    flex shrink-0 snap-start
+                                    flex-col items-center
                                     gap-2
-                                    shrink-0 lg:shrink
-                                    snap-start
-                                    transition-all duration-200
+                                    transition-all
+                                    duration-200
                                     focus:outline-hidden
+                                    lg:shrink
                                 "
                             >
                                 {/* Icon */}
                                 <div
                                     className={`
-                                        w-12 h-12
-                                        sm:w-14 sm:h-14
+                                        flex
+                                        h-12 w-12
+                                        items-center
+                                        justify-center
                                         rounded-2xl
-                                        flex items-center justify-center
-                                        transition-all duration-300
                                         shadow-xs
+                                        transition-all
+                                        duration-300
+                                        sm:h-14 sm:w-14
 
-                                        ${isActive
-                                            ? `
+                                        ${
+                                            isActive
+                                                ? `
+                                                    scale-105
                                                     bg-rose-500
                                                     text-white
-                                                    shadow-rose-500/25
                                                     shadow-lg
-                                                    scale-105
+                                                    shadow-rose-500/25
                                                 `
-                                            : `
-                                                    bg-white
-                                                    dark:bg-slate-800
-                                                    text-slate-600
-                                                    dark:text-slate-300
+                                                : `
                                                     border
                                                     border-slate-200/60
-                                                    dark:border-slate-700/60
-                                                    group-hover:border-rose-500/50
-                                                    dark:group-hover:border-rose-500/50
-                                                    group-hover:text-rose-500
-                                                    dark:group-hover:text-rose-400
-                                                    group-hover:shadow-md
+                                                    bg-white
+                                                    text-slate-600
+
                                                     group-hover:scale-105
+                                                    group-hover:border-rose-500/50
+                                                    group-hover:text-rose-500
+                                                    group-hover:shadow-md
+
+                                                    dark:border-slate-700/60
+                                                    dark:bg-slate-800
+                                                    dark:text-slate-300
+                                                    dark:group-hover:border-rose-500/50
+                                                    dark:group-hover:text-rose-400
                                                 `
                                         }
                                     `}
@@ -357,24 +253,26 @@ export default function CategoryNavigation({
                                 {/* Category Name */}
                                 <span
                                     className={`
+                                        whitespace-nowrap
+                                        text-center
                                         text-[11px]
-                                        sm:text-xs
                                         font-bold
                                         tracking-tight
-                                        text-center
-                                        whitespace-nowrap
-                                        transition-colors duration-200
+                                        transition-colors
+                                        duration-200
+                                        sm:text-xs
 
-                                        ${isActive
-                                            ? `
+                                        ${
+                                            isActive
+                                                ? `
+                                                    font-extrabold
                                                     text-rose-600
                                                     dark:text-rose-400
-                                                    font-extrabold
                                                 `
-                                            : `
+                                                : `
                                                     text-slate-700
-                                                    dark:text-slate-300
                                                     group-hover:text-rose-600
+                                                    dark:text-slate-300
                                                     dark:group-hover:text-rose-400
                                                 `
                                         }
@@ -391,38 +289,41 @@ export default function CategoryNavigation({
                 {canScrollRight && (
                     <div
                         className="
-                            lg:hidden
                             pointer-events-none
                             absolute
                             right-0
                             top-0
                             bottom-0
-                            w-14
+                            flex w-14
+                            items-center
+                            justify-end
                             rounded-r-2xl
                             bg-gradient-to-l
                             from-slate-100
-                            dark:from-slate-900
                             to-transparent
-                            flex items-center
-                            justify-end
                             pr-2
-                            transition-opacity duration-300
+                            transition-opacity
+                            duration-300
+                            lg:hidden
+                            dark:from-slate-900
                         "
                     >
                         <div
                             className="
-                                w-6 h-6
+                                flex
+                                h-6 w-6
+                                items-center
+                                justify-center
                                 rounded-full
                                 bg-slate-900/10
-                                dark:bg-white/10
-                                backdrop-blur-xs
-                                flex items-center justify-center
                                 text-slate-600
-                                dark:text-slate-300
+                                backdrop-blur-xs
                                 animate-pulse
+                                dark:bg-white/10
+                                dark:text-slate-300
                             "
                         >
-                            <ChevronRight className="w-4 h-4" />
+                            <ChevronRight className="h-4 w-4" />
                         </div>
                     </div>
                 )}

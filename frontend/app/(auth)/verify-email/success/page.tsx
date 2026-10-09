@@ -15,7 +15,6 @@ export default function VerifyEmailSuccessPage() {
       <div className="flex min-h-screen items-start justify-center p-4 sm:p-6 lg:items-center">
         <FadeIn className="w-full max-w-6xl">
           <div className="relative grid overflow-hidden rounded-3xl border border-light-border bg-[#f7f8f8] shadow-xl shadow-black/5 dark:border-dark-border dark:bg-dark-surface dark:shadow-black/20 lg:grid-cols-[1.05fr_0.95fr]">
-
             {/* Editorial side */}
             <div className="hidden min-h-[680px] flex-col justify-between bg-light-surface p-10 dark:bg-[#282d2d] lg:flex xl:p-14">
               <div>
@@ -34,13 +33,16 @@ export default function VerifyEmailSuccessPage() {
 
                   <h1 className="mt-6 text-4xl font-bold tracking-tight text-light-text dark:text-dark-text xl:text-5xl">
                     You&apos;re all set.
-                    <span className="text-brand-teal"> Welcome to the Vibe.</span>
+                    <span className="text-brand-teal">
+                      {' '}
+                      Welcome to the Vibe.
+                    </span>
                   </h1>
 
                   <p className="mt-5 max-w-lg text-base leading-7 text-light-text-muted dark:text-dark-text-muted">
                     Your email has been successfully verified. Your
-                    VibeNationHQ account is now ready for the stories,
-                    music, entertainment, and culture waiting for you.
+                    VibeNationHQ account is now ready. Take a moment to
+                    personalize your music experience before you dive in.
                   </p>
                 </div>
               </div>
@@ -57,9 +59,9 @@ export default function VerifyEmailSuccessPage() {
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-light-text-muted dark:text-dark-text-muted">
-                      A verified email gives you a trusted way to
-                      receive important account messages and recover
-                      access when needed.
+                      A verified email gives you a trusted way to receive
+                      important account messages and recover access when
+                      needed.
                     </p>
                   </div>
                 </div>
@@ -119,13 +121,25 @@ export default function VerifyEmailSuccessPage() {
                   </div>
                 </div>
 
+                {/* Personalization prompt */}
+                <div className="mt-5 rounded-2xl border border-light-border-soft bg-light-surface-soft p-5 text-left dark:border-dark-border-soft dark:bg-dark-surface-soft">
+                  <p className="text-sm font-semibold text-light-text dark:text-dark-text">
+                    One quick step before you start
+                  </p>
+
+                  <p className="mt-1 text-sm leading-6 text-light-text-muted dark:text-dark-text-muted">
+                    Choose the music genres you enjoy so we can make your
+                    music feed more relevant to your Vibe.
+                  </p>
+                </div>
+
                 {/* Continue */}
                 <div className="mt-7">
                   <Link
-                    href="/"
+                    href="/music/onboarding/genres"
                     className="flex w-full items-center justify-center rounded-xl bg-brand-teal px-4 py-3.5 text-sm font-semibold text-white shadow-sm shadow-brand-teal/20 transition hover:bg-brand-teal-dark focus:outline-none focus:ring-4 focus:ring-brand-teal/20 active:scale-[0.99]"
                   >
-                    Continue to VibeNationHQ
+                    Countinue
                   </Link>
                 </div>
 
@@ -134,8 +148,8 @@ export default function VerifyEmailSuccessPage() {
                   <ShieldCheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-teal" />
 
                   <p className="text-xs leading-5 text-light-text-soft dark:text-dark-text-soft">
-                    Keep your account details secure and never share
-                    your password or verification links with anyone.
+                    Keep your account details secure and never share your
+                    password or verification links with anyone.
                   </p>
                 </div>
 

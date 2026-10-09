@@ -76,7 +76,6 @@ export default function CategoryNewsGrid({
                                 alt={mainFeaturedNews.title}
                                 fill
                                 priority
-                                unoptimized
                                 sizes="(max-width: 1024px) 100vw, 50vw"
                                 className="object-cover transition-transform duration-500 group-hover:scale-105"
                             />
@@ -139,7 +138,6 @@ export default function CategoryNewsGrid({
                                     src={getNewsImg(newsItem)}
                                     alt={newsItem.title}
                                     fill
-                                    unoptimized
                                     sizes="(max-width: 1024px) 50vw, 25vw"
                                     className="object-cover transition-transform duration-500 group-hover:scale-105"
                                 />

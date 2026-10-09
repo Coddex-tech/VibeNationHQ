@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
-import HeroNewsSection from '@/components/NewsHeroSection';
-import FeaturedArticlesGrid from '@/components/NewsCategoryGrid';
-import CategoryCarouselSection from '@/components/CategoryCarouselSection';
+import HeroNewsSection from '@/components/news/NewsHeroSection';
+import FeaturedArticlesGrid from '@/components/news/NewsCategoryGrid';
+import CategoryCarouselSection from '@/components/news/CategoryCarouselSection';
 
 interface NewsCard {
     id: number;

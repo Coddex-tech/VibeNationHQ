@@ -1,5 +1,6 @@
-import CategoryNavigation from "@/components/CategoryNavigation";
-import Footer from "@/components/Footer";
+import CategoryNavigation from "@/components/news/CategoryNavigation";
+import Footer from "@/components/news/Footer";
+import HomeNav from "@/components/special/HomeNav";
 
 export default function NewsLayout({
     children,
@@ -8,15 +9,16 @@ export default function NewsLayout({
 }) {
     return (
         <>
+            <HomeNav />
             <div className="w-full">
                 <div className="max-w-[1500px] mx-auto px-4">
-                    <CategoryNavigation mode="news" />
+                    <CategoryNavigation />
                 </div>
             </div>
 
             {children}
 
-            <Footer/>
+            <Footer />
         </>
     );
 }

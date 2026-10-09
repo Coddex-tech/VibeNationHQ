@@ -423,3 +423,207 @@ export function ArrowLeftIcon({ className = ''}: { className?: string; }) {
     </svg>
   );
 }
+
+
+export function ArrowRightIcon({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5 12h14"
+      />
+
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 5l7 7-7 7"
+      />
+    </svg>
+  );
+}
+
+
+export function BookOpenIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 5.5A2.5 2.5 0 016.5 3H20v16H6.5A2.5 2.5 0 004 16.5v-11z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 16.5A2.5 2.5 0 016.5 14H20"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 7h8M8 10h6"
+      />
+    </svg>
+  );
+}
+
+export function CalendarIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <rect
+        x="3"
+        y="4"
+        width="18"
+        height="17"
+        rx="2"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16 2v4M8 2v4M3 9h18"
+      />
+    </svg>
+  );
+}
+
+export function MessageCircleIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20 11.5a8 8 0 01-8 8 8.8 8.8 0 01-3.4-.68L4 20l1.18-3.53A8 8 0 1120 11.5z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 11.5h.01M12 11.5h.01M16 11.5h.01"
+      />
+    </svg>
+  );
+}
+
+export function HeartIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20.84 8.61a5.5 5.5 0 00-9.78-3.39L12 6l.94-.78a5.5 5.5 0 007.9 7.62L12 21l-8.84-8.16a5.5 5.5 0 017.9-7.62L12 6l.94-.78"
+      />
+    </svg>
+  );
+}
+
+export function UserIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <circle cx="12" cy="8" r="4" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 21a8 8 0 0116 0"
+      />
+    </svg>
+  );
+}
+
+export function StarIcon({
+  className = "w-5 h-5",
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m12 3 2.78 5.63 6.22.9-4.5 4.39 1.06 6.2L12 17.2l-5.56 2.92 1.06-6.2L3 9.53l6.22-.9L12 3z"
+      />
+    </svg>
+  );
+}
+
+
+export function ChevronRightIcon({
+  className = '',
+}: {
+  className?: string;
+}) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  );
+}
