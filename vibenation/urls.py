@@ -44,8 +44,9 @@ urlpatterns = [
     # STAFF PORTAL - We name this 'staff'
     path('vibe-crew-login-2026/', staff_admin_site.urls),
 
-
     path('', include(('news.urls', 'news'), namespace='news')),
+
+    path("api/", include("accounts.api.urls")),
     
     path('ads/', include('ads.urls')),
 

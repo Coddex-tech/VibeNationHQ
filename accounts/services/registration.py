@@ -31,5 +31,4 @@ def register_user(*, email, password):
         user=user,
         raw_token=raw_token,
     )
-
     return user

@@ -30,7 +30,7 @@ def create_email_verification_token(user):
     """
     Create or replace the email verification token for a user.
 
-    Returns:
+    Returns:Email
         tuple[EmailVerificationToken, str]:
             The database token object and the raw token.
     """

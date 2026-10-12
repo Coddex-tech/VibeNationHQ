@@ -6,10 +6,10 @@ import qrcode
 
 from django.contrib import admin, messages
 from django.contrib.admin.models import DELETION, LogEntry
-from django.contrib.auth import logout
+from django.contrib.auth import get_user_model, logout
 from django.contrib.auth.admin import GroupAdmin as BaseGroupAdmin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.html import escape, format_html
@@ -22,6 +22,16 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from unfold.sites import UnfoldAdminSite
+
+from accounts.models import (
+    VibeNationUser,
+    StaffAccount,
+)
+
+from accounts.admin import (
+    StaffAccountAdmin,
+    VibeNationUserAdmin,
+)
 
 from ads.models import Advertisement
 from news.models import News
@@ -81,7 +91,7 @@ from music.admin import (
     UserFollowAdmin,
 )
 
-
+User = get_user_model()
 # ============================================================
 # DASHBOARD STATISTICS
 # ============================================================
@@ -218,6 +228,16 @@ def dashboard_stats_callback(request, context):
 # ============================================================
 # CUSTOM USER / GROUP ADMINS
 # ============================================================
+class InternalUserAdmin(VibeNationUserAdmin):
+    """
+    Technical User admin used by Django autocomplete fields.
+
+    The real account management UI is provided by the
+    VibeNationUser and StaffAccount proxy models.
+    """
+
+    def get_model_perms(self, request):
+        return {}
 
 class MyUserAdmin(BaseUserAdmin, UnfoldModelAdmin):
     """
@@ -248,9 +268,17 @@ class MyUserAdmin(BaseUserAdmin, UnfoldModelAdmin):
 
 
 class MyGroupAdmin(BaseGroupAdmin, UnfoldModelAdmin):
-    """
-    Custom Group admin shared by the Boss and Staff portals.
-    """
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
     filter_horizontal = (
         "permissions",
@@ -261,7 +289,7 @@ class MyGroupAdmin(BaseGroupAdmin, UnfoldModelAdmin):
 # MASTER / BOSS ADMIN SITE
 # ============================================================
 
-class MasterAdminSite(UnfoldAdminSite):
+class MasterAdminSite(OTPAdminSite, UnfoldAdminSite):
     """
     VibeNationHQ Master/Boss administration portal.
 
@@ -930,14 +958,37 @@ all_portals = [
     staff_admin_site,
 ]
 
+
+# ============================================================
+# CORE AUTH REGISTRATION
+# ============================================================
+#
+# User must be registered on ALL portals because the existing
+# Music ModelAdmins use User in autocomplete_fields.
+#
+# This includes Django's default admin.site.
+# ============================================================
+
 safe_register(
-    all_sites,
+    all_portals,
     User,
-    MyUserAdmin,
+    InternalUserAdmin,
 )
 
 safe_register(
     all_sites,
+    VibeNationUser,
+    VibeNationUserAdmin,
+)
+
+safe_register(
+    all_sites,
+    StaffAccount,
+    StaffAccountAdmin,
+)
+
+safe_register(
+    all_portals,
     Group,
     MyGroupAdmin,
 )

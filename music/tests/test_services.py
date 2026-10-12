@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
+from datetime import timedelta
 
 from rest_framework.exceptions import ValidationError
 
@@ -62,6 +63,8 @@ from music.services.community import (
     CommunityPostReportService,
     CommunityPostCommentReportService
 )
+
+from music.services.discovery import DiscoveryService
 
 
 User = get_user_model()
@@ -2335,3 +2338,629 @@ class CommunityReportServiceTests(TestCase):
             self.post.comments_count,
             original_comments,
         )
+
+
+class DiscoveryServiceTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="discoveryuser",
+            password="testpass123",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="otherdiscoveryuser",
+            password="testpass123",
+        )
+
+        self.artist = Artist.objects.create(
+            name="Discovery Artist",
+            slug="discovery-artist",
+            is_active=True,
+        )
+
+        self.song = Song.objects.create(
+            title="Discovery Song",
+            slug="discovery-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+        self.song.artists.add(self.artist)
+
+        self.album = Album.objects.create(
+            title="Discovery Album",
+            slug="discovery-album",
+            status=Album.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+        self.album.artists.add(self.artist)
+
+    # ========================================================
+    # TRENDING SONGS
+    # ========================================================
+
+    def test_trending_songs_returns_recently_engaged_published_songs(self):
+        SongFavorite.objects.create(
+            user=self.user,
+            song=self.song,
+        )
+
+        results = list(
+            DiscoveryService.trending_songs()
+        )
+
+        self.assertIn(self.song, results)
+
+    def test_trending_songs_excludes_old_engagement(self):
+        favorite = SongFavorite.objects.create(
+            user=self.user,
+            song=self.song,
+        )
+
+        SongFavorite.objects.filter(
+            pk=favorite.pk,
+        ).update(
+            created_at=timezone.now() - timedelta(days=8)
+        )
+
+        results = list(
+            DiscoveryService.trending_songs()
+        )
+
+        self.assertNotIn(self.song, results)
+
+    def test_trending_songs_excludes_unpublished_songs(self):
+        draft_song = Song.objects.create(
+            title="Draft Discovery Song",
+            slug="draft-discovery-song",
+            status=Song.Status.DRAFT,
+        )
+
+        SongFavorite.objects.create(
+            user=self.user,
+            song=draft_song,
+        )
+
+        results = list(
+            DiscoveryService.trending_songs()
+        )
+
+        self.assertNotIn(draft_song, results)
+
+    def test_trending_songs_ranks_more_recent_favorites_first(self):
+        first_song = Song.objects.create(
+            title="First Trending Song",
+            slug="first-trending-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        second_song = Song.objects.create(
+            title="Second Trending Song",
+            slug="second-trending-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        first_song.artists.add(self.artist)
+        second_song.artists.add(self.artist)
+
+        SongFavorite.objects.create(
+            user=self.user,
+            song=first_song,
+        )
+
+        SongFavorite.objects.create(
+            user=self.other_user,
+            song=second_song,
+        )
+
+        SongFavorite.objects.create(
+            user=User.objects.create_user(
+                username="thirdtrendinguser",
+                password="testpass123",
+            ),
+            song=second_song,
+        )
+
+        results = list(
+            DiscoveryService.trending_songs()
+        )
+
+        self.assertEqual(results[0], second_song)
+
+    def test_trending_songs_is_limited_to_ten(self):
+        for index in range(12):
+            song = Song.objects.create(
+                title=f"Trending Song {index}",
+                slug=f"trending-song-{index}",
+                status=Song.Status.PUBLISHED,
+                published_at=timezone.now(),
+            )
+
+            song.artists.add(self.artist)
+
+            user = User.objects.create_user(
+                username=f"trenduser{index}",
+                password="testpass123",
+            )
+
+            SongFavorite.objects.create(
+                user=user,
+                song=song,
+            )
+
+        results = list(
+            DiscoveryService.trending_songs()
+        )
+
+        self.assertLessEqual(len(results), 10)
+
+    # ========================================================
+    # TRENDING ALBUMS
+    # ========================================================
+
+    def test_trending_albums_returns_recently_engaged_published_albums(self):
+        AlbumFavorite.objects.create(
+            user=self.user,
+            album=self.album,
+        )
+
+        results = list(
+            DiscoveryService.trending_albums()
+        )
+
+        self.assertIn(self.album, results)
+
+    def test_trending_albums_excludes_old_engagement(self):
+        favorite = AlbumFavorite.objects.create(
+            user=self.user,
+            album=self.album,
+        )
+
+        AlbumFavorite.objects.filter(
+            pk=favorite.pk,
+        ).update(
+            created_at=timezone.now() - timedelta(days=8)
+        )
+
+        results = list(
+            DiscoveryService.trending_albums()
+        )
+
+        self.assertNotIn(self.album, results)
+
+    def test_trending_albums_excludes_unpublished_albums(self):
+        draft_album = Album.objects.create(
+            title="Draft Discovery Album",
+            slug="draft-discovery-album",
+            status=Album.Status.DRAFT,
+        )
+
+        AlbumFavorite.objects.create(
+            user=self.user,
+            album=draft_album,
+        )
+
+        results = list(
+            DiscoveryService.trending_albums()
+        )
+
+        self.assertNotIn(draft_album, results)
+
+    # ========================================================
+    # TRENDING ARTISTS
+    # ========================================================
+
+    def test_trending_artists_returns_recently_followed_artist(self):
+        ArtistFollow.objects.create(
+            user=self.user,
+            artist=self.artist,
+        )
+
+        results = list(
+            DiscoveryService.trending_artists()
+        )
+
+        self.assertIn(self.artist, results)
+
+    def test_trending_artists_excludes_inactive_artists(self):
+        inactive_artist = Artist.objects.create(
+            name="Inactive Discovery Artist",
+            slug="inactive-discovery-artist",
+            is_active=False,
+        )
+
+        ArtistFollow.objects.create(
+            user=self.user,
+            artist=inactive_artist,
+        )
+
+        results = list(
+            DiscoveryService.trending_artists()
+        )
+
+        self.assertNotIn(inactive_artist, results)
+
+    def test_trending_artists_excludes_old_follows(self):
+        follow = ArtistFollow.objects.create(
+            user=self.user,
+            artist=self.artist,
+        )
+
+        old_time = timezone.now() - timedelta(days=8)
+
+        ArtistFollow.objects.filter(
+            pk=follow.pk,
+        ).update(
+            created_at=old_time,
+        )
+
+        Song.objects.filter(
+            pk=self.song.pk,
+        ).update(
+            published_at=old_time,
+        )
+
+        Album.objects.filter(
+            pk=self.album.pk,
+        ).update(
+            published_at=old_time,
+        )
+
+        results = list(
+            DiscoveryService.trending_artists()
+        )
+
+        self.assertNotIn(self.artist, results)
+
+    # ========================================================
+    # MOST FAVOURITED
+    # ========================================================
+
+    def test_most_favorited_songs_orders_by_favorites_count(self):
+        first_song = Song.objects.create(
+            title="First Favorite Song",
+            slug="first-favorite-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        second_song = Song.objects.create(
+            title="Second Favorite Song",
+            slug="second-favorite-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        first_song.artists.add(self.artist)
+        second_song.artists.add(self.artist)
+
+        first_song.favorites_count = 1
+        first_song.save(update_fields=["favorites_count"])
+
+        second_song.favorites_count = 5
+        second_song.save(update_fields=["favorites_count"])
+
+        results = list(
+            DiscoveryService.most_favorited_songs()
+        )
+
+        self.assertEqual(results[0], second_song)
+
+    def test_most_favorited_songs_excludes_zero_favorites(self):
+        results = list(
+            DiscoveryService.most_favorited_songs()
+        )
+
+        self.assertNotIn(self.song, results)
+
+    def test_most_favorited_albums_excludes_zero_favorites(self):
+        results = list(
+            DiscoveryService.most_favorited_albums()
+        )
+
+        self.assertNotIn(self.album, results)
+
+    # ========================================================
+    # MOST DISCUSSED
+    # ========================================================
+
+    def test_most_discussed_songs_orders_by_discussion_count(self):
+        first_song = Song.objects.create(
+            title="First Discussed Song",
+            slug="first-discussed-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        second_song = Song.objects.create(
+            title="Second Discussed Song",
+            slug="second-discussed-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        first_song.artists.add(self.artist)
+        second_song.artists.add(self.artist)
+
+        post_one = CommunityPost.objects.create(
+            user=self.user,
+            content="Discussion one.",
+            status=CommunityPost.Status.PUBLISHED,
+        )
+
+        CommunityPostTarget.objects.create(
+            post=post_one,
+            target_type=CommunityPostTarget.TargetType.SONG,
+            song=first_song,
+        )
+
+        for index in range(3):
+            user = User.objects.create_user(
+                username=f"discussionuser{index}",
+                password="testpass123",
+            )
+
+            post = CommunityPost.objects.create(
+                user=user,
+                content=f"Discussion {index}.",
+                status=CommunityPost.Status.PUBLISHED,
+            )
+
+            CommunityPostTarget.objects.create(
+                post=post,
+                target_type=CommunityPostTarget.TargetType.SONG,
+                song=second_song,
+            )
+
+        results = list(
+            DiscoveryService.most_discussed_songs()
+        )
+
+        self.assertEqual(results[0], second_song)
+
+    def test_most_discussed_songs_excludes_hidden_posts(self):
+        hidden_post = CommunityPost.objects.create(
+            user=self.user,
+            content="Hidden discussion.",
+            status=CommunityPost.Status.HIDDEN,
+        )
+
+        CommunityPostTarget.objects.create(
+            post=hidden_post,
+            target_type=CommunityPostTarget.TargetType.SONG,
+            song=self.song,
+        )
+
+        results = list(
+            DiscoveryService.most_discussed_songs()
+        )
+
+        self.assertNotIn(self.song, results)
+
+    # ========================================================
+    # TOP RATED
+    # ========================================================
+
+    def test_top_rated_songs_uses_average_rating(self):
+        users = []
+
+        ratings = [5.0, 5.0, 5.0, 4.5, 4.5]
+
+        for index, rating in enumerate(ratings):
+            user = User.objects.create_user(
+                username=f"songratinguser{index}",
+                password="testpass123",
+            )
+            users.append(user)
+
+            SongRating.objects.create(
+                user=user,
+                song=self.song,
+                rating=rating,
+            )
+
+        self.song.ratings_count = 5
+        self.song.save(update_fields=["ratings_count"])
+
+        results = list(
+            DiscoveryService.top_rated_songs()
+        )
+
+        self.assertEqual(results[0], self.song)
+        self.assertAlmostEqual(
+            float(results[0].average_rating),
+            4.8,
+        )
+
+    def test_top_rated_songs_requires_minimum_ratings(self):
+        for index in range(4):
+            user = User.objects.create_user(
+                username=f"fewratinguser{index}",
+                password="testpass123",
+            )
+
+            SongRating.objects.create(
+                user=user,
+                song=self.song,
+                rating=5.0,
+            )
+
+        self.song.ratings_count = 4
+        self.song.save(update_fields=["ratings_count"])
+
+        results = list(
+            DiscoveryService.top_rated_songs()
+        )
+
+        self.assertNotIn(self.song, results)
+
+    def test_top_rated_albums_uses_average_rating(self):
+        ratings = [5.0, 5.0, 5.0, 4.5, 4.5]
+
+        for index, rating in enumerate(ratings):
+            user = User.objects.create_user(
+                username=f"albumratinguser{index}",
+                password="testpass123",
+            )
+
+            AlbumRating.objects.create(
+                user=user,
+                album=self.album,
+                rating=rating,
+            )
+
+        self.album.ratings_count = 5
+        self.album.save(update_fields=["ratings_count"])
+
+        results = list(
+            DiscoveryService.top_rated_albums()
+        )
+
+        self.assertEqual(results[0], self.album)
+        self.assertAlmostEqual(
+            float(results[0].average_rating),
+            4.8,
+        )
+
+    def test_top_rated_albums_requires_minimum_ratings(self):
+        for index in range(4):
+            user = User.objects.create_user(
+                username=f"fewalbumratinguser{index}",
+                password="testpass123",
+            )
+
+            AlbumRating.objects.create(
+                user=user,
+                album=self.album,
+                rating=5.0,
+            )
+
+        self.album.ratings_count = 4
+        self.album.save(update_fields=["ratings_count"])
+
+        results = list(
+            DiscoveryService.top_rated_albums()
+        )
+
+        self.assertNotIn(self.album, results)
+
+    # ========================================================
+    # FEATURED
+    # ========================================================
+
+    def test_featured_songs_returns_featured_published_songs(self):
+        self.song.is_featured = True
+        self.song.save(update_fields=["is_featured"])
+
+        results = list(
+            DiscoveryService.featured_songs()
+        )
+
+        self.assertIn(self.song, results)
+
+    def test_featured_songs_excludes_unpublished_songs(self):
+        draft_song = Song.objects.create(
+            title="Draft Featured Song",
+            slug="draft-featured-song",
+            status=Song.Status.DRAFT,
+            is_featured=True,
+        )
+
+        results = list(
+            DiscoveryService.featured_songs()
+        )
+
+        self.assertNotIn(draft_song, results)
+
+    def test_featured_albums_returns_featured_published_albums(self):
+        self.album.is_featured = True
+        self.album.save(update_fields=["is_featured"])
+
+        results = list(
+            DiscoveryService.featured_albums()
+        )
+
+        self.assertIn(self.album, results)
+
+    def test_featured_artists_returns_active_verified_artists(self):
+        self.artist.is_verified = True
+        self.artist.save(update_fields=["is_verified"])
+
+        results = list(
+            DiscoveryService.featured_artists()
+        )
+
+        self.assertIn(self.artist, results)
+
+    def test_featured_artists_excludes_unverified_artists(self):
+        results = list(
+            DiscoveryService.featured_artists()
+        )
+
+        self.assertNotIn(self.artist, results)
+
+    # ========================================================
+    # RECENTLY RELEASED
+    # ========================================================
+
+    def test_recently_released_songs_orders_newest_first(self):
+        older_song = Song.objects.create(
+            title="Older Song",
+            slug="older-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+            release_date=timezone.now().date() - timezone.timedelta(days=10),
+        )
+
+        newer_song = Song.objects.create(
+            title="Newer Song",
+            slug="newer-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+            release_date=timezone.now().date(),
+        )
+
+        older_song.artists.add(self.artist)
+        newer_song.artists.add(self.artist)
+
+        results = list(
+            DiscoveryService.recently_released_songs()
+        )
+
+        self.assertEqual(results[0], newer_song)
+
+    def test_recently_released_songs_excludes_missing_release_date(self):
+        self.assertIsNone(self.song.release_date)
+
+        results = list(
+            DiscoveryService.recently_released_songs()
+        )
+
+        self.assertNotIn(self.song, results)
+
+    def test_recently_released_albums_orders_newest_first(self):
+        older_album = Album.objects.create(
+            title="Older Album",
+            slug="older-album",
+            status=Album.Status.PUBLISHED,
+            published_at=timezone.now(),
+            release_date=timezone.now().date() - timezone.timedelta(days=10),
+        )
+
+        newer_album = Album.objects.create(
+            title="Newer Album",
+            slug="newer-album",
+            status=Album.Status.PUBLISHED,
+            published_at=timezone.now(),
+            release_date=timezone.now().date(),
+        )
+
+        older_album.artists.add(self.artist)
+        newer_album.artists.add(self.artist)
+
+        results = list(
+            DiscoveryService.recently_released_albums()
+        )
+
+        self.assertEqual(results[0], newer_album)

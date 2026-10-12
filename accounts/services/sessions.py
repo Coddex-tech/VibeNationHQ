@@ -10,6 +10,9 @@ from ..models import UserSession
 
 SESSION_SECRET_BYTES = 32
 SESSION_LIFETIME = timedelta(days=30)
+SESSION_LAST_SEEN_UPDATE_INTERVAL = timedelta(
+    minutes=5
+)
 
 
 class InvalidSessionError(Exception):
@@ -68,12 +71,14 @@ def get_valid_session(*, raw_secret):
             "Invalid session."
         )
 
+    now = timezone.now()
+
     if session.revoked_at is not None:
         raise InvalidSessionError(
             "Invalid session."
         )
 
-    if timezone.now() >= session.expires_at:
+    if now >= session.expires_at:
         raise InvalidSessionError(
             "Invalid session."
         )
@@ -82,6 +87,24 @@ def get_valid_session(*, raw_secret):
         raise InvalidSessionError(
             "Invalid session."
         )
+
+    # Avoid writing to the database on every
+    # authenticated request. Refresh last_seen_at
+    # at most once every five minutes.
+    if (
+        session.last_seen_at is None
+        or (
+            now - session.last_seen_at
+            >= SESSION_LAST_SEEN_UPDATE_INTERVAL
+        )
+    ):
+        UserSession.objects.filter(
+            id=session.id,
+        ).update(
+            last_seen_at=now,
+        )
+
+        session.last_seen_at = now
 
     return session
 
@@ -110,6 +133,7 @@ def revoke_session(*, raw_secret):
 
     return session
 
+
 def logout_web_user(*, raw_secret):
     """
     Revoke the authenticated web session.
@@ -118,6 +142,7 @@ def logout_web_user(*, raw_secret):
     return revoke_session(
         raw_secret=raw_secret,
     )
+
 
 @transaction.atomic
 def revoke_session_by_id(*, user, session_id):
@@ -141,3 +166,28 @@ def revoke_session_by_id(*, user, session_id):
     )
 
     return session
+
+
+@transaction.atomic
+def revoke_all_other_sessions(
+    *,
+    user,
+    current_session_id,
+):
+    revoked_at = timezone.now()
+
+    updated = (
+        UserSession.objects
+        .filter(
+            user=user,
+            revoked_at__isnull=True,
+        )
+        .exclude(
+            id=current_session_id,
+        )
+        .update(
+            revoked_at=revoked_at,
+        )
+    )
+
+    return updated

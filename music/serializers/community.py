@@ -1,33 +1,71 @@
 from rest_framework import serializers
 
-from django.db import transaction
+from django.contrib.auth import get_user_model
 
 from music.models import (
-    CommunityPost,
-    CommunityPostTarget,
-    CommunityPostComment,
-    CommunityPostReport,
-    CommunityPostCommentReport, 
-    Song,
     Album,
     Artist,
+    CommunityPost,
+    CommunityPostComment,
+    CommunityPostCommentReport,
+    CommunityPostReport,
+    CommunityPostTarget,
+    Song,
 )
 
 from .base import (
     BaseModelSerializer,
-    validate_half_star_rating
+    validate_half_star_rating,
 )
 
 from .catalog import (
-    ArtistCardSerializer,
     AlbumCardSerializer,
+    ArtistCardSerializer,
     SongCardSerializer,
 )
+
+
+User = get_user_model()
+
+
+# ============================================================
+# USER DETAIL
+# ============================================================
+
+
+
+class CommunityUserSerializer(serializers.ModelSerializer):
+    is_following = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "is_following",
+        ]
+        read_only_fields = fields
+
+    def get_is_following(self, obj):
+        """
+        Read the follow state annotated by the queryset.
+
+        The default is False for contexts that don't annotate
+        the user, such as comment serialization.
+        """
+        return bool(
+            getattr(
+                obj,
+                "is_following",
+                False,
+            )
+        )
 
 
 # ============================================================
 # COMMUNITY POST TARGET — READ
 # ============================================================
+
 
 class CommunityPostTargetSerializer(BaseModelSerializer):
     """
@@ -40,6 +78,10 @@ class CommunityPostTargetSerializer(BaseModelSerializer):
     - VibeNation Album
     - VibeNation Artist
     - External music catalog item
+
+    For canonical Song targets, preview_url is resolved from
+    the Song's provider identity records rather than stored
+    directly on the Song model.
     """
 
     song = SongCardSerializer(
@@ -54,8 +96,54 @@ class CommunityPostTargetSerializer(BaseModelSerializer):
         read_only=True,
     )
 
+    preview_url = serializers.SerializerMethodField()
+
+    def get_preview_url(self, obj):
+        """
+        Return an available provider preview URL for a
+        canonical Song target.
+
+        Provider preview URLs live on MusicProviderIdentity,
+        not on the canonical Song model.
+
+        The community post views prefetch the provider
+        identities, so this method can resolve the URL
+        without causing an additional query per post.
+        """
+
+        if (
+            obj.target_type
+            != CommunityPostTarget.TargetType.SONG
+        ):
+            return obj.preview_url or None
+
+        song = obj.song
+
+        if song is None:
+            return None
+
+        prefetched_objects = getattr(
+            song,
+            "_prefetched_objects_cache",
+            {},
+        )
+
+        provider_identities = prefetched_objects.get(
+            "provider_identities",
+        )
+
+        if provider_identities is None:
+            return None
+
+        for identity in provider_identities:
+            if identity.preview_url:
+                return identity.preview_url
+
+        return None
+
     class Meta:
         model = CommunityPostTarget
+
         fields = [
             "id",
             "target_type",
@@ -70,7 +158,7 @@ class CommunityPostTargetSerializer(BaseModelSerializer):
             "external_content_type",
             "external_id",
 
-            # External metadata snapshot
+            # External metadata snapshot / resolved preview
             "title",
             "artist_name",
             "album_name",
@@ -87,21 +175,27 @@ class CommunityPostTargetSerializer(BaseModelSerializer):
 # COMMUNITY POST TARGET — CREATE INPUT
 # ============================================================
 
-class CommunityPostTargetCreateSerializer(serializers.Serializer):
+
+class CommunityPostTargetCreateSerializer(
+    serializers.Serializer,
+):
     """
-    Validates the target a user wants to attach to a
-    community post.
+    Validates the canonical music target a user wants
+    to attach to a community post.
 
-    The client can attach exactly one of:
+    External provider results must first pass through the
+    music provider import pipeline and become canonical
+    VibeNationHQ records.
 
-    - an internal VibeNation Song
-    - an internal VibeNation Album
-    - an internal VibeNation Artist
-    - an external music catalog item
+    Therefore, the community post API does not directly
+    create external targets.
 
-    Server-controlled snapshot fields such as title,
-    artwork, artist name, metadata, etc. are intentionally
-    NOT accepted from the client.
+    A Song or Album does not need to be catalog-published
+    before it can be attached to a community post. Draft
+    canonical records are allowed because community usage
+    and catalog publication are separate concerns.
+
+    Archived records cannot be attached.
     """
 
     target_type = serializers.ChoiceField(
@@ -110,31 +204,37 @@ class CommunityPostTargetCreateSerializer(serializers.Serializer):
 
     # --------------------------------------------------------
     # Internal targets
+    #
+    # Community posts may reference canonical Songs/Albums
+    # that are still in editorial DRAFT status.
+    #
+    # ARCHIVED records remain excluded.
     # --------------------------------------------------------
 
     song = serializers.PrimaryKeyRelatedField(
-        queryset=Song.objects.filter(
-            status=Song.Status.PUBLISHED,
+        queryset=Song.objects.exclude(
+            status=Song.Status.ARCHIVED,
         ),
         required=False,
     )
 
     album = serializers.PrimaryKeyRelatedField(
-        queryset=Album.objects.filter(
-            status=Album.Status.PUBLISHED,
+        queryset=Album.objects.exclude(
+            status=Album.Status.ARCHIVED,
         ),
         required=False,
     )
 
     artist = serializers.PrimaryKeyRelatedField(
-        queryset=Artist.objects.filter(
-            is_active=True,
-        ),
+        queryset=Artist.objects.all(),
         required=False,
     )
 
     # --------------------------------------------------------
-    # External target
+    # External fields
+    #
+    # These are intentionally defined so direct external
+    # attachment attempts can be rejected explicitly.
     # --------------------------------------------------------
 
     external_provider = serializers.ChoiceField(
@@ -164,142 +264,135 @@ class CommunityPostTargetCreateSerializer(serializers.Serializer):
         album = attrs.get("album")
         artist = attrs.get("artist")
 
-        external_provider = attrs.get("external_provider")
-        external_content_type = attrs.get("external_content_type")
-        external_id = attrs.get("external_id")
+        external_provider = attrs.get(
+            "external_provider",
+        )
+        external_content_type = attrs.get(
+            "external_content_type",
+        )
+        external_id = attrs.get(
+            "external_id",
+        )
 
-        # ====================================================
-        # SONG
-        # ====================================================
+        has_external_fields = any(
+            value is not None
+            for value in (
+                external_provider,
+                external_content_type,
+                external_id,
+            )
+        )
 
         if target_type == CommunityPostTarget.TargetType.SONG:
-
-            if not song:
+            if song is None:
                 raise serializers.ValidationError({
-                    "song": "A song is required when target_type is 'song'."
+                    "song": (
+                        "A song is required when "
+                        "target_type is 'song'."
+                    ),
                 })
 
-            if album or artist:
+            if album is not None or artist is not None:
                 raise serializers.ValidationError(
-                    "A song target cannot include an album or artist."
+                    "A song target cannot include "
+                    "an album or artist."
                 )
 
-            if (
-                external_provider
-                or external_content_type
-                or external_id
-            ):
+            if has_external_fields:
                 raise serializers.ValidationError(
-                    "A song target cannot include external target fields."
+                    "A song target cannot include "
+                    "external target fields."
                 )
 
-        # ====================================================
-        # ALBUM
-        # ====================================================
+            return attrs
 
-        elif target_type == CommunityPostTarget.TargetType.ALBUM:
-
-            if not album:
+        if target_type == CommunityPostTarget.TargetType.ALBUM:
+            if album is None:
                 raise serializers.ValidationError({
-                    "album": "An album is required when target_type is 'album'."
+                    "album": (
+                        "An album is required when "
+                        "target_type is 'album'."
+                    ),
                 })
 
-            if song or artist:
+            if song is not None or artist is not None:
                 raise serializers.ValidationError(
-                    "An album target cannot include a song or artist."
+                    "An album target cannot include "
+                    "a song or artist."
                 )
 
-            if (
-                external_provider
-                or external_content_type
-                or external_id
-            ):
+            if has_external_fields:
                 raise serializers.ValidationError(
-                    "An album target cannot include external target fields."
+                    "An album target cannot include "
+                    "external target fields."
                 )
 
-        # ====================================================
-        # ARTIST
-        # ====================================================
+            return attrs
 
-        elif target_type == CommunityPostTarget.TargetType.ARTIST:
-
-            if not artist:
+        if target_type == CommunityPostTarget.TargetType.ARTIST:
+            if artist is None:
                 raise serializers.ValidationError({
-                    "artist": "An artist is required when target_type is 'artist'."
+                    "artist": (
+                        "An artist is required when "
+                        "target_type is 'artist'."
+                    ),
                 })
 
-            if song or album:
+            if song is not None or album is not None:
                 raise serializers.ValidationError(
-                    "An artist target cannot include a song or album."
+                    "An artist target cannot include "
+                    "a song or album."
                 )
 
-            if (
-                external_provider
-                or external_content_type
-                or external_id
-            ):
+            if has_external_fields:
                 raise serializers.ValidationError(
-                    "An artist target cannot include external target fields."
+                    "An artist target cannot include "
+                    "external target fields."
                 )
 
-        # ====================================================
-        # EXTERNAL
-        # ====================================================
+            return attrs
 
-        elif target_type == CommunityPostTarget.TargetType.EXTERNAL:
+        if target_type == CommunityPostTarget.TargetType.EXTERNAL:
+            raise serializers.ValidationError({
+                "target_type": (
+                    "External music results must be imported "
+                    "into the VibeNationHQ catalog before "
+                    "they can be attached to a community post."
+                ),
+            })
 
-            if not external_provider:
-                raise serializers.ValidationError({
-                    "external_provider": (
-                        "This field is required for an external target."
-                    )
-                })
-
-            if not external_content_type:
-                raise serializers.ValidationError({
-                    "external_content_type": (
-                        "This field is required for an external target."
-                    )
-                })
-
-            if not external_id:
-                raise serializers.ValidationError({
-                    "external_id": (
-                        "This field is required for an external target."
-                    )
-                })
-
-            if song or album or artist:
-                raise serializers.ValidationError(
-                    "An external target cannot include an internal target."
-                )
-
-        return attrs
+        raise serializers.ValidationError({
+            "target_type": (
+                "Invalid community post target type."
+            ),
+        })
 
 
 # ============================================================
-# COMMUNITY POST
+# COMMUNITY POST — READ
 # ============================================================
+
 
 class CommunityPostSerializer(BaseModelSerializer):
     """
     Read-only representation of a community post.
 
-    Includes:
-
-    - author
-    - post content
-    - optional rating
-    - attached music/content target
-    - engagement counters
-    - moderation state
-    - timestamps
+    favorites_count is dynamically annotated by querysets
+    that need the total favorite count. It is intentionally
+    not stored on the CommunityPost model.
     """
+
+    user = CommunityUserSerializer(
+        read_only=True,
+    )
 
     target = CommunityPostTargetSerializer(
         read_only=True,
     )
+
+    is_liked = serializers.SerializerMethodField()
+    is_favorited = serializers.SerializerMethodField()
+    favorites_count = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityPost
@@ -312,6 +405,7 @@ class CommunityPostSerializer(BaseModelSerializer):
 
             # Content
             "content",
+            "slug",
             "rating",
 
             # Target
@@ -321,6 +415,9 @@ class CommunityPostSerializer(BaseModelSerializer):
             "views_count",
             "likes_count",
             "comments_count",
+            "favorites_count",
+            "is_liked",
+            "is_favorited",
 
             # Moderation / state
             "status",
@@ -333,34 +430,72 @@ class CommunityPostSerializer(BaseModelSerializer):
 
         read_only_fields = fields
 
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+
+        if (
+            request is None
+            or not request.user.is_authenticated
+        ):
+            return False
+
+        return bool(
+            getattr(
+                obj,
+                "is_liked",
+                False,
+            )
+        )
+
+    def get_is_favorited(self, obj):
+        request = self.context.get("request")
+
+        if (
+            request is None
+            or not request.user.is_authenticated
+        ):
+            return False
+
+        return bool(
+            getattr(
+                obj,
+                "is_favorited",
+                False,
+            )
+        )
+
+    def get_favorites_count(self, obj):
+        return int(
+            getattr(
+                obj,
+                "favorites_count",
+                0,
+            )
+        )
+
 
 # ============================================================
 # COMMUNITY POST — CREATE INPUT
 # ============================================================
-class CommunityPostCreateSerializer(serializers.ModelSerializer):
+
+
+class CommunityPostCreateSerializer(
+    serializers.ModelSerializer,
+):
     """
-    Serializer used when a user creates a community post.
+    Validates input for creating a community post.
 
-    Client-controlled fields:
-    - content
-    - rating
-    - target
+    A post may be:
 
-    The optional rating represents the user's personal rating
-    expressed through this community post.
+    - text-only
+    - attached to a Song
+    - attached to an Album
+    - attached to an Artist
 
-    It does NOT replace or modify the structured SongRating
-    or AlbumRating system.
+    Ratings are only valid when the post has a Song or
+    Album target.
 
-    Server-controlled fields:
-    - user
-    - views_count
-    - likes_count
-    - comments_count
-    - status
-    - is_edited
-    - created_at
-    - updated_at
+    Database creation is handled by CommunityPostService.
     """
 
     rating = serializers.DecimalField(
@@ -387,110 +522,83 @@ class CommunityPostCreateSerializer(serializers.ModelSerializer):
             "target",
         ]
 
-    @transaction.atomic
-    def create(self, validated_data):
-        """
-        Create the community post and its target atomically.
-
-        If target creation fails, the post creation is rolled back too.
-        """
-
-        target_data = validated_data.pop("target", None)
-
-        user = self.context["request"].user
-
-        post = CommunityPost.objects.create(
-            user=user,
-            **validated_data,
+    def validate(self, attrs):
+        content = attrs.get(
+            "content",
+            "",
         )
 
-        if target_data:
-            self._create_target(
-                post=post,
-                target_data=target_data,
-            )
-
-        return post
-
-    def _create_target(self, post, target_data):
-        """
-        Create the CommunityPostTarget associated with the post.
-
-        Internal targets can be created immediately.
-
-        External targets will later be resolved through a dedicated
-        external music metadata service.
-        """
-
-        target_type = target_data["target_type"]
-
-        # ====================================================
-        # INTERNAL SONG
-        # ====================================================
-
-        if target_type == CommunityPostTarget.TargetType.SONG:
-            CommunityPostTarget.objects.create(
-                post=post,
-                target_type=target_type,
-                song=target_data["song"],
-            )
-            return
-
-        # ====================================================
-        # INTERNAL ALBUM
-        # ====================================================
-
-        if target_type == CommunityPostTarget.TargetType.ALBUM:
-            CommunityPostTarget.objects.create(
-                post=post,
-                target_type=target_type,
-                album=target_data["album"],
-            )
-            return
-
-        # ====================================================
-        # INTERNAL ARTIST
-        # ====================================================
-
-        if target_type == CommunityPostTarget.TargetType.ARTIST:
-            CommunityPostTarget.objects.create(
-                post=post,
-                target_type=target_type,
-                artist=target_data["artist"],
-            )
-            return
-
-        # ====================================================
-        # EXTERNAL
-        # ====================================================
-
-        if target_type == CommunityPostTarget.TargetType.EXTERNAL:
+        if not isinstance(content, str):
             raise serializers.ValidationError({
-                "target": (
-                    "External targets are not available yet. "
-                    "They must be resolved by the external music "
-                    "catalog service before the target can be created."
-                )
+                "content": (
+                    "Post content must be a valid string."
+                ),
             })
+
+        content = content.strip()
+
+        if not content:
+            raise serializers.ValidationError({
+                "content": (
+                    "Post content cannot be empty."
+                ),
+            })
+
+        attrs["content"] = content
+
+        rating = attrs.get("rating")
+        target = attrs.get("target")
+
+        # No target means this is an ordinary text post.
+        if target is None:
+            if rating is not None:
+                raise serializers.ValidationError({
+                    "rating": (
+                        "A rating can only be added when "
+                        "a song or album is attached."
+                    ),
+                })
+
+            return attrs
+
+        target_type = target["target_type"]
+
+        # Ratings are valid only for songs and albums.
+        if rating is not None:
+            if target_type not in {
+                CommunityPostTarget.TargetType.SONG,
+                CommunityPostTarget.TargetType.ALBUM,
+            }:
+                raise serializers.ValidationError({
+                    "rating": (
+                        "A rating can only be added to "
+                        "a song or album."
+                    ),
+                })
+
+        return attrs
 
 
 # ============================================================
 # COMMUNITY POST — UPDATE INPUT
 # ============================================================
 
-class CommunityPostUpdateSerializer(serializers.ModelSerializer):
+
+class CommunityPostUpdateSerializer(
+    serializers.ModelSerializer,
+):
     """
     Serializer used when a user edits their community post.
 
     Users can update:
+
     - content
     - rating
 
     The attached target cannot be changed after creation.
 
-    Server-controlled fields such as the author, engagement
-    counters, status, edit state, and timestamps cannot be
-    modified by the client.
+    A rating remains valid only when the post has a Song or
+    Album target.
     """
 
     rating = serializers.DecimalField(
@@ -511,42 +619,82 @@ class CommunityPostUpdateSerializer(serializers.ModelSerializer):
             "rating",
         ]
 
-    def update(self, instance, validated_data):
-        """
-        Update the editable fields and mark the post as edited.
-        """
-
-        instance.content = validated_data.get(
+    def validate(self, attrs):
+        content = attrs.get(
             "content",
-            instance.content,
         )
 
-        if "rating" in validated_data:
-            instance.rating = validated_data["rating"]
+        if content is not None:
+            if not isinstance(content, str):
+                raise serializers.ValidationError({
+                    "content": (
+                        "Post content must be a valid string."
+                    ),
+                })
 
-        instance.is_edited = True
+            content = content.strip()
 
-        instance.save(
-            update_fields=[
-                "content",
-                "rating",
-                "is_edited",
-                "updated_at",
-            ]
-        )
+            if not content:
+                raise serializers.ValidationError({
+                    "content": (
+                        "Post content cannot be empty."
+                    ),
+                })
 
-        return instance
+            attrs["content"] = content
+
+        if "rating" in attrs:
+            rating = attrs["rating"]
+
+            if rating is not None:
+                target = getattr(
+                    self.instance,
+                    "target",
+                    None,
+                )
+
+                if target is None:
+                    raise serializers.ValidationError({
+                        "rating": (
+                            "A rating can only be added when "
+                            "a song or album is attached."
+                        ),
+                    })
+
+                if target.target_type not in {
+                    CommunityPostTarget.TargetType.SONG,
+                    CommunityPostTarget.TargetType.ALBUM,
+                }:
+                    raise serializers.ValidationError({
+                        "rating": (
+                            "A rating can only be added to "
+                            "a song or album."
+                        ),
+                    })
+
+        return attrs
 
 
 # ============================================================
+# COMMUNITY POST COMMENT — READ
 # ============================================================
-# COMMUNITY POST COMMENT — CREATE INPUT
-# ============================================================
-# ============================================================
-class CommunityPostCommentSerializer(BaseModelSerializer):
+class CommunityPostCommentSerializer(
+    BaseModelSerializer,
+):
     """
     Read-only representation of a community post comment.
     """
+
+    user = CommunityUserSerializer(
+        read_only=True,
+    )
+
+    post_creator_id = serializers.IntegerField(
+        source="post.user_id",
+        read_only=True,
+    )
+
+    is_liked = serializers.SerializerMethodField()
 
     class Meta:
         model = CommunityPostComment
@@ -555,12 +703,15 @@ class CommunityPostCommentSerializer(BaseModelSerializer):
             "id",
             "user",
             "post",
+            "post_creator_id",
             "parent",
             "content",
 
             "views_count",
             "likes_count",
             "replies_count",
+
+            "is_liked",
 
             "status",
             "is_edited",
@@ -570,28 +721,51 @@ class CommunityPostCommentSerializer(BaseModelSerializer):
         ]
 
         read_only_fields = fields
-        
+
+    def get_is_liked(self, obj):
+        """
+        Read the like state annotated by the queryset.
+
+        Anonymous users and querysets without the annotation
+        safely default to False.
+        """
+        request = self.context.get("request")
+
+        if (
+            request is None
+            or not request.user.is_authenticated
+        ):
+            return False
+
+        return bool(
+            getattr(
+                obj,
+                "is_liked",
+                False,
+            )
+        )
+
+
+# ============================================================
+# COMMUNITY POST COMMENT — CREATE INPUT
+# ============================================================
+
 
 class CommunityPostCommentCreateSerializer(
-    serializers.ModelSerializer
+    serializers.ModelSerializer,
 ):
     """
-    Serializer used when a user creates a comment or reply.
+    Validates input for creating a comment or reply.
 
-    Client-controlled fields:
-    - content
-    - post
-    - parent
-
-    Server-controlled fields:
-    - user
-    - views_count
-    - likes_count
-    - replies_count
-    - status
-    - is_edited
-    - timestamps
+    Database creation and comment counters are handled by
+    CommunityPostCommentService.
     """
+
+    content = serializers.CharField(
+        max_length=10000,
+        trim_whitespace=True,
+        allow_blank=False,
+    )
 
     class Meta:
         model = CommunityPostComment
@@ -603,10 +777,6 @@ class CommunityPostCommentCreateSerializer(
         ]
 
     def validate_post(self, value):
-        """
-        Only allow comments on published community posts.
-        """
-
         if value.status != CommunityPost.Status.PUBLISHED:
             raise serializers.ValidationError(
                 "Comments can only be added to published posts."
@@ -615,68 +785,53 @@ class CommunityPostCommentCreateSerializer(
         return value
 
     def validate(self, attrs):
-        """
-        Validate the parent comment when creating a reply.
-        """
-
         post = attrs["post"]
         parent = attrs.get("parent")
 
         if parent is None:
             return attrs
 
-        # ----------------------------------------------------
-        # Parent must belong to the same post
-        # ----------------------------------------------------
-
         if parent.post_id != post.id:
             raise serializers.ValidationError({
                 "parent": (
-                    "The parent comment must belong to the same post."
-                )
+                    "The parent comment must belong "
+                    "to the same post."
+                ),
             })
 
-        # ----------------------------------------------------
-        # Parent must be published
-        # ----------------------------------------------------
-
-        if parent.status != CommunityPostComment.Status.PUBLISHED:
+        if parent.status != (
+            CommunityPostComment.Status.PUBLISHED
+        ):
             raise serializers.ValidationError({
                 "parent": (
-                    "You cannot reply to a hidden or removed comment."
-                )
+                    "You cannot reply to a hidden "
+                    "or removed comment."
+                ),
             })
 
         return attrs
-
-    def create(self, validated_data):
-        """
-        Create the comment using the authenticated user.
-        """
-
-        user = self.context["request"].user
-
-        return CommunityPostComment.objects.create(
-            user=user,
-            **validated_data,
-        )
 
 
 # ============================================================
 # COMMUNITY POST COMMENT — UPDATE INPUT
 # ============================================================
 
+
 class CommunityPostCommentUpdateSerializer(
-    serializers.ModelSerializer
+    serializers.ModelSerializer,
 ):
     """
-    Serializer used when a user edits their comment.
+    Validates input when a user edits their comment.
 
-    Only the comment content can be changed.
-
-    The post, parent, author, counters, moderation state,
-    edit state, and timestamps cannot be modified by the client.
+    The API view/service must also enforce the 15-minute
+    editing window and comment ownership.
     """
+
+    content = serializers.CharField(
+        max_length=10000,
+        trim_whitespace=True,
+        allow_blank=False,
+    )
 
     class Meta:
         model = CommunityPostComment
@@ -685,32 +840,25 @@ class CommunityPostCommentUpdateSerializer(
             "content",
         ]
 
-    def update(self, instance, validated_data):
-        """
-        Update the comment and mark it as edited.
-        """
+    def validate_content(self, value):
+        value = value.strip()
 
-        instance.content = validated_data["content"]
-        instance.is_edited = True
+        if not value:
+            raise serializers.ValidationError(
+                "Comment content cannot be empty."
+            )
 
-        instance.save(
-            update_fields=[
-                "content",
-                "is_edited",
-                "updated_at",
-            ]
-        )
-
-        return instance
+        return value
 
 
-# ============================================================
 # ============================================================
 # COMMUNITY POST REPORT
 # ============================================================
-# ============================================================
 
-class CommunityPostReportSerializer(BaseModelSerializer):
+
+class CommunityPostReportSerializer(
+    BaseModelSerializer,
+):
     """
     Read-only representation of a report submitted against
     a community post.
@@ -732,7 +880,7 @@ class CommunityPostReportSerializer(BaseModelSerializer):
 
 
 class CommunityPostReportCreateSerializer(
-    serializers.ModelSerializer
+    serializers.ModelSerializer,
 ):
     """
     Serializer used when a user reports a community post.
@@ -754,8 +902,9 @@ class CommunityPostReportCreateSerializer(
 # COMMUNITY POST COMMENT REPORT
 # ============================================================
 
+
 class CommunityPostCommentReportSerializer(
-    BaseModelSerializer
+    BaseModelSerializer,
 ):
     """
     Read-only representation of a report submitted against
@@ -778,7 +927,7 @@ class CommunityPostCommentReportSerializer(
 
 
 class CommunityPostCommentReportCreateSerializer(
-    serializers.ModelSerializer
+    serializers.ModelSerializer,
 ):
     """
     Serializer used when a user reports a community post comment.

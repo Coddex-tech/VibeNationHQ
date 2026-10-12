@@ -5,13 +5,10 @@ from music.models import (
     CommunityPostLike,
     EditorialCommentLike,
     CommunityPostCommentLike,
-    EditorialArticle,
-    CommunityPost,
-    EditorialComment,
-    CommunityPostComment,
 )
 
 from .base import BaseModelSerializer
+
 
 # ============================================================
 # EDITORIAL ARTICLE LIKE
@@ -35,33 +32,19 @@ class EditorialArticleLikeSerializer(BaseModelSerializer):
         read_only_fields = fields
 
 
-class EditorialArticleLikeCreateSerializer(serializers.ModelSerializer):
+class EditorialArticleLikeCreateSerializer(
+    serializers.ModelSerializer
+):
     """
     Create a like for an editorial article.
 
-    The authenticated user is assigned server-side.
-    Only published articles can be liked.
+    The authenticated user and target article are assigned
+    server-side. The article comes from the URL.
     """
-
-    article = serializers.PrimaryKeyRelatedField(
-        queryset=EditorialArticle.objects.filter(
-            status=EditorialArticle.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = EditorialArticleLike
-        fields = [
-            "article",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return EditorialArticleLike.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []
 
 
 # ============================================================
@@ -86,33 +69,19 @@ class CommunityPostLikeSerializer(BaseModelSerializer):
         read_only_fields = fields
 
 
-class CommunityPostLikeCreateSerializer(serializers.ModelSerializer):
+class CommunityPostLikeCreateSerializer(
+    serializers.ModelSerializer
+):
     """
     Create a like for a community post.
 
-    The authenticated user is assigned server-side.
-    Only published posts can be liked.
+    The authenticated user and target post are assigned
+    server-side. The post comes from the URL.
     """
-
-    post = serializers.PrimaryKeyRelatedField(
-        queryset=CommunityPost.objects.filter(
-            status=CommunityPost.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = CommunityPostLike
-        fields = [
-            "post",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return CommunityPostLike.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []
 
 
 # ============================================================
@@ -137,42 +106,28 @@ class EditorialCommentLikeSerializer(BaseModelSerializer):
         read_only_fields = fields
 
 
-class EditorialCommentLikeCreateSerializer(serializers.ModelSerializer):
+class EditorialCommentLikeCreateSerializer(
+    serializers.ModelSerializer
+):
     """
     Create a like for an editorial comment or reply.
 
-    The authenticated user is assigned server-side.
-    The comment must belong to an editorial article that
-    is currently published.
+    The authenticated user and target comment are assigned
+    server-side. The comment comes from the URL.
     """
-
-    comment = serializers.PrimaryKeyRelatedField(
-        queryset=EditorialComment.objects.filter(
-            status=EditorialComment.Status.PUBLISHED,
-            article__status=EditorialArticle.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = EditorialCommentLike
-        fields = [
-            "comment",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return EditorialCommentLike.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []
 
 
 # ============================================================
 # COMMUNITY POST COMMENT LIKE
 # ============================================================
 
-class CommunityPostCommentLikeSerializer(BaseModelSerializer):
+class CommunityPostCommentLikeSerializer(
+    BaseModelSerializer
+):
     """
     Read-only representation of a user's like on a
     community post comment or reply.
@@ -196,27 +151,10 @@ class CommunityPostCommentLikeCreateSerializer(
     """
     Create a like for a community post comment or reply.
 
-    The authenticated user is assigned server-side.
-    The comment must belong to a currently published post.
+    The authenticated user and target comment are assigned
+    server-side. The comment comes from the URL.
     """
-
-    comment = serializers.PrimaryKeyRelatedField(
-        queryset=CommunityPostComment.objects.filter(
-            status=CommunityPostComment.Status.PUBLISHED,
-            post__status=CommunityPost.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = CommunityPostCommentLike
-        fields = [
-            "comment",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return CommunityPostCommentLike.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []

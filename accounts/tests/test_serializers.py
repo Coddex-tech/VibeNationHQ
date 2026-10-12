@@ -5,6 +5,7 @@ from django.test import TestCase
 
 from accounts.serializers.registration import RegistrationSerializer
 from accounts.serializers.login import LoginSerializer
+from accounts.serializers.google import GoogleLoginSerializer
 
 
 User = get_user_model()
@@ -322,5 +323,70 @@ class ChangePasswordSerializerTests(TestCase):
 
         self.assertIn(
             "new_password",
+            serializer.errors,
+        )
+
+
+class GoogleLoginSerializerTests(TestCase):
+
+    def test_valid_google_credential(self):
+        serializer = GoogleLoginSerializer(
+            data={
+                "credential": "fake-google-id-token",
+            },
+        )
+
+        self.assertTrue(
+            serializer.is_valid(),
+        )
+
+        self.assertEqual(
+            serializer.validated_data["credential"],
+            "fake-google-id-token",
+        )
+
+    def test_missing_google_credential_is_invalid(self):
+        serializer = GoogleLoginSerializer(
+            data={},
+        )
+
+        self.assertFalse(
+            serializer.is_valid(),
+        )
+
+        self.assertIn(
+            "credential",
+            serializer.errors,
+        )
+
+    def test_blank_google_credential_is_invalid(self):
+        serializer = GoogleLoginSerializer(
+            data={
+                "credential": "",
+            },
+        )
+
+        self.assertFalse(
+            serializer.is_valid(),
+        )
+
+        self.assertIn(
+            "credential",
+            serializer.errors,
+        )
+
+    def test_whitespace_only_google_credential_is_invalid(self):
+        serializer = GoogleLoginSerializer(
+            data={
+                "credential": "   ",
+            },
+        )
+
+        self.assertFalse(
+            serializer.is_valid(),
+        )
+
+        self.assertIn(
+            "credential",
             serializer.errors,
         )

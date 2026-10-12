@@ -15,6 +15,7 @@ from ...services.sessions import (
     InvalidSessionError,
     logout_web_user,
     revoke_session_by_id,
+    revoke_all_other_sessions,
 )
 
 from ...serializers.security import (
@@ -129,6 +130,32 @@ class SessionRevokeView(APIView):
         return Response(
             {
                 "message": "Session revoked.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class SessionRevokeAllOthersView(APIView):
+    authentication_classes = [
+        VibeNationSessionAuthentication,
+    ]
+
+    permission_classes = [
+        IsAuthenticated,
+    ]
+
+    def post(self, request):
+        revoked_count = revoke_all_other_sessions(
+            user=request.user,
+            current_session_id=request.auth.id,
+        )
+
+        return Response(
+            {
+                "message": (
+                    "All other sessions have been revoked."
+                ),
+                "revoked_count": revoked_count,
             },
             status=status.HTTP_200_OK,
         )

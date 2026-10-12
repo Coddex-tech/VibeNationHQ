@@ -254,9 +254,9 @@ class AlbumAdmin(TimeStampedAdmin):
         "created_at",
     )
 
-    autocomplete_fields = (
-        "reviewed_by",
-    )
+    # autocomplete_fields = (
+    #     "reviewed_by",
+    # )
 
     filter_horizontal = (
         "artists",
@@ -881,6 +881,7 @@ class CommunityPostAdmin(TimeStampedAdmin):
             {
                 "fields": (
                     "user",
+                    "slug",
                     "content",
                     "rating",
                 )

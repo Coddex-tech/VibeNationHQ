@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -10,7 +12,13 @@ from rest_framework.test import APITestCase, APIRequestFactory
 from rest_framework.exceptions import AuthenticationFailed
 
 from datetime import  timedelta
-from accounts.models import User
+from accounts.models import (
+    User,
+    PasswordResetToken,
+    EmailChangeToken,
+    PhoneOTP,
+    UserPhone,
+)
 from accounts.services.verification import (
     VERIFICATION_RESEND_COOLDOWN,
     create_email_verification_token,
@@ -22,6 +30,17 @@ from accounts.authentications import (
 from accounts.services.sessions import (
     create_session,
     revoke_session,
+)
+from accounts.services.password import (
+    create_password_reset_token,
+)
+from accounts.services.security import (
+    create_email_change_token,
+    create_phone_otp
+)
+from accounts.services.google import (
+    GoogleAccountError,
+    InvalidGoogleTokenError,
 )
 
 User = get_user_model()
@@ -758,6 +777,346 @@ class LoginAPITests(TestCase):
         self.assertEqual(
             response.status_code,
             200,
+        )
+
+        response_data = response.json()
+
+        self.assertNotIn(
+            "session",
+            response_data,
+        )
+
+        self.assertNotIn(
+            "token",
+            response_data,
+        )
+
+        self.assertNotIn(
+            "secret",
+            response_data,
+        )
+
+
+class GoogleLoginAPITests(TestCase):
+
+    def setUp(self):
+        self.url = reverse(
+            "google-login"
+        )
+
+        self.google_claims = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_valid_google_login_returns_200(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["message"],
+            "Google login successful.",
+        )
+
+        self.assertEqual(
+            response.data["user"]["email"],
+            "google@example.com",
+        )
+
+        mock_login.assert_called_once_with(
+            token="fake-google-id-token",
+        )
+
+    def test_missing_google_credential_returns_400(
+        self,
+    ):
+        response = self.client.post(
+            self.url,
+            {},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "credential",
+            response.data,
+        )
+
+    def test_blank_google_credential_returns_400(
+        self,
+    ):
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "credential",
+            response.data,
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_invalid_google_token_returns_401(
+        self,
+        mock_login,
+    ):
+        mock_login.side_effect = (
+            InvalidGoogleTokenError(
+                "Invalid Google credential."
+            )
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "invalid-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self.assertEqual(
+            response.data["detail"],
+            "Invalid Google credential.",
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_existing_account_requires_linking(
+        self,
+        mock_login,
+    ):
+        mock_login.side_effect = (
+            GoogleAccountError(
+                "A VibeNation account already exists "
+                "with this email. Sign in with your "
+                "existing account to link Google."
+            )
+        )
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "google-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_409_CONFLICT,
+        )
+
+        self.assertEqual(
+            response.data["detail"],
+            (
+                "A VibeNation account already exists "
+                "with this email. Sign in with your "
+                "existing account to link Google."
+            ),
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_successful_google_login_creates_session(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            user.sessions.count(),
+            1,
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_successful_google_login_sets_session_cookie(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertIn(
+            "vibenation_session",
+            response.cookies,
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_successful_google_login_cookie_is_httponly(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        cookie = response.cookies[
+            "vibenation_session"
+        ]
+
+        self.assertTrue(
+            cookie["httponly"]
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_successful_google_login_cookie_is_samesite_lax(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        cookie = response.cookies[
+            "vibenation_session"
+        ]
+
+        self.assertEqual(
+            cookie["samesite"],
+            "Lax",
+        )
+
+    @patch(
+        "accounts.api.views.google.login_with_google"
+    )
+    def test_google_login_does_not_return_session_secret(
+        self,
+        mock_login,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        mock_login.return_value = user
+
+        response = self.client.post(
+            self.url,
+            {
+                "credential": "fake-google-id-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
         )
 
         response_data = response.json()
@@ -1918,4 +2277,1546 @@ class SessionRevokeAPITests(TestCase):
         self.assertNotIn(
             "new_password",
             response.data,
+        )
+
+
+class ForgotPasswordAPITests(TestCase):
+
+    def setUp(self):
+        self.password = "StrongPassword123!"
+
+        self.user = User.objects.create_user(
+            email="forgot@example.com",
+            password=self.password,
+            is_active=True,
+        )
+
+        self.inactive_user = User.objects.create_user(
+            email="inactive-forgot@example.com",
+            password=self.password,
+            is_active=False,
+        )
+
+        self.url = reverse(
+            "password-forgot",
+        )
+
+        cache.clear()
+
+    def test_existing_email_returns_generic_response(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "message": (
+                    "If an account exists for this email, "
+                    "a password reset link has been sent."
+                )
+            },
+        )
+
+    def test_unknown_email_returns_same_generic_response(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": "does-not-exist@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "message": (
+                    "If an account exists for this email, "
+                    "a password reset link has been sent."
+                )
+            },
+        )
+
+    def test_existing_and_unknown_email_have_same_response(self):
+        existing_response = self.client.post(
+            self.url,
+            {
+                "email": self.user.email,
+            },
+            format="json",
+        )
+
+        cache.clear()
+
+        unknown_response = self.client.post(
+            self.url,
+            {
+                "email": "unknown@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            existing_response.status_code,
+            unknown_response.status_code,
+        )
+
+        self.assertEqual(
+            existing_response.data,
+            unknown_response.data,
+        )
+
+    def test_inactive_account_returns_generic_response(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.inactive_user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "message": (
+                    "If an account exists for this email, "
+                    "a password reset link has been sent."
+                )
+            },
+        )
+
+    def test_inactive_account_does_not_create_reset_token(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.inactive_user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertFalse(
+            PasswordResetToken.objects.filter(
+                user=self.inactive_user,
+            ).exists()
+        )
+
+    def test_existing_account_creates_reset_token(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertTrue(
+            PasswordResetToken.objects.filter(
+                user=self.user,
+            ).exists()
+        )
+
+    def test_raw_token_is_not_returned_in_response(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertNotIn(
+            "token",
+            response.data,
+        )
+
+    def test_reset_email_is_sent(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            1,
+        )
+
+        email = mail.outbox[0]
+
+        self.assertEqual(
+            email.to,
+            [self.user.email],
+        )
+
+        self.assertIn(
+            "Reset your VibeNationHQ password",
+            email.subject,
+        )
+
+        self.assertIn(
+            "reset-password?token=",
+            email.body,
+        )
+
+    def test_unknown_email_does_not_send_email(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": "unknown@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            0,
+        )
+
+    def test_inactive_account_does_not_send_email(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": self.inactive_user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            0,
+        )
+
+    def test_invalid_email_returns_400(self):
+        response = self.client.post(
+            self.url,
+            {
+                "email": "not-an-email",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_request_is_throttled(self):
+        for _ in range(5):
+            response = self.client.post(
+                self.url,
+                {
+                    "email": "unknown@example.com",
+                },
+                format="json",
+            )
+
+            self.assertEqual(
+                response.status_code,
+                200,
+            )
+
+        response = self.client.post(
+            self.url,
+            {
+                "email": "unknown@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            429,
+        )
+
+
+class ResetPasswordAPITests(TestCase):
+
+    def setUp(self):
+        self.old_password = (
+            "StrongPassword123!"
+        )
+
+        self.new_password = (
+            "NewStrongPassword456!"
+        )
+
+        self.user = User.objects.create_user(
+            email="reset@example.com",
+            password=self.old_password,
+            is_active=True,
+        )
+
+        self.reset_token, self.raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        self.session, self.raw_secret = (
+            create_session(
+                user=self.user,
+            )
+        )
+
+        self.url = reverse(
+            "password-reset",
+        )
+
+    def test_valid_token_resets_password(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertTrue(
+            self.user.check_password(
+                self.new_password
+            )
+        )
+
+    def test_old_password_no_longer_works(self):
+        self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertFalse(
+            self.user.check_password(
+                self.old_password
+            )
+        )
+
+    def test_token_is_consumed(self):
+        self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.reset_token.refresh_from_db()
+
+        self.assertIsNotNone(
+            self.reset_token.used_at,
+        )
+
+    def test_token_cannot_be_used_twice(self):
+        first_response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            200,
+        )
+
+        second_response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": (
+                    "AnotherPassword789!"
+                ),
+                "new_password_confirm": (
+                    "AnotherPassword789!"
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            400,
+        )
+
+    def test_invalid_token_is_rejected(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": "completely-invalid-token",
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_password_confirmation_is_required(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    "DifferentPassword789!"
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_password_validators_are_applied(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": "123",
+                "new_password_confirm": "123",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_all_sessions_are_revoked(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.session.refresh_from_db()
+
+        self.assertIsNotNone(
+            self.session.revoked_at,
+        )
+
+    def test_no_credential_data_is_returned(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": self.raw_token,
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            response.data,
+            {
+                "message": (
+                    "Password reset successfully."
+                )
+            },
+        )
+
+    def test_empty_token_is_rejected(self):
+        response = self.client.post(
+            self.url,
+            {
+                "token": "",
+                "new_password": self.new_password,
+                "new_password_confirm": (
+                    self.new_password
+                ),
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+
+class ChangeEmailAPITests(TestCase):
+
+    def setUp(self):
+        self.password = (
+            "StrongPassword123!"
+        )
+
+        self.user = User.objects.create_user(
+            email="old-email@example.com",
+            password=self.password,
+            is_active=True,
+        )
+
+        self.session, self.raw_secret = (
+            create_session(
+                user=self.user,
+            )
+        )
+
+        self.change_url = reverse(
+            "email-change",
+        )
+
+        self.verify_url = reverse(
+            "email-change-verify",
+        )
+
+        self.client.cookies[
+            AUTH_COOKIE_NAME
+        ] = self.raw_secret
+
+        cache.clear()
+
+    def test_change_email_requires_authentication(self):
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            401,
+        )
+
+    def test_change_email_requires_current_password(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": "WrongPassword123!",
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+        self.assertFalse(
+            EmailChangeToken.objects.exists()
+        )
+
+    def test_change_email_sends_verification_email(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertEqual(
+            len(mail.outbox),
+            1,
+        )
+
+        self.assertEqual(
+            mail.outbox[0].to,
+            ["new@example.com"],
+        )
+
+    def test_change_email_does_not_change_email_immediately(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.email,
+            "old-email@example.com",
+        )
+
+    def test_change_email_creates_token(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        token = (
+            EmailChangeToken.objects
+            .get(user=self.user)
+        )
+
+        self.assertEqual(
+            token.new_email,
+            "new@example.com",
+        )
+
+    def test_change_email_rejects_same_email(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": self.user.email,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_change_email_rejects_invalid_email(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "not-an-email",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_change_email_rejects_existing_email(self):
+        User.objects.create_user(
+            email="taken@example.com",
+            password=self.password,
+            is_active=True,
+        )
+
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "taken@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_verify_email_change_changes_email(self):
+        _, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email="new@example.com",
+            )
+        )
+
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            self.verify_url,
+            {
+                "token": raw_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.email,
+            "new@example.com",
+        )
+
+    def test_verify_email_change_consumes_token(self):
+        token, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email="new@example.com",
+            )
+        )
+
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            self.verify_url,
+            {
+                "token": raw_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        token.refresh_from_db()
+
+        self.assertIsNotNone(
+            token.used_at,
+        )
+
+    def test_verify_email_change_cannot_be_reused(self):
+        _, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email="new@example.com",
+            )
+        )
+
+        self.client.cookies.clear()
+
+        first_response = self.client.post(
+            self.verify_url,
+            {
+                "token": raw_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            200,
+        )
+
+        second_response = self.client.post(
+            self.verify_url,
+            {
+                "token": raw_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            400,
+        )
+
+    def test_invalid_email_change_token_is_rejected(self):
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            self.verify_url,
+            {
+                "token": "invalid-token",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+    def test_verification_does_not_require_login(self):
+        _, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email="new@example.com",
+            )
+        )
+
+        self.client.cookies.clear()
+
+        response = self.client.post(
+            self.verify_url,
+            {
+                "token": raw_token,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+    def test_raw_token_is_not_returned(self):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": self.password,
+                "new_email": "new@example.com",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertNotIn(
+            "token",
+            response.data,
+        )
+
+
+class PhoneAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="phone@example.com",
+            password="StrongPassword123!",
+        )
+
+        self.client.force_authenticate(
+            user=self.user,
+        )
+
+        self.add_url = reverse(
+            "phone-add",
+        )
+
+        self.add_verify_url = reverse(
+            "phone-add-verify",
+        )
+
+        self.change_url = reverse(
+            "phone-change",
+        )
+
+        self.change_verify_url = reverse(
+            "phone-change-verify",
+        )
+
+    @patch(
+    "accounts.services.phone.send_sms"
+    )
+    def test_phone_add_sends_verification_code(
+        self,
+        mock_send_sms,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            response = self.client.post(
+                self.add_url,
+                {
+                    "phone_number": "+2348012345678",
+                    "country_code": "NG",
+                },
+                format="json",
+            )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertEqual(
+            response.data["detail"],
+            "Verification code sent successfully.",
+        )
+
+        otp = PhoneOTP.objects.get(
+            user=self.user,
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        self.assertEqual(
+            otp.phone_number,
+            "+2348012345678",
+        )
+
+        self.assertTrue(
+            mock_send_sms.called,
+        )
+
+    def test_phone_add_requires_authentication(self):
+        self.client.force_authenticate(
+            user=None,
+        )
+
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_phone_add_rejects_invalid_phone(self):
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "08012345678",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_phone_add_verify_successfully_verifies_phone(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number="+2348012345678",
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        response = self.client.post(
+            self.add_verify_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+                "code": raw_code,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["phone_number"],
+            "+2348012345678",
+        )
+
+        self.assertTrue(
+            response.data["verified"],
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            "+2348012345678",
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+    def test_phone_add_verify_rejects_wrong_code(self):
+        create_phone_otp(
+            user=self.user,
+            phone_number="+2348012345678",
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        response = self.client.post(
+            self.add_verify_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+                "code": "000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            UserPhone.objects.filter(
+                user=self.user,
+            ).exists()
+        )
+
+    def test_phone_add_verify_rejects_non_numeric_code(
+        self,
+    ):
+        response = self.client.post(
+            self.add_verify_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+                "code": "abcdef",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+    def test_phone_change_requires_current_password(
+        self,
+    ):
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": "WrongPassword123!",
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            PhoneOTP.objects.filter(
+                user=self.user,
+                purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+            ).exists()
+        )
+
+    @patch(
+    "accounts.services.phone.send_sms"
+    )
+    def test_phone_change_sends_verification_code(
+        self,
+        mock_send_sms,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            response = self.client.post(
+                self.change_url,
+                {
+                    "current_password": "StrongPassword123!",
+                    "phone_number": "+2348098765432",
+                    "country_code": "NG",
+                },
+                format="json",
+            )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        otp = PhoneOTP.objects.get(
+            user=self.user,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        self.assertEqual(
+            otp.phone_number,
+            "+2348098765432",
+        )
+
+        self.assertTrue(
+            mock_send_sms.called,
+        )
+
+    def test_phone_change_verify_successfully_changes_phone(
+        self,
+    ):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348011111111",
+            verified_at=timezone.now(),
+        )
+
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number="+2348098765432",
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        response = self.client.post(
+            self.change_verify_url,
+            {
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+                "code": raw_code,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["phone_number"],
+            "+2348098765432",
+        )
+
+        self.assertTrue(
+            response.data["verified"],
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            "+2348098765432",
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+    def test_phone_change_verify_rejects_wrong_code(
+        self,
+    ):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348011111111",
+            verified_at=timezone.now(),
+        )
+
+        create_phone_otp(
+            user=self.user,
+            phone_number="+2348098765432",
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        response = self.client.post(
+            self.change_verify_url,
+            {
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+                "code": "000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            "+2348011111111",
+        )
+
+    def test_phone_change_cannot_use_phone_owned_by_another_user(
+        self,
+    ):
+        other_user = User.objects.create_user(
+            email="other@example.com",
+            password="StrongPassword123!",
+        )
+
+        UserPhone.objects.create(
+            user=other_user,
+            phone_number="+2348099999999",
+            verified_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": "StrongPassword123!",
+                "phone_number": "+2348099999999",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertFalse(
+            PhoneOTP.objects.filter(
+                user=self.user,
+                purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+            ).exists()
+        )
+
+    def test_phone_change_verify_requires_authentication(
+        self,
+    ):
+        self.client.force_authenticate(
+            user=None,
+        )
+
+        response = self.client.post(
+            self.change_verify_url,
+            {
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+                "code": "123456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_phone_add_respects_otp_cooldown(self):
+        create_phone_otp(
+            user=self.user,
+            phone_number="+2348012345678",
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "wait",
+            response.data["detail"].lower(),
+        )
+
+
+    def test_phone_add_allows_new_otp_after_cooldown(self):
+        old_otp, _ = create_phone_otp(
+            user=self.user,
+            phone_number="+2348012345678",
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        old_otp.created_at = timezone.now() - timedelta(
+            seconds=61,
+        )
+        old_otp.save(
+            update_fields=["created_at"],
+        )
+
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        old_otp.refresh_from_db()
+
+        self.assertTrue(
+            old_otp.is_used,
+        )
+
+        self.assertEqual(
+            PhoneOTP.objects.filter(
+                user=self.user,
+                purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+            ).count(),
+            2,
+        )
+
+
+    def test_phone_add_rejects_already_verified_phone(self):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348012345678",
+            verified_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "+2348012345678",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "already verified",
+            response.data["detail"].lower(),
+        )
+
+
+    def test_phone_change_verify_rejects_exhausted_otp(self):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348011111111",
+            verified_at=timezone.now(),
+        )
+
+        otp, _ = create_phone_otp(
+            user=self.user,
+            phone_number="+2348098765432",
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        otp.attempts = otp.max_attempts
+        otp.save(
+            update_fields=["attempts"],
+        )
+
+        response = self.client.post(
+            self.change_verify_url,
+            {
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+                "code": "000000",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            "+2348011111111",
+        )
+
+
+    def test_phone_change_rejects_current_verified_phone(
+        self,
+    ):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348011111111",
+            verified_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            self.change_url,
+            {
+                "current_password": "StrongPassword123!",
+                "country_code": "NG",
+                "phone_number": "+2348011111111",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        self.assertIn(
+            "already your verified phone",
+            response.data["detail"].lower(),
+        )
+
+
+    def test_phone_change_verify_requires_valid_otp(self):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number="+2348011111111",
+            verified_at=timezone.now(),
+        )
+
+        response = self.client.post(
+            self.change_verify_url,
+            {
+                "phone_number": "+2348098765432",
+                "country_code": "NG",
+                "code": "123456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            "+2348011111111",
+        )
+
+    def test_phone_add_accepts_national_number_with_country_code(
+        self,
+    ):
+        response = self.client.post(
+            self.add_url,
+            {
+                "phone_number": "08012345678",
+                "country_code": "NG",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        otp = PhoneOTP.objects.get(
+            user=self.user,
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        self.assertEqual(
+            otp.phone_number,
+            "+2348012345678",
         )

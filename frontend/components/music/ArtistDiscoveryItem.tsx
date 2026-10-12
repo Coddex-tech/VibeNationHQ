@@ -1,54 +1,151 @@
+
 'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Check,
+  LoaderCircle,
   UserPlus,
   UserRoundCheck,
 } from 'lucide-react';
 
+import { ApiError } from '@/lib/api';
+import {
+  followArtist,
+  unfollowArtist,
+} from '@/lib/music/CommunityPosts';
 import type { CommunityArtist } from '@/lib/music/CommunityPosts';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 type ArtistDiscoveryItemProps = {
   artist: CommunityArtist;
 };
 
+type ArtistFollowStateChangedEvent = CustomEvent<{
+  artistId: number;
+  following: boolean;
+  followersCount: number;
+}>;
+
+const ARTIST_FOLLOW_STATE_CHANGED_EVENT =
+  'vibenation:artist-follow-state-changed';
+
 export default function ArtistDiscoveryItem({
   artist,
 }: ArtistDiscoveryItemProps) {
-  const [isFollowing, setIsFollowing] =
-    useState(false);
+  const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const [isUpdating, setIsUpdating] =
-    useState(false);
+  const [isFollowing, setIsFollowing] = useState(
+    Boolean(artist.is_following),
+  );
 
-  const artistHref =
-    `/music/artists/${artist.slug}`;
+  const [followersCount, setFollowersCount] = useState(
+    artist.followers_count,
+  );
 
-  const handleFollow = async () => {
-    if (isUpdating) {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [followError, setFollowError] = useState('');
+
+  const followRequestInProgress = useRef(false);
+
+  const artistHref = `/music/artists/${artist.slug}`;
+
+  // Synchronize the button and count when the parent supplies
+  // updated artist data.
+  useEffect(() => {
+    setIsFollowing(Boolean(artist.is_following));
+    setFollowersCount(artist.followers_count);
+  }, [
+    artist.id,
+    artist.is_following,
+    artist.followers_count,
+  ]);
+
+  // Keep other mounted cards for this artist synchronized.
+  useEffect(() => {
+    function handleArtistFollowStateChanged(event: Event) {
+      const followEvent =
+        event as ArtistFollowStateChangedEvent;
+
+      if (followEvent.detail.artistId !== Number(artist.id)) {
+        return;
+      }
+
+      setIsFollowing(followEvent.detail.following);
+      setFollowersCount(followEvent.detail.followersCount);
+      setFollowError('');
+    }
+
+    window.addEventListener(
+      ARTIST_FOLLOW_STATE_CHANGED_EVENT,
+      handleArtistFollowStateChanged,
+    );
+
+    return () => {
+      window.removeEventListener(
+        ARTIST_FOLLOW_STATE_CHANGED_EVENT,
+        handleArtistFollowStateChanged,
+      );
+    };
+  }, [artist.id]);
+
+  async function handleFollowToggle() {
+    if (followRequestInProgress.current || isUpdating) {
       return;
     }
 
+    // Guests must sign in before following an artist.
+    if (!user) {
+      const returnTo = pathname || '/music';
+
+      router.push(
+        `/login?next=${encodeURIComponent(returnTo)}`,
+      );
+
+      return;
+    }
+
+    followRequestInProgress.current = true;
     setIsUpdating(true);
+    setFollowError('');
 
     try {
-      /*
-       * Follow API will be connected here once the
-       * artist-follow endpoint is finalized.
-       *
-       * For now this provides the correct interaction
-       * and optimistic UI behavior.
-       */
-      setIsFollowing(
-        (currentValue) => !currentValue,
+      const response = isFollowing
+        ? await unfollowArtist(Number(artist.id))
+        : await followArtist(Number(artist.id));
+
+      const following = Boolean(response.following);
+      const nextFollowersCount = response.followers_count;
+
+      setIsFollowing(following);
+      setFollowersCount(nextFollowersCount);
+
+      // Update other cards for this artist in the current page.
+      window.dispatchEvent(
+        new CustomEvent(ARTIST_FOLLOW_STATE_CHANGED_EVENT, {
+          detail: {
+            artistId: Number(artist.id),
+            following,
+            followersCount: nextFollowersCount,
+          },
+        }),
       );
+    } catch (error) {
+      setFollowError(getErrorMessage(error));
     } finally {
+      followRequestInProgress.current = false;
       setIsUpdating(false);
     }
-  };
+  }
 
   return (
     <article
@@ -60,11 +157,7 @@ export default function ArtistDiscoveryItem({
         sm:px-6 sm:py-6
       "
     >
-      <div
-        className="
-          flex items-center gap-3
-        "
-      >
+      <div className="flex items-center gap-3">
         {/* Artist identity */}
         <Link
           href={artistHref}
@@ -101,9 +194,7 @@ export default function ArtistDiscoveryItem({
                 dark:text-dark-text-soft
               "
             >
-              {artist.name
-                .charAt(0)
-                .toUpperCase()}
+              {artist.name.charAt(0).toUpperCase()}
             </div>
           )}
         </Link>
@@ -139,7 +230,10 @@ export default function ArtistDiscoveryItem({
                 aria-label="Verified artist"
                 title="Verified artist"
               >
-                <Check className="h-3 w-3" strokeWidth={2.5} />
+                <Check
+                  className="h-3 w-3"
+                  strokeWidth={2.5}
+                />
               </span>
             )}
           </div>
@@ -151,19 +245,23 @@ export default function ArtistDiscoveryItem({
               dark:text-dark-text-muted
             "
           >
-            {formatFollowerCount(
-              artist.followers_count,
-            )}{' '}
-            followers
+            {formatFollowerCount(followersCount)} followers
           </p>
         </div>
 
         {/* Follow */}
         <button
           type="button"
-          onClick={handleFollow}
+          onClick={() => {
+            void handleFollowToggle();
+          }}
           disabled={isUpdating}
           aria-pressed={isFollowing}
+          aria-label={
+            isFollowing
+              ? `Unfollow ${artist.name}`
+              : `Follow ${artist.name}`
+          }
           className={`
             inline-flex
             min-h-9
@@ -208,26 +306,51 @@ export default function ArtistDiscoveryItem({
             }
           `}
         >
-          {isFollowing ? (
+          {isUpdating ? (
             <>
-              <UserRoundCheck className="h-3.5 w-3.5" />
+              <LoaderCircle
+                className="h-3.5 w-3.5 animate-spin"
+                aria-hidden="true"
+              />
+              Please wait
+            </>
+          ) : isFollowing ? (
+            <>
+              <UserRoundCheck
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              />
               Following
             </>
           ) : (
             <>
-              <UserPlus className="h-3.5 w-3.5" />
+              <UserPlus
+                className="h-3.5 w-3.5"
+                aria-hidden="true"
+              />
               Follow
             </>
           )}
         </button>
       </div>
+
+      {followError && (
+        <p
+          role="alert"
+          className="
+            mt-3 text-right text-xs
+            text-red-600
+            dark:text-red-400
+          "
+        >
+          {followError}
+        </p>
+      )}
     </article>
   );
 }
 
-function formatFollowerCount(
-  value: number,
-): string {
+function formatFollowerCount(value: number): string {
   if (value < 1_000) {
     return String(value);
   }
@@ -241,4 +364,16 @@ function formatFollowerCount(
   return `${(value / 1_000_000).toFixed(
     value >= 10_000_000 ? 0 : 1,
   )}M`;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message || 'The request could not be completed.';
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return 'Something went wrong. Please try again.';
 }

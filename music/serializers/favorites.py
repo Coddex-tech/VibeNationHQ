@@ -3,8 +3,6 @@ from rest_framework import serializers
 from music.models import (
     SongFavorite,
     AlbumFavorite,
-    Song,
-    Album,
 )
 
 from .base import BaseModelSerializer
@@ -43,29 +41,13 @@ class SongFavoriteCreateSerializer(serializers.ModelSerializer):
     """
     Create a favorite/save relationship for a song.
 
-    The authenticated user is assigned server-side.
-    The song must be published.
+    The authenticated user and song are assigned server-side.
+    The song comes from the URL, not the request body.
     """
-
-    song = serializers.PrimaryKeyRelatedField(
-        queryset=Song.objects.filter(
-            status=Song.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = SongFavorite
-        fields = [
-            "song",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return SongFavorite.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []
 
 
 # ============================================================
@@ -97,26 +79,10 @@ class AlbumFavoriteCreateSerializer(serializers.ModelSerializer):
     """
     Create a favorite/save relationship for an album.
 
-    The authenticated user is assigned server-side.
-    The album must be published.
+    The authenticated user and album are assigned server-side.
+    The album comes from the URL, not the request body.
     """
-
-    album = serializers.PrimaryKeyRelatedField(
-        queryset=Album.objects.filter(
-            status=Album.Status.PUBLISHED,
-        )
-    )
 
     class Meta:
         model = AlbumFavorite
-        fields = [
-            "album",
-        ]
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return AlbumFavorite.objects.create(
-            user=request.user,
-            **validated_data,
-        )
+        fields = []

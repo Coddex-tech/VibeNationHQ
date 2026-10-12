@@ -60,6 +60,60 @@ class Genre(TimeStampedModel):
 
 
 # ============================================================
+# USER GENRE PREFERENCE
+# ============================================================
+
+class UserGenrePreference(TimeStampedModel):
+    """
+    Explicit music taste preference selected by a VibeNationHQ
+    user.
+
+    This stores the genres a user tells VibeNationHQ they enjoy.
+
+    Explicit preferences are only one signal for the music feed.
+    Behavioral signals such as views, previews, favorites,
+    ratings, and follows remain separate and can be combined
+    later by the feed ranking system.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="music_genre_preferences",
+    )
+
+    genre = models.ForeignKey(
+        Genre,
+        on_delete=models.CASCADE,
+        related_name="user_preferences",
+    )
+
+    class Meta:
+        ordering = ["genre__name"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "genre"],
+                name="unique_user_genre_preference",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=["user", "genre"],
+            ),
+            models.Index(
+                fields=["genre", "user"],
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} prefers {self.genre}"
+        )
+
+
+# ============================================================
 # ARTIST
 # ============================================================
 
@@ -603,6 +657,187 @@ class Song(TimeStampedModel):
 
 
 # ============================================================
+# MUSIC PROVIDER IDENTITY
+# ============================================================
+
+class MusicProviderIdentity(TimeStampedModel):
+    """
+    Maps a canonical VibeNation music entity to an external
+    music provider identity.
+
+    A single Artist, Album, or Song may have identities from
+    multiple providers such as iTunes and MusicBrainz.
+
+    Example:
+
+        provider = "itunes"
+        entity_type = "song"
+        provider_id = "123456789"
+        song = <canonical Song>
+
+    Provider-specific metadata such as preview URLs,
+    artwork URLs, and external metadata live here rather
+    than directly on the canonical music models.
+    """
+
+    class Provider(models.TextChoices):
+        ITUNES = "itunes", "iTunes"
+        MUSICBRAINZ = "musicbrainz", "MusicBrainz"
+        SPOTIFY = "spotify", "Spotify"
+        OTHER = "other", "Other"
+
+    class EntityType(models.TextChoices):
+        SONG = "song", "Song"
+        ALBUM = "album", "Album"
+        ARTIST = "artist", "Artist"
+
+    provider = models.CharField(
+        max_length=30,
+        choices=Provider.choices,
+    )
+
+    entity_type = models.CharField(
+        max_length=20,
+        choices=EntityType.choices,
+    )
+
+    provider_id = models.CharField(
+        max_length=255,
+    )
+
+    # --------------------------------------------------------
+    # Canonical VibeNation entity
+    # --------------------------------------------------------
+
+    song = models.ForeignKey(
+        "Song",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="provider_identities",
+    )
+
+    album = models.ForeignKey(
+        "Album",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="provider_identities",
+    )
+
+    artist = models.ForeignKey(
+        "Artist",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="provider_identities",
+    )
+
+    # --------------------------------------------------------
+    # Provider-specific metadata
+    # --------------------------------------------------------
+
+    artwork_url = models.URLField(
+        blank=True,
+    )
+
+    preview_url = models.URLField(
+        blank=True,
+    )
+
+    spotify_url = models.URLField(
+        blank=True,
+    )
+
+    apple_music_url = models.URLField(
+        blank=True,
+    )
+
+    youtube_url = models.URLField(
+        blank=True,
+    )
+
+    audiomack_url = models.URLField(
+        blank=True,
+    )
+
+    boomplay_url = models.URLField(
+        blank=True,
+    )
+
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["provider", "entity_type", "provider_id"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "provider",
+                    "entity_type",
+                    "provider_id",
+                ],
+                name="unique_music_provider_identity",
+            ),
+
+            models.CheckConstraint(
+                condition=(
+                    (
+                        Q(
+                            entity_type="song",
+                            song__isnull=False,
+                            album__isnull=True,
+                            artist__isnull=True,
+                        )
+                    )
+                    | (
+                        Q(
+                            entity_type="album",
+                            song__isnull=True,
+                            album__isnull=False,
+                            artist__isnull=True,
+                        )
+                    )
+                    | (
+                        Q(
+                            entity_type="artist",
+                            song__isnull=True,
+                            album__isnull=True,
+                            artist__isnull=False,
+                        )
+                    )
+                ),
+                name="provider_identity_matches_entity",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "provider",
+                    "entity_type",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "provider",
+                    "provider_id",
+                ],
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.provider} "
+            f"{self.entity_type} "
+            f"{self.provider_id}"
+        )
+
+
+# ============================================================
 # ALBUM TRACK
 # ============================================================
 
@@ -958,7 +1193,12 @@ class CommunityPost(TimeStampedModel):
     )
 
     content = models.TextField(
-        max_length=5000,
+        max_length=10000,
+    )
+
+    slug = models.SlugField(
+        max_length=255,
+        unique=True,
     )
 
     rating = models.DecimalField(
@@ -1348,6 +1588,41 @@ class CommunityPostLike(TimeStampedModel):
         return f"{self.user} liked post {self.post_id}"
 
 
+class CommunityPostFavorite(TimeStampedModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="favorite_community_posts",
+    )
+    post = models.ForeignKey(
+        CommunityPost,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "post"],
+                name="unique_user_community_post_favorite",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["post", "-created_at"],
+            ),
+            models.Index(
+                fields=["user", "-created_at"],
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user_id} favorited "
+            f"community post {self.post_id}"
+        )
+
+
 # ============================================================
 # EDITORIAL COMMENT
 # ============================================================
@@ -1500,7 +1775,7 @@ class CommunityPostComment(TimeStampedModel):
     )
 
     content = models.TextField(
-        max_length=3000,
+        max_length=10000,
     )
 
     # --------------------------------------------------------
@@ -2086,4 +2361,328 @@ class UserFollow(TimeStampedModel):
         return (
             f"{self.follower} follows "
             f"{self.following}"
+        )
+
+
+# ============================================================
+# MUSIC FEED INTERACTION
+# ============================================================
+
+class MusicFeedInteraction(TimeStampedModel):
+    """
+    Behavioral interaction history used by the VibeNationHQ
+    music feed and recommendation system.
+
+    This model records meaningful user behavior so feed
+    ranking can learn from what users actually interact with.
+
+    IMPORTANT:
+
+    Existing engagement models remain the source of truth for
+    persistent relationships and state.
+
+    Examples:
+
+        CommunityPostLike
+        SongFavorite
+        ArtistFollow
+        SongRating
+        AlbumRating
+
+    MusicFeedInteraction is behavioral history, not a
+    replacement for those models.
+
+    An interaction may target exactly ONE supported content
+    entity:
+
+        - Song
+        - Album
+        - Artist
+        - CommunityPost
+        - EditorialArticle
+
+    Repeated interactions are allowed because behavior is
+    time-dependent. For example, a user may view or play the
+    same song multiple times.
+
+    The optional idempotency_key allows the API to safely
+    ignore duplicate submissions caused by network retries.
+    """
+
+    class InteractionType(models.TextChoices):
+        # ----------------------------------------------------
+        # Song interactions
+        # ----------------------------------------------------
+
+        VIEW_SONG = "view_song", "Viewed song"
+        PLAY_PREVIEW = "play_preview", "Played song preview"
+        FAVORITE_SONG = "favorite_song", "Favorited song"
+        RATE_SONG = "rate_song", "Rated song"
+
+        # ----------------------------------------------------
+        # Album interactions
+        # ----------------------------------------------------
+
+        VIEW_ALBUM = "view_album", "Viewed album"
+        FAVORITE_ALBUM = "favorite_album", "Favorited album"
+        RATE_ALBUM = "rate_album", "Rated album"
+
+        # ----------------------------------------------------
+        # Artist interactions
+        # ----------------------------------------------------
+
+        VIEW_ARTIST = "view_artist", "Viewed artist"
+        FOLLOW_ARTIST = "follow_artist", "Followed artist"
+
+        # ----------------------------------------------------
+        # Community interactions
+        # ----------------------------------------------------
+
+        VIEW_COMMUNITY_POST = (
+            "view_community_post",
+            "Viewed community post",
+        )
+
+        LIKE_COMMUNITY_POST = (
+            "like_community_post",
+            "Liked community post",
+        )
+
+        COMMENT_COMMUNITY_POST = (
+            "comment_community_post",
+            "Commented on community post",
+        )
+
+        # ----------------------------------------------------
+        # Editorial interactions
+        # ----------------------------------------------------
+
+        VIEW_EDITORIAL = (
+            "view_editorial",
+            "Viewed editorial article",
+        )
+
+        LIKE_EDITORIAL = (
+            "like_editorial",
+            "Liked editorial article",
+        )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="music_feed_interactions",
+    )
+
+    interaction_type = models.CharField(
+        max_length=40,
+        choices=InteractionType.choices,
+    )
+
+    # --------------------------------------------------------
+    # Interaction targets
+    # --------------------------------------------------------
+
+    song = models.ForeignKey(
+        Song,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="feed_interactions",
+    )
+
+    album = models.ForeignKey(
+        Album,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="feed_interactions",
+    )
+
+    artist = models.ForeignKey(
+        Artist,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="feed_interactions",
+    )
+
+    community_post = models.ForeignKey(
+        CommunityPost,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="feed_interactions",
+    )
+
+    editorial_article = models.ForeignKey(
+        EditorialArticle,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="feed_interactions",
+    )
+
+    # --------------------------------------------------------
+    # Request idempotency
+    # --------------------------------------------------------
+
+    idempotency_key = models.UUIDField(
+        blank=True,
+        null=True,
+        unique=True,
+        editable=False,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        indexes = [
+            # Main user history query.
+            models.Index(
+                fields=[
+                    "user",
+                    "-created_at",
+                ],
+            ),
+
+            # User history by interaction type.
+            models.Index(
+                fields=[
+                    "user",
+                    "interaction_type",
+                    "-created_at",
+                ],
+            ),
+
+            # Target-specific behavioral history.
+            models.Index(
+                fields=[
+                    "song",
+                    "-created_at",
+                ],
+            ),
+
+            models.Index(
+                fields=[
+                    "album",
+                    "-created_at",
+                ],
+            ),
+
+            models.Index(
+                fields=[
+                    "artist",
+                    "-created_at",
+                ],
+            ),
+
+            models.Index(
+                fields=[
+                    "community_post",
+                    "-created_at",
+                ],
+            ),
+
+            models.Index(
+                fields=[
+                    "editorial_article",
+                    "-created_at",
+                ],
+            ),
+        ]
+
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    # Song interaction.
+                    (
+                        Q(
+                            interaction_type__in=[
+                                "view_song",
+                                "play_preview",
+                                "favorite_song",
+                                "rate_song",
+                            ],
+                            song__isnull=False,
+                            album__isnull=True,
+                            artist__isnull=True,
+                            community_post__isnull=True,
+                            editorial_article__isnull=True,
+                        )
+                    )
+
+                    # Album interaction.
+                    |
+                    (
+                        Q(
+                            interaction_type__in=[
+                                "view_album",
+                                "favorite_album",
+                                "rate_album",
+                            ],
+                            song__isnull=True,
+                            album__isnull=False,
+                            artist__isnull=True,
+                            community_post__isnull=True,
+                            editorial_article__isnull=True,
+                        )
+                    )
+
+                    # Artist interaction.
+                    |
+                    (
+                        Q(
+                            interaction_type__in=[
+                                "view_artist",
+                                "follow_artist",
+                            ],
+                            song__isnull=True,
+                            album__isnull=True,
+                            artist__isnull=False,
+                            community_post__isnull=True,
+                            editorial_article__isnull=True,
+                        )
+                    )
+
+                    # Community post interaction.
+                    |
+                    (
+                        Q(
+                            interaction_type__in=[
+                                "view_community_post",
+                                "like_community_post",
+                                "comment_community_post",
+                            ],
+                            song__isnull=True,
+                            album__isnull=True,
+                            artist__isnull=True,
+                            community_post__isnull=False,
+                            editorial_article__isnull=True,
+                        )
+                    )
+
+                    # Editorial interaction.
+                    |
+                    (
+                        Q(
+                            interaction_type__in=[
+                                "view_editorial",
+                                "like_editorial",
+                            ],
+                            song__isnull=True,
+                            album__isnull=True,
+                            artist__isnull=True,
+                            community_post__isnull=True,
+                            editorial_article__isnull=False,
+                        )
+                    )
+                ),
+                name="valid_music_feed_interaction",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user} - "
+            f"{self.interaction_type}"
         )

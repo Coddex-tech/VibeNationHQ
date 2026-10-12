@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.sitemaps",
     'rest_framework',
+    "corsheaders",
 
     # Two-Factor Authentication
     'django_otp',
@@ -110,6 +111,7 @@ INSTALLED_APPS = [
     'django_cleanup.apps.CleanupConfig',
 
     # Local Apps
+    'accounts',
     'news',
     'music',
     'ads',
@@ -121,6 +123,7 @@ MIDDLEWARE = [
     'vibenation.middleware.IpBlockMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -259,16 +262,33 @@ X_FRAME_OPTIONS = 'SAMEORIGIN'
 SITE_ID = 1
 
 REST_FRAMEWORK = {
+    # VibeNationHQ web-session authentication.
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentications.VibeNationSessionAuthentication',
+    ],
+
     # Allows read-only access to anonymous visitors, full access to authenticated users
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticatedOrReadOnly',
     ],
+
     # Keeps your JSON output tight and clean without whitespace overhead
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer', # Keeps that clean test screen active
     ],
+
+    "DEFAULT_THROTTLE_RATES": {
+        "resend_verification": "5/minute",
+        "password_reset_request": "5/minute",
+    },
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+CORS_ALLOW_CREDENTIALS = True
 
 UNFOLD = {
     "SITE_TITLE": "VibeNation Admin",
@@ -286,7 +306,7 @@ UNFOLD = {
     "TABS": [],
     "SHOW_HISTORY": False,
     "SHOW_VIEW_ON_SITE": False,
-    
+
     "COLORS": {
         "primary": {
             "50": "250 245 255",
@@ -315,16 +335,21 @@ UNFOLD = {
                         "title": "Ad Zones",
                         "link": reverse_lazy("admin:ads_adzone_changelist"),
                         "icon": "ads_click",
-                        "permission": lambda request: request.user.has_perm("ads.view_adzone")
+                        "permission": lambda request: request.user.has_perm(
+                            "ads.view_adzone"
+                        ),
                     },
                     {
                         "title": "Ads",
                         "link": reverse_lazy("admin:ads_advertisement_changelist"),
                         "icon": "campaign",
-                        "permission": lambda request: request.user.has_perm("ads.view_advertisement")
+                        "permission": lambda request: request.user.has_perm(
+                            "ads.view_advertisement"
+                        ),
                     },
                 ],
             },
+
             {
                 "title": "News Management",
                 "separator": True,
@@ -333,22 +358,29 @@ UNFOLD = {
                         "title": "Articles",
                         "link": reverse_lazy("admin:news_news_changelist"),
                         "icon": "article",
-                        "permission": lambda r: r.user.has_perm("news.view_news")
+                        "permission": lambda request: request.user.has_perm(
+                            "news.view_news"
+                        ),
                     },
                     {
                         "title": "Categories",
                         "link": reverse_lazy("admin:news_category_changelist"),
                         "icon": "category",
-                        "permission": lambda r: r.user.has_perm("news.view_category")
+                        "permission": lambda request: request.user.has_perm(
+                            "news.view_category"
+                        ),
                     },
                     {
                         "title": "News Comments",
                         "link": reverse_lazy("admin:news_newscomment_changelist"),
                         "icon": "comment",
-                        "permission": lambda r: r.user.has_perm("news.view_newscomment")
+                        "permission": lambda request: request.user.has_perm(
+                            "news.view_newscomment"
+                        ),
                     },
                 ],
             },
+
             {
                 "title": "Music Management",
                 "separator": True,
@@ -629,57 +661,101 @@ UNFOLD = {
                     },
                 ],
             },
+
+            # ====================================================
+            # USERS & ADMINISTRATION
+            # ====================================================
+
             {
                 "title": "Users & Administration",
                 "separator": True,
                 "items": [
                     {
-                        "title": "Users", 
-                        "link": reverse_lazy("admin:auth_user_changelist"), 
-                        "icon": "person", 
-                        "permission": lambda request: request.user.has_perm("auth.view_user")
+                        "title": "Users",
+                        "link": reverse_lazy(
+                            "admin:accounts_user_changelist"
+                        ),
+                        "icon": "person",
+                        "permission": lambda request: request.user.has_perm(
+                            "accounts.view_user"
+                        ),
                     },
                     {
-                        "title": "Groups", 
-                        "link": reverse_lazy("admin:auth_group_changelist"), 
-                        "icon": "groups", 
-                        "permission": lambda request: request.user.has_perm("auth.view_group")
+                        "title": "Groups",
+                        "link": reverse_lazy(
+                            "admin:auth_group_changelist"
+                        ),
+                        "icon": "groups",
+                        "permission": lambda request: request.user.has_perm(
+                            "auth.view_group"
+                        ),
                     },
                     {
-                        "title": "Log Entries", 
-                        "link": reverse_lazy("admin:admin_logentry_changelist"), 
-                        "icon": "history", 
-                        "permission": lambda request: request.user.is_superuser
+                        "title": "Log Entries",
+                        "link": reverse_lazy(
+                            "admin:admin_logentry_changelist"
+                        ),
+                        "icon": "history",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                 ],
             },
+
+            # ====================================================
+            # SECURITY
+            # ====================================================
+
             {
                 "title": "Security",
                 "separator": True,
                 "items": [
                     {
-                        "title": "Static Devices", 
-                        "link": reverse_lazy("admin:otp_static_staticdevice_changelist"), 
-                        "icon": "no_encryption", 
-                        "permission": lambda request: request.user.is_superuser
+                        "title": "Static Devices",
+                        "link": reverse_lazy(
+                            "admin:otp_static_staticdevice_changelist"
+                        ),
+                        "icon": "no_encryption",
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "TOTP Devices",
-                        "link": reverse_lazy("admin:otp_totp_totpdevice_changelist"),
+                        "link": reverse_lazy(
+                            "admin:otp_totp_totpdevice_changelist"
+                        ),
                         "icon": "phonelink_lock",
-                        "permission": lambda request: request.user.is_superuser
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
                         "title": "Blocked IP Address",
-                        "link": reverse_lazy("admin:news_ipblock_changelist"),
+                        "link": reverse_lazy(
+                            "admin:news_ipblock_changelist"
+                        ),
                         "icon": "shield",
-                        "permission": lambda request: request.user.is_superuser
-                    }
+                        "permission": lambda request: request.user.is_superuser,
+                    },
                 ],
             },
         ],
     },
 }
+VIBENATION_FRONTEND_URL = (
+    "http://localhost:3000"
+)
+# Email
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+DEFAULT_FROM_EMAIL = (
+    "VibeNationHQ <no-reply@vibenationhq.com>"
+)
+
+# ACCOUNT SYSTEM
+AUTH_USER_MODEL = "accounts.User"
+
+# GOOGLE AUTHENTICATION
+GOOGLE_CLIENT_ID = env(
+    "GOOGLE_CLIENT_ID",
+    default="",
+)
 
 # ========== NEWS SECTION ==============
 NEWS_INITIAL_COMMENTS = 2

@@ -3,6 +3,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from types import SimpleNamespace
 
+from django.contrib.auth import get_user_model
+
 from music.models import (
     Artist,
     Genre,
@@ -20,7 +22,9 @@ from music.models import (
     EditorialArticle,
     CommunityPost,
     EditorialComment,
-    CommunityPostComment
+    CommunityPostComment,
+    SongRating,
+    AlbumRating,
 )
 
 from music.serializers.catalog import (
@@ -43,7 +47,7 @@ from music.serializers.ratings import (
     AlbumRatingUpdateSerializer,
 )
 
-from music.serializers.favourites import (
+from music.serializers.favorites import (
     SongFavoriteSerializer,
     SongFavoriteCreateSerializer,
     AlbumFavoriteSerializer,
@@ -84,22 +88,15 @@ from music.serializers.community import (
     CommunityPostReportSerializer,
     CommunityPostCommentReport,
     CommunityPostCommentReportSerializer,
-    CommunityPostReport
-)
-
-from django.contrib.auth import get_user_model
-
-from music.models import (
-    SongRating,
-    AlbumRating,
+    CommunityPostReport,
 )
 
 
 User = get_user_model()
 
 
-
 class CommunitySerializerTests(TestCase):
+
     def setUp(self):
         self.user = User.objects.create_user(
             username="communityuser",
@@ -300,7 +297,7 @@ class CommunitySerializerTests(TestCase):
         self.assertEqual(data["user"], self.user.id)
         self.assertIn("target", data)
 
-    def test_community_post_create_serializer_assigns_user_server_side(self):
+    def test_community_post_create_serializer_accepts_content(self):
         serializer = CommunityPostCreateSerializer(
             data={
                 "content": "A new community post.",
@@ -309,11 +306,6 @@ class CommunitySerializerTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
-        post = serializer.save()
-
-        self.assertEqual(post.user, self.user)
-        self.assertEqual(post.content, "A new community post.")
 
     def test_community_post_create_serializer_accepts_rating(self):
         serializer = CommunityPostCreateSerializer(
@@ -325,10 +317,6 @@ class CommunitySerializerTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
-        post = serializer.save()
-
-        self.assertEqual(float(post.rating), 4.5)
 
     def test_community_post_create_serializer_rejects_invalid_rating(self):
         serializer = CommunityPostCreateSerializer(
@@ -472,11 +460,6 @@ class CommunitySerializerTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-        comment = serializer.save()
-
-        self.assertEqual(comment.user, self.user)
-        self.assertEqual(comment.post, self.post)
-
     def test_comment_create_serializer_rejects_hidden_post(self):
         hidden_post = CommunityPost.objects.create(
             user=self.user,
@@ -523,11 +506,6 @@ class CommunitySerializerTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-        reply = serializer.save()
-
-        self.assertEqual(reply.parent, self.comment)
-        self.assertEqual(reply.post, self.post)
-
     def test_comment_create_serializer_rejects_parent_from_another_post(self):
         another_post = CommunityPost.objects.create(
             user=self.other_user,
@@ -572,7 +550,7 @@ class CommunitySerializerTests(TestCase):
 
         self.assertFalse(serializer.is_valid())
 
-    def test_comment_create_serializer_assigns_user_server_side(self):
+    def test_comment_create_serializer_accepts_content_and_post(self):
         serializer = CommunityPostCommentCreateSerializer(
             data={
                 "post": self.post.id,
@@ -582,10 +560,6 @@ class CommunitySerializerTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
-        comment = serializer.save()
-
-        self.assertEqual(comment.user, self.user)
 
     def test_comment_update_serializer_updates_content(self):
         serializer = CommunityPostCommentUpdateSerializer(
@@ -625,14 +599,13 @@ class CommunitySerializerTests(TestCase):
         self.assertEqual(serializer.data["user"], self.user.id)
         self.assertEqual(serializer.data["post"], self.post.id)
 
-    def test_community_post_report_create_assigns_user_server_side(self):
+    def test_community_post_report_create_serializer_accepts_data(self):
         reason = CommunityPostReport._meta.get_field(
             "reason"
         ).choices[0][0]
 
         serializer = CommunityPostReportCreateSerializer(
             data={
-                "post": self.post.id,
                 "reason": reason,
                 "details": "Something is wrong with this post.",
             },
@@ -640,11 +613,6 @@ class CommunitySerializerTests(TestCase):
         )
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
-
-        report = serializer.save()
-
-        self.assertEqual(report.user, self.user)
-        self.assertEqual(report.post, self.post)
 
     def test_community_post_comment_report_serializer(self):
         reason = CommunityPostCommentReport._meta.get_field(
@@ -664,14 +632,13 @@ class CommunitySerializerTests(TestCase):
         self.assertEqual(serializer.data["user"], self.user.id)
         self.assertEqual(serializer.data["comment"], self.comment.id)
 
-    def test_community_post_comment_report_create_assigns_user_server_side(self):
+    def test_community_post_comment_report_create_serializer_accepts_data(self):
         reason = CommunityPostCommentReport._meta.get_field(
             "reason"
         ).choices[0][0]
 
         serializer = CommunityPostCommentReportCreateSerializer(
             data={
-                "comment": self.comment.id,
                 "reason": reason,
                 "details": "This comment should be reviewed.",
             },
@@ -680,14 +647,13 @@ class CommunitySerializerTests(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
-        report = serializer.save()
 
-        self.assertEqual(report.user, self.user)
-        self.assertEqual(report.comment, self.comment)
-        
 class FollowSerializerTests(TestCase):
     """
     Tests for artist-follow and user-follow serializers.
+
+    Target assignment and authenticated-user assignment are handled
+    by the follow service, not by the serializer.
     """
 
     @classmethod
@@ -714,7 +680,7 @@ class FollowSerializerTests(TestCase):
             is_active=False,
         )
 
-    def test_artist_follow_create_accepts_active_artist(self):
+    def test_artist_follow_create_accepts_artist(self):
         serializer = ArtistFollowCreateSerializer(
             data={
                 "artist": self.artist.pk,
@@ -726,30 +692,32 @@ class FollowSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_artist_follow_create_rejects_inactive_artist(self):
+    def test_artist_follow_create_accepts_inactive_artist_for_serializer(self):
+        """
+        Artist activity is a business rule handled by ArtistFollowService.
+        """
+
         serializer = ArtistFollowCreateSerializer(
             data={
                 "artist": self.inactive_artist.pk,
             }
         )
 
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("artist", serializer.errors)
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
 
-    def test_artist_follow_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
+    def test_artist_follow_create_does_not_assign_user(self):
+        """
+        The serializer validates the request payload only.
+        The service assigns the authenticated user.
+        """
 
         serializer = ArtistFollowCreateSerializer(
             data={
                 "artist": self.artist.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -757,16 +725,9 @@ class FollowSerializerTests(TestCase):
             serializer.errors,
         )
 
-        follow = serializer.save()
-
-        self.assertEqual(
-            follow.user,
-            self.user,
-        )
-
-        self.assertEqual(
-            follow.artist,
-            self.artist,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
     def test_artist_follow_read_serializer(self):
@@ -794,20 +755,11 @@ class FollowSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_user_follow_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_user_follow_create_does_not_assign_authenticated_user(self):
         serializer = UserFollowCreateSerializer(
             data={
                 "following": self.other_user.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -815,16 +767,9 @@ class FollowSerializerTests(TestCase):
             serializer.errors,
         )
 
-        follow = serializer.save()
-
-        self.assertEqual(
-            follow.follower,
-            self.user,
-        )
-
-        self.assertEqual(
-            follow.following,
-            self.other_user,
+        self.assertNotIn(
+            "follower",
+            serializer.validated_data,
         )
 
     def test_user_follow_read_serializer(self):
@@ -852,17 +797,19 @@ class FollowSerializerTests(TestCase):
             }
         )
 
-        # The database constraint is responsible for the final
-        # protection against self-following. The serializer itself
-        # currently does not implement that business rule.
+        # Self-follow protection is handled by the service/database layer.
         self.assertTrue(
             serializer.is_valid(),
             serializer.errors,
         )
 
+
 class FavoriteSerializerTests(TestCase):
     """
     Tests for song and album favorite serializers.
+
+    Target publication checks and authenticated-user assignment
+    are handled by FavoriteService.
     """
 
     @classmethod
@@ -911,7 +858,7 @@ class FavoriteSerializerTests(TestCase):
             status=Album.Status.DRAFT,
         )
 
-    def test_song_favorite_create_accepts_published_song(self):
+    def test_song_favorite_create_accepts_song(self):
         serializer = SongFavoriteCreateSerializer(
             data={
                 "song": self.song.pk,
@@ -923,17 +870,23 @@ class FavoriteSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_song_favorite_create_rejects_unpublished_song(self):
+    def test_song_favorite_create_accepts_unpublished_song_for_serializer(self):
+        """
+        Publication status is enforced by FavoriteService.
+        """
+
         serializer = SongFavoriteCreateSerializer(
             data={
                 "song": self.unpublished_song.pk,
             }
         )
 
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("song", serializer.errors)
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
 
-    def test_album_favorite_create_accepts_published_album(self):
+    def test_album_favorite_create_accepts_album(self):
         serializer = AlbumFavoriteCreateSerializer(
             data={
                 "album": self.album.pk,
@@ -945,30 +898,27 @@ class FavoriteSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_album_favorite_create_rejects_unpublished_album(self):
+    def test_album_favorite_create_accepts_unpublished_album_for_serializer(self):
+        """
+        Publication status is enforced by FavoriteService.
+        """
+
         serializer = AlbumFavoriteCreateSerializer(
             data={
                 "album": self.unpublished_album.pk,
             }
         )
 
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("album", serializer.errors)
+        self.assertTrue(
+            serializer.is_valid(),
+            serializer.errors,
+        )
 
-    def test_song_favorite_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_song_favorite_create_does_not_assign_authenticated_user(self):
         serializer = SongFavoriteCreateSerializer(
             data={
                 "song": self.song.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -976,32 +926,16 @@ class FavoriteSerializerTests(TestCase):
             serializer.errors,
         )
 
-        favorite = serializer.save()
-
-        self.assertEqual(
-            favorite.user,
-            self.user,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
-        self.assertEqual(
-            favorite.song,
-            self.song,
-        )
-
-    def test_album_favorite_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_album_favorite_create_does_not_assign_authenticated_user(self):
         serializer = AlbumFavoriteCreateSerializer(
             data={
                 "album": self.album.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1009,16 +943,9 @@ class FavoriteSerializerTests(TestCase):
             serializer.errors,
         )
 
-        favorite = serializer.save()
-
-        self.assertEqual(
-            favorite.user,
-            self.user,
-        )
-
-        self.assertEqual(
-            favorite.album,
-            self.album,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
     def test_song_favorite_read_serializer(self):
@@ -1047,9 +974,13 @@ class FavoriteSerializerTests(TestCase):
             "Favorite Album",
         )
 
+
 class RatingSerializerTests(TestCase):
     """
     Tests for song and album rating serializers.
+
+    Rating value validation belongs to the serializer.
+    User/song/album assignment belongs to the rating service.
     """
 
     @classmethod
@@ -1088,7 +1019,6 @@ class RatingSerializerTests(TestCase):
     def test_song_rating_create_accepts_valid_rating(self):
         serializer = SongRatingCreateSerializer(
             data={
-                "song": self.song.pk,
                 "rating": "4.5",
             }
         )
@@ -1101,7 +1031,6 @@ class RatingSerializerTests(TestCase):
     def test_song_rating_create_rejects_invalid_increment(self):
         serializer = SongRatingCreateSerializer(
             data={
-                "song": self.song.pk,
                 "rating": "4.3",
             }
         )
@@ -1112,7 +1041,6 @@ class RatingSerializerTests(TestCase):
     def test_song_rating_create_rejects_rating_above_five(self):
         serializer = SongRatingCreateSerializer(
             data={
-                "song": self.song.pk,
                 "rating": "5.5",
             }
         )
@@ -1123,7 +1051,6 @@ class RatingSerializerTests(TestCase):
     def test_song_rating_create_rejects_rating_below_half(self):
         serializer = SongRatingCreateSerializer(
             data={
-                "song": self.song.pk,
                 "rating": "0.4",
             }
         )
@@ -1146,7 +1073,6 @@ class RatingSerializerTests(TestCase):
     def test_album_rating_create_accepts_valid_rating(self):
         serializer = AlbumRatingCreateSerializer(
             data={
-                "album": self.album.pk,
                 "rating": "5.0",
             }
         )
@@ -1168,21 +1094,11 @@ class RatingSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_song_rating_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_song_rating_create_does_not_assign_authenticated_user(self):
         serializer = SongRatingCreateSerializer(
             data={
-                "song": self.song.pk,
                 "rating": "4.5",
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1190,38 +1106,16 @@ class RatingSerializerTests(TestCase):
             serializer.errors,
         )
 
-        rating = serializer.save()
-
-        self.assertEqual(
-            rating.user,
-            self.user,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
-        self.assertEqual(
-            rating.song,
-            self.song,
-        )
-
-        self.assertEqual(
-            rating.rating,
-            4.5,
-        )
-
-    def test_album_rating_create_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_album_rating_create_does_not_assign_authenticated_user(self):
         serializer = AlbumRatingCreateSerializer(
             data={
-                "album": self.album.pk,
                 "rating": "5.0",
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1229,21 +1123,9 @@ class RatingSerializerTests(TestCase):
             serializer.errors,
         )
 
-        rating = serializer.save()
-
-        self.assertEqual(
-            rating.user,
-            self.user,
-        )
-
-        self.assertEqual(
-            rating.album,
-            self.album,
-        )
-
-        self.assertEqual(
-            rating.rating,
-            5.0,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
     def test_song_rating_read_serializer(self):
@@ -1257,7 +1139,7 @@ class RatingSerializerTests(TestCase):
 
         self.assertEqual(
             serializer.data["rating"],
-            "4.5",
+            "4.50",
         )
 
         self.assertEqual(
@@ -1276,7 +1158,7 @@ class RatingSerializerTests(TestCase):
 
         self.assertEqual(
             serializer.data["rating"],
-            "5.0",
+            "5.00",
         )
 
         self.assertEqual(
@@ -1481,6 +1363,9 @@ class CatalogSerializerTests(TestCase):
 class LikeSerializerTests(TestCase):
     """
     Tests for all VibeNation like serializers.
+
+    Target assignment and authenticated-user assignment are handled
+    by LikeService/API logic, not by the serializer.
     """
 
     @classmethod
@@ -1561,20 +1446,11 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_editorial_article_like_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_editorial_article_like_does_not_assign_authenticated_user(self):
         serializer = EditorialArticleLikeCreateSerializer(
             data={
                 "article": self.article.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1582,10 +1458,10 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-        like = serializer.save()
-
-        self.assertEqual(like.user, self.user)
-        self.assertEqual(like.article, self.article)
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
+        )
 
     def test_editorial_article_like_read_serializer(self):
         like = EditorialArticleLike.objects.create(
@@ -1616,20 +1492,11 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_community_post_like_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_community_post_like_does_not_assign_authenticated_user(self):
         serializer = CommunityPostLikeCreateSerializer(
             data={
                 "post": self.post.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1637,10 +1504,10 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-        like = serializer.save()
-
-        self.assertEqual(like.user, self.user)
-        self.assertEqual(like.post, self.post)
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
+        )
 
     def test_community_post_like_read_serializer(self):
         like = CommunityPostLike.objects.create(
@@ -1671,20 +1538,11 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_editorial_comment_like_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_editorial_comment_like_does_not_assign_authenticated_user(self):
         serializer = EditorialCommentLikeCreateSerializer(
             data={
                 "comment": self.editorial_comment.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1692,12 +1550,9 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-        like = serializer.save()
-
-        self.assertEqual(like.user, self.user)
-        self.assertEqual(
-            like.comment,
-            self.editorial_comment,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
     def test_editorial_comment_like_read_serializer(self):
@@ -1729,20 +1584,11 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-    def test_community_comment_like_assigns_authenticated_user(self):
-        request = type(
-            "Request",
-            (),
-            {"user": self.user},
-        )()
-
+    def test_community_comment_like_does_not_assign_authenticated_user(self):
         serializer = CommunityPostCommentLikeCreateSerializer(
             data={
                 "comment": self.community_comment.pk,
-            },
-            context={
-                "request": request,
-            },
+            }
         )
 
         self.assertTrue(
@@ -1750,12 +1596,9 @@ class LikeSerializerTests(TestCase):
             serializer.errors,
         )
 
-        like = serializer.save()
-
-        self.assertEqual(like.user, self.user)
-        self.assertEqual(
-            like.comment,
-            self.community_comment,
+        self.assertNotIn(
+            "user",
+            serializer.validated_data,
         )
 
     def test_community_comment_like_read_serializer(self):

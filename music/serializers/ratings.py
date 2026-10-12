@@ -3,8 +3,6 @@ from rest_framework import serializers
 from music.models import (
     SongRating,
     AlbumRating,
-    Song,
-    Album,
 )
 
 from .base import (
@@ -31,6 +29,12 @@ class SongRatingSerializer(BaseModelSerializer):
         read_only=True,
     )
 
+    rating = serializers.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        read_only=True,
+    )
+
     class Meta:
         model = SongRating
         fields = [
@@ -48,38 +52,23 @@ class SongRatingCreateSerializer(serializers.ModelSerializer):
     """
     Create a rating for a song.
 
-    The authenticated user is assigned server-side.
+    The authenticated user and song are assigned server-side.
     The song must be published.
     """
 
-    song = serializers.PrimaryKeyRelatedField(
-        queryset=Song.objects.filter(
-            status=Song.Status.PUBLISHED,
-        )
-    )
-
     rating = serializers.DecimalField(
-        max_digits=2,
-        decimal_places=1,
+        max_digits=3,
+        decimal_places=2,
+        validators=[
+            validate_half_star_rating,
+        ],
     )
 
     class Meta:
         model = SongRating
         fields = [
-            "song",
             "rating",
         ]
-
-    def validate_rating(self, value):
-        return validate_half_star_rating(value)
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return SongRating.objects.create(
-            user=request.user,
-            **validated_data,
-        )
 
 
 class SongRatingUpdateSerializer(serializers.ModelSerializer):
@@ -90,8 +79,11 @@ class SongRatingUpdateSerializer(serializers.ModelSerializer):
     """
 
     rating = serializers.DecimalField(
-        max_digits=2,
-        decimal_places=1,
+        max_digits=3,
+        decimal_places=2,
+        validators=[
+            validate_half_star_rating,
+        ],
     )
 
     class Meta:
@@ -99,9 +91,6 @@ class SongRatingUpdateSerializer(serializers.ModelSerializer):
         fields = [
             "rating",
         ]
-
-    def validate_rating(self, value):
-        return validate_half_star_rating(value)
 
 
 # ============================================================
@@ -114,6 +103,12 @@ class AlbumRatingSerializer(BaseModelSerializer):
     """
 
     album = AlbumCardSerializer(
+        read_only=True,
+    )
+
+    rating = serializers.DecimalField(
+        max_digits=3,
+        decimal_places=2,
         read_only=True,
     )
 
@@ -134,38 +129,23 @@ class AlbumRatingCreateSerializer(serializers.ModelSerializer):
     """
     Create a rating for an album.
 
-    The authenticated user is assigned server-side.
+    The authenticated user and album are assigned server-side.
     The album must be published.
     """
 
-    album = serializers.PrimaryKeyRelatedField(
-        queryset=Album.objects.filter(
-            status=Album.Status.PUBLISHED,
-        )
-    )
-
     rating = serializers.DecimalField(
-        max_digits=2,
-        decimal_places=1,
+        max_digits=3,
+        decimal_places=2,
+        validators=[
+            validate_half_star_rating,
+        ],
     )
 
     class Meta:
         model = AlbumRating
         fields = [
-            "album",
             "rating",
         ]
-
-    def validate_rating(self, value):
-        return validate_half_star_rating(value)
-
-    def create(self, validated_data):
-        request = self.context["request"]
-
-        return AlbumRating.objects.create(
-            user=request.user,
-            **validated_data,
-        )
 
 
 class AlbumRatingUpdateSerializer(serializers.ModelSerializer):
@@ -176,8 +156,11 @@ class AlbumRatingUpdateSerializer(serializers.ModelSerializer):
     """
 
     rating = serializers.DecimalField(
-        max_digits=2,
-        decimal_places=1,
+        max_digits=3,
+        decimal_places=2,
+        validators=[
+            validate_half_star_rating,
+        ],
     )
 
     class Meta:
@@ -185,6 +168,3 @@ class AlbumRatingUpdateSerializer(serializers.ModelSerializer):
         fields = [
             "rating",
         ]
-
-    def validate_rating(self, value):
-        return validate_half_star_rating(value)

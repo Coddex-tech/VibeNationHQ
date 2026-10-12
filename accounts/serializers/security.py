@@ -29,3 +29,22 @@ class UserSessionSerializer(serializers.ModelSerializer):
             current_session is not None
             and obj.id == current_session.id
         )
+
+
+class ChangeEmailSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+    )
+
+    new_email = serializers.EmailField()
+
+    def validate_new_email(self, value):
+        return value.strip().lower()
+
+
+class VerifyEmailChangeSerializer(serializers.Serializer):
+    token = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+    )

@@ -4,12 +4,19 @@ from django.utils import timezone
 from django.core import mail
 from django.http import HttpResponse
 
+from unittest.mock import patch
+
 from datetime import timedelta
 
 from accounts.services.registration import register_user
 from accounts.models import (
     EmailVerificationToken,
     User,
+    PasswordResetToken,
+    EmailChangeToken,
+    PhoneOTP,
+    UserPhone,
+    UserIdentity,
 )
 from accounts.services.authentication import (
     AUTH_COOKIE_NAME,
@@ -32,6 +39,47 @@ from accounts.services.sessions import (
     create_session,
     get_valid_session,
     revoke_session,
+)
+from accounts.services.password import (
+    PASSWORD_RESET_TOKEN_LIFETIME,
+    consume_password_reset_token,
+    create_password_reset_token,
+    verify_password_reset_token,
+)
+from accounts.services.security import (
+    EmailChangeError,
+    confirm_email_change,
+    create_email_change_token,
+    request_email_change,
+    verify_email_change_token,
+    PHONE_OTP_LIFETIME,
+    PHONE_OTP_MAX_ATTEMPTS,
+    PHONE_OTP_RESEND_COOLDOWN,
+    create_phone_otp,
+    generate_phone_otp_code,
+    verify_phone_otp,
+)
+from accounts.services.sms import (
+    ConsoleSMSProvider,
+    SMSDeliveryError,
+    get_sms_provider,
+    send_sms,
+)
+from accounts.services.phone import (
+    PhoneServiceError,
+    get_verified_phone,
+    normalize_phone_number,
+    request_phone_change,
+    request_phone_verification,
+    verify_phone,
+    verify_phone_change,
+)
+from accounts.services.google import (
+    GoogleAccountError,
+    InvalidGoogleTokenError,
+    resolve_google_user,
+    verify_google_id_token,
+    login_with_google,
 )
 
 User = get_user_model()
@@ -930,7 +978,11 @@ class WebAuthenticationServiceTests(TestCase):
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from accounts.models import UserSession
+from accounts.models import (
+    UserSession,
+    PhoneOTP,
+    User,
+)
 from accounts.services.password import change_password
 
 
@@ -1020,4 +1072,2123 @@ class ChangePasswordServiceTests(TestCase):
 
         self.assertIsNone(
             self.other_user_session.revoked_at,
+        )
+
+
+class PasswordResetTokenServiceTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="reset@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+    def test_create_password_reset_token(self):
+        token, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        self.assertIsNotNone(
+            token,
+        )
+
+        self.assertTrue(
+            raw_token,
+        )
+
+        self.assertNotEqual(
+            token.token_hash,
+            raw_token,
+        )
+
+        self.assertEqual(
+            token.user,
+            self.user,
+        )
+
+    def test_created_token_expires_in_one_hour(self):
+        before = timezone.now()
+
+        token, _ = create_password_reset_token(
+            user=self.user,
+        )
+
+        after = timezone.now()
+
+        expected_min = (
+            before
+            + PASSWORD_RESET_TOKEN_LIFETIME
+        )
+
+        expected_max = (
+            after
+            + PASSWORD_RESET_TOKEN_LIFETIME
+        )
+
+        self.assertGreaterEqual(
+            token.expires_at,
+            expected_min,
+        )
+
+        self.assertLessEqual(
+            token.expires_at,
+            expected_max,
+        )
+
+    def test_created_token_can_be_verified(self):
+        _, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        token = verify_password_reset_token(
+            raw_token=raw_token,
+        )
+
+        self.assertEqual(
+            token.user,
+            self.user,
+        )
+
+        self.assertTrue(
+            token.is_valid,
+        )
+
+    def test_invalid_token_is_rejected(self):
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            verify_password_reset_token(
+                raw_token="invalid-token",
+            )
+
+    def test_expired_token_is_rejected(self):
+        token, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        token.expires_at = (
+            timezone.now()
+            - timedelta(seconds=1)
+        )
+
+        token.save(
+            update_fields=["expires_at"],
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            verify_password_reset_token(
+                raw_token=raw_token,
+            )
+
+    def test_used_token_is_rejected(self):
+        token, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        token.used_at = timezone.now()
+
+        token.save(
+            update_fields=["used_at"],
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            verify_password_reset_token(
+                raw_token=raw_token,
+            )
+
+    def test_new_token_invalidates_previous_active_token(
+        self,
+    ):
+        _, first_raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        first_token = PasswordResetToken.objects.get(
+            user=self.user,
+            token_hash=(
+                PasswordResetToken.hash_token(
+                    first_raw_token,
+                )
+            ),
+        )
+
+        _, second_raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        first_token.refresh_from_db()
+
+        self.assertIsNotNone(
+            first_token.used_at,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            verify_password_reset_token(
+                raw_token=first_raw_token,
+            )
+
+        second_token = (
+            verify_password_reset_token(
+                raw_token=second_raw_token,
+            )
+        )
+
+        self.assertTrue(
+            second_token.is_valid,
+        )
+
+    def test_consume_token_marks_it_used(self):
+        _, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        token = consume_password_reset_token(
+            raw_token=raw_token,
+        )
+
+        self.assertIsNotNone(
+            token.used_at,
+        )
+
+        self.assertFalse(
+            token.is_valid,
+        )
+
+    def test_consumed_token_cannot_be_consumed_again(
+        self,
+    ):
+        _, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        consume_password_reset_token(
+            raw_token=raw_token,
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            consume_password_reset_token(
+                raw_token=raw_token,
+            )
+
+    def test_inactive_user_token_is_rejected(self):
+        self.user.is_active = False
+
+        self.user.save(
+            update_fields=["is_active"],
+        )
+
+        _, raw_token = (
+            create_password_reset_token(
+                user=self.user,
+            )
+        )
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Invalid or expired password reset token.",
+        ):
+            verify_password_reset_token(
+                raw_token=raw_token,
+            )
+
+
+class EmailChangeServiceTests(TestCase):
+
+    def setUp(self):
+        self.password = (
+            "StrongPassword123!"
+        )
+
+        self.user = User.objects.create_user(
+            email="old@example.com",
+            password=self.password,
+            is_active=True,
+        )
+
+        self.new_email = (
+            "new@example.com"
+        )
+
+    def test_create_email_change_token(self):
+        token, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        self.assertIsNotNone(token)
+
+        self.assertTrue(
+            raw_token
+        )
+
+        self.assertNotEqual(
+            token.token_hash,
+            raw_token,
+        )
+
+        self.assertEqual(
+            token.new_email,
+            self.new_email,
+        )
+
+    def test_token_hash_is_stored_not_raw_token(self):
+        token, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        self.assertNotEqual(
+            token.token_hash,
+            raw_token,
+        )
+
+        self.assertEqual(
+            token.token_hash,
+            EmailChangeToken.hash_token(
+                raw_token
+            ),
+        )
+
+    def test_request_email_change_requires_current_password(
+        self,
+    ):
+        with self.assertRaises(
+            EmailChangeError
+        ):
+            request_email_change(
+                user=self.user,
+                current_password="WrongPassword123!",
+                new_email=self.new_email,
+            )
+
+        self.assertFalse(
+            EmailChangeToken.objects.exists()
+        )
+
+    def test_request_email_change_sends_token(
+        self,
+    ):
+        token = request_email_change(
+            user=self.user,
+            current_password=self.password,
+            new_email=self.new_email,
+        )
+
+        self.assertIsNotNone(token)
+
+        self.assertEqual(
+            token.new_email,
+            self.new_email,
+        )
+
+    def test_same_email_is_rejected(self):
+        with self.assertRaises(
+            EmailChangeError
+        ):
+            request_email_change(
+                user=self.user,
+                current_password=self.password,
+                new_email=self.user.email,
+            )
+
+    def test_existing_email_is_rejected(self):
+        User.objects.create_user(
+            email="taken@example.com",
+            password=self.password,
+            is_active=True,
+        )
+
+        with self.assertRaises(
+            EmailChangeError
+        ):
+            request_email_change(
+                user=self.user,
+                current_password=self.password,
+                new_email="taken@example.com",
+            )
+
+    def test_previous_active_token_is_invalidated(
+        self,
+    ):
+        first_token, _ = (
+            create_email_change_token(
+                user=self.user,
+                new_email="first@example.com",
+            )
+        )
+
+        second_token, _ = (
+            create_email_change_token(
+                user=self.user,
+                new_email="second@example.com",
+            )
+        )
+
+        first_token.refresh_from_db()
+
+        self.assertIsNotNone(
+            first_token.used_at
+        )
+
+        self.assertIsNone(
+            second_token.used_at
+        )
+
+    def test_verify_token_returns_valid_token(
+        self,
+    ):
+        token, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        verified = verify_email_change_token(
+            raw_token=raw_token,
+        )
+
+        self.assertEqual(
+            verified,
+            token,
+        )
+
+    def test_confirm_email_change_updates_email(
+        self,
+    ):
+        _, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        confirm_email_change(
+            raw_token=raw_token,
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.email,
+            self.new_email,
+        )
+
+    def test_confirm_email_change_consumes_token(
+        self,
+    ):
+        token, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        confirm_email_change(
+            raw_token=raw_token,
+        )
+
+        token.refresh_from_db()
+
+        self.assertIsNotNone(
+            token.used_at
+        )
+
+    def test_consumed_token_cannot_be_used_again(
+        self,
+    ):
+        _, raw_token = (
+            create_email_change_token(
+                user=self.user,
+                new_email=self.new_email,
+            )
+        )
+
+        confirm_email_change(
+            raw_token=raw_token,
+        )
+
+        with self.assertRaises(
+            EmailChangeError
+        ):
+            confirm_email_change(
+                raw_token=raw_token,
+            )
+
+
+class PhoneOTPServiceTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="otp-service@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+        self.phone_number = (
+            "+2348012345678"
+        )
+
+        self.purpose = (
+            PhoneOTP.Purpose.VERIFY_PHONE
+        )
+
+    def test_generated_code_has_six_digits(self):
+        code = generate_phone_otp_code()
+
+        self.assertEqual(
+            len(code),
+            6,
+        )
+
+        self.assertTrue(
+            code.isdigit(),
+        )
+
+    def test_create_phone_otp(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        self.assertIsNotNone(
+            otp,
+        )
+
+        self.assertEqual(
+            len(raw_code),
+            6,
+        )
+
+        self.assertTrue(
+            raw_code.isdigit(),
+        )
+
+    def test_raw_code_is_not_stored(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        self.assertNotEqual(
+            otp.code_hash,
+            raw_code,
+        )
+
+        self.assertEqual(
+            otp.code_hash,
+            PhoneOTP.hash_code(
+                raw_code,
+            ),
+        )
+
+    def test_otp_expires_in_ten_minutes(self):
+        before = timezone.now()
+
+        otp, _ = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        after = timezone.now()
+
+        expected_minimum = (
+            before
+            + PHONE_OTP_LIFETIME
+        )
+
+        expected_maximum = (
+            after
+            + PHONE_OTP_LIFETIME
+        )
+
+        self.assertGreaterEqual(
+            otp.expires_at,
+            expected_minimum,
+        )
+
+        self.assertLessEqual(
+            otp.expires_at,
+            expected_maximum,
+        )
+
+    def test_max_attempts_are_configured(self):
+        otp, _ = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        self.assertEqual(
+            otp.max_attempts,
+            PHONE_OTP_MAX_ATTEMPTS,
+        )
+
+    def test_correct_code_verifies(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        verified = verify_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+            code=raw_code,
+        )
+
+        self.assertEqual(
+            verified,
+            otp,
+        )
+
+        otp.refresh_from_db()
+
+        self.assertIsNotNone(
+            otp.used_at,
+        )
+
+    def test_wrong_code_is_rejected(self):
+        create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+                code="000000",
+            )
+
+    def test_wrong_code_increments_attempts(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        with self.assertRaises(ValueError):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+                code="000000",
+            )
+
+        otp.refresh_from_db()
+
+        self.assertEqual(
+            otp.attempts,
+            1,
+        )
+
+    def test_fifth_wrong_attempt_exhausts_otp(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        for _ in range(5):
+            with self.assertRaises(ValueError):
+                verify_phone_otp(
+                    user=self.user,
+                    phone_number=self.phone_number,
+                    purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+                    code="000000",
+                )
+
+        otp.refresh_from_db()
+
+        self.assertTrue(
+            otp.attempts_exhausted,
+        )
+
+    def test_exhausted_otp_cannot_be_verified(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        otp.attempts = (
+            PHONE_OTP_MAX_ATTEMPTS
+        )
+
+        otp.save(
+            update_fields=["attempts"],
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+                code=raw_code,
+            )
+
+    def test_expired_otp_cannot_be_verified(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        otp.expires_at = (
+            timezone.now()
+            - timedelta(seconds=1)
+        )
+
+        otp.save(
+            update_fields=["expires_at"],
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+                code=raw_code,
+            )
+
+    def test_used_otp_cannot_be_verified(self):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        verify_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+            code=raw_code,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+                code=raw_code,
+            )
+
+    def test_new_otp_invalidates_previous_otp(
+        self,
+    ):
+        first_otp, first_code = (
+            create_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+            )
+        )
+
+        # Move past the resend cooldown.
+        first_otp.created_at = (
+            timezone.now()
+            - PHONE_OTP_RESEND_COOLDOWN
+            - timedelta(seconds=1)
+        )
+
+        first_otp.save(
+            update_fields=["created_at"],
+        )
+
+        second_otp, second_code = (
+            create_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+            )
+        )
+
+        first_otp.refresh_from_db()
+
+        self.assertIsNotNone(
+            first_otp.used_at,
+        )
+
+        self.assertIsNone(
+            second_otp.used_at,
+        )
+
+    def test_resend_within_cooldown_is_rejected(
+        self,
+    ):
+        create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            create_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=self.purpose,
+            )
+
+    def test_different_phone_does_not_verify(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number="+2348099999999",
+                purpose=self.purpose,
+                code=raw_code,
+            )
+
+    def test_different_purpose_does_not_verify(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=self.purpose,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_otp(
+                user=self.user,
+                phone_number=self.phone_number,
+                purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+                code=raw_code,
+            )
+
+class SMSDeliveryError(Exception):
+    """
+    Raised when an SMS cannot be delivered.
+    """
+    pass
+
+
+class SMSProvider:
+    """
+    Provider-neutral SMS interface.
+
+    Concrete SMS providers will implement this interface later.
+    """
+
+    def send(
+        self,
+        *,
+        phone_number,
+        message,
+    ):
+        raise NotImplementedError
+
+
+class ConsoleSMSProvider(SMSProvider):
+    """
+    Development SMS provider.
+
+    Prints SMS messages to the console instead of sending
+    real SMS messages.
+    """
+
+    def send(
+        self,
+        *,
+        phone_number,
+        message,
+    ):
+        print(
+            "\n"
+            "========== VibeNationHQ SMS ==========\n"
+            f"To: {phone_number}\n"
+            f"Message: {message}\n"
+            "=======================================\n"
+        )
+
+        return True
+
+
+def get_sms_provider():
+    """
+    Return the configured SMS provider.
+    """
+
+    return ConsoleSMSProvider()
+
+
+def send_sms(
+    *,
+    phone_number,
+    message,
+):
+    """
+    Send an SMS using the configured provider.
+    """
+
+    provider = get_sms_provider()
+
+    try:
+        return provider.send(
+            phone_number=phone_number,
+            message=message,
+        )
+    except Exception as exc:
+        raise SMSDeliveryError(
+            "Unable to send SMS."
+        ) from exc
+
+class SMSServicesTests(TestCase):
+
+    def test_console_sms_provider_sends_successfully(self):
+        provider = ConsoleSMSProvider()
+
+        result = provider.send(
+            phone_number="+2348012345678",
+            message="Your VibeNationHQ verification code is 123456.",
+        )
+
+        self.assertTrue(
+            result,
+        )
+
+    def test_get_sms_provider_returns_provider(self):
+        provider = get_sms_provider()
+
+        self.assertIsInstance(
+            provider,
+            ConsoleSMSProvider,
+        )
+
+    def test_send_sms_returns_success(self):
+        result = send_sms(
+            phone_number="+2348012345678",
+            message="Your VibeNationHQ verification code is 123456.",
+        )
+
+        self.assertTrue(
+            result,
+        )
+
+
+class PhoneServiceTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="phone-service@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+        self.phone_number = (
+            "+2348012345678"
+        )
+
+        self.purpose = (
+            PhoneOTP.Purpose.VERIFY_PHONE
+        )
+
+    def test_normalize_phone_number(self):
+        result = normalize_phone_number(
+            "  +2348012345678  ",
+        )
+
+        self.assertEqual(
+            result,
+            "+2348012345678",
+        )
+
+    def test_normalize_nigerian_national_number(self):
+        result = normalize_phone_number(
+            "08012345678",
+            "NG",
+        )
+
+        self.assertEqual(
+            result,
+            "+2348012345678",
+        )
+
+
+    def test_normalize_uk_national_number(self):
+        result = normalize_phone_number(
+            "07911 123456",
+            "GB",
+        )
+
+        self.assertEqual(
+            result,
+            "+447911123456",
+        )
+
+
+    def test_national_number_without_country_code_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "08012345678",
+            )
+
+
+    def test_full_international_number_does_not_require_country_code(
+        self,
+    ):
+        result = normalize_phone_number(
+            "+234 801 234 5678",
+        )
+
+        self.assertEqual(
+            result,
+            "+2348012345678",
+        )
+
+
+    def test_invalid_region_code_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "08012345678",
+                "XX",
+            )
+
+    def test_normalize_nigerian_phone_number(self):
+        result = normalize_phone_number(
+            "+234 801 234 5678",
+        )
+
+        self.assertEqual(
+            result,
+            "+2348012345678",
+        )
+
+    def test_normalize_uk_phone_number(self):
+        result = normalize_phone_number(
+            "+44 7911 123456",
+        )
+
+        self.assertEqual(
+            result,
+            "+447911123456",
+        )
+
+    def test_normalize_us_phone_number(self):
+        result = normalize_phone_number(
+            "+1 415 555 2671",
+        )
+
+        self.assertEqual(
+            result,
+            "+14155552671",
+        )
+
+    def test_normalize_indian_phone_number(self):
+        result = normalize_phone_number(
+            "+91 98765 43210",
+        )
+
+        self.assertEqual(
+            result,
+            "+919876543210",
+        )
+
+    def test_different_formatting_produces_same_number(
+        self,
+    ):
+        first = normalize_phone_number(
+            "+234 801 234 5678",
+        )
+
+        second = normalize_phone_number(
+            "+234-801-234-5678",
+        )
+
+        third = normalize_phone_number(
+            "+2348012345678",
+        )
+
+        self.assertEqual(
+            first,
+            second,
+        )
+
+        self.assertEqual(
+            second,
+            third,
+        )
+
+        self.assertEqual(
+            first,
+            "+2348012345678",
+        )
+
+    def test_invalid_phone_number_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "+234123",
+            )
+
+    def test_impossible_phone_number_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "+234999999999999999",
+            )
+
+    def test_invalid_us_phone_number_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "+10000000000",
+            )
+
+    def test_invalid_country_code_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "+999123456789",
+            )
+
+    def test_phone_number_without_plus_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "2348012345678",
+            )
+
+    def test_non_string_phone_number_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                None,
+            )
+
+    
+
+    def test_empty_phone_number_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number("")
+
+    def test_phone_without_country_code_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            normalize_phone_number(
+                "08012345678",
+            )
+
+    def test_get_verified_phone_returns_none_when_missing(self):
+        result = get_verified_phone(
+            user=self.user,
+        )
+
+        self.assertIsNone(
+            result,
+        )
+
+    def test_request_phone_verification_creates_otp(
+        self,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            otp = request_phone_verification(
+                user=self.user,
+                phone_number=self.phone_number,
+            )
+
+        self.assertIsNotNone(
+            otp,
+        )
+
+        self.assertEqual(
+            otp.user,
+            self.user,
+        )
+
+        self.assertEqual(
+            otp.phone_number,
+            self.phone_number,
+        )
+
+        self.assertEqual(
+            otp.purpose,
+            PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+    @patch(
+        "accounts.services.phone.send_sms"
+    )
+    def test_request_phone_verification_sends_sms(
+        self,
+        mock_send_sms,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            request_phone_verification(
+                user=self.user,
+                phone_number=self.phone_number,
+            )
+
+        mock_send_sms.assert_called_once()
+
+        call_kwargs = (
+            mock_send_sms.call_args.kwargs
+        )
+
+        self.assertEqual(
+            call_kwargs["phone_number"],
+            self.phone_number,
+        )
+
+        self.assertIn(
+            "verification code",
+            call_kwargs["message"],
+        )
+
+    def test_request_verified_phone_is_rejected(
+        self,
+    ):
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number=self.phone_number,
+            verified_at=timezone.now(),
+        )
+
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            request_phone_verification(
+                user=self.user,
+                phone_number=self.phone_number,
+            )
+
+    def test_phone_owned_by_another_user_is_rejected(
+        self,
+    ):
+        other_user = User.objects.create_user(
+            email="other-phone@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+        UserPhone.objects.create(
+            user=other_user,
+            phone_number=self.phone_number,
+            verified_at=timezone.now(),
+        )
+
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            request_phone_verification(
+                user=self.user,
+                phone_number=self.phone_number,
+            )
+
+    def test_verify_phone_creates_verified_phone(
+    self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.phone_number,
+            purpose=PhoneOTP.Purpose.VERIFY_PHONE,
+        )
+
+        phone = verify_phone(
+            user=self.user,
+            phone_number=self.phone_number,
+            code=raw_code,
+        )
+
+        self.assertIsNotNone(
+            phone,
+        )
+
+        self.assertEqual(
+            phone.user,
+            self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            self.phone_number,
+        )
+
+        self.assertIsNotNone(
+            phone.verified_at,
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+    def test_wrong_phone_code_does_not_create_phone(
+        self,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            request_phone_verification(
+                user=self.user,
+                phone_number=self.phone_number,
+            )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone(
+                user=self.user,
+                phone_number=self.phone_number,
+                code="000000",
+            )
+
+        self.assertFalse(
+            UserPhone.objects.filter(
+                user=self.user,
+            ).exists(),
+        )
+
+    def test_verified_phone_is_returned(
+        self,
+    ):
+        phone = UserPhone.objects.create(
+            user=self.user,
+            phone_number=self.phone_number,
+            verified_at=timezone.now(),
+        )
+
+        result = get_verified_phone(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            result,
+            phone,
+        )
+
+
+class PhoneChangeServiceTests(TestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="phone-change@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+        self.current_phone = (
+            "+2348012345678"
+        )
+
+        self.new_phone = (
+            "+2348098765432"
+        )
+
+        UserPhone.objects.create(
+            user=self.user,
+            phone_number=self.current_phone,
+            verified_at=timezone.now(),
+        )
+
+    def test_wrong_current_password_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            request_phone_change(
+                user=self.user,
+                current_password="WrongPassword123!",
+                new_phone_number=self.new_phone,
+            )
+
+    def test_same_verified_phone_is_rejected(self):
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            request_phone_change(
+                user=self.user,
+                current_password="StrongPassword123!",
+                new_phone_number=self.current_phone,
+            )
+
+    def test_new_phone_request_creates_change_otp(
+        self,
+    ):
+        with self.captureOnCommitCallbacks(
+            execute=True,
+        ):
+            otp = request_phone_change(
+                user=self.user,
+                current_password="StrongPassword123!",
+                new_phone_number=self.new_phone,
+            )
+
+        self.assertEqual(
+            otp.user,
+            self.user,
+        )
+
+        self.assertEqual(
+            otp.phone_number,
+            self.new_phone,
+        )
+
+        self.assertEqual(
+            otp.purpose,
+            PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+    def test_new_phone_request_sends_sms(self):
+        with patch(
+            "accounts.services.phone.send_sms"
+        ) as mock_send_sms:
+
+            with self.captureOnCommitCallbacks(
+                execute=True,
+            ):
+                request_phone_change(
+                    user=self.user,
+                    current_password="StrongPassword123!",
+                    new_phone_number=self.new_phone,
+                )
+
+        mock_send_sms.assert_called_once()
+
+        call_kwargs = (
+            mock_send_sms.call_args.kwargs
+        )
+
+        self.assertEqual(
+            call_kwargs["phone_number"],
+            self.new_phone,
+        )
+
+        self.assertIn(
+            "phone-change verification code",
+            call_kwargs["message"],
+        )
+
+    def test_new_phone_owned_by_another_user_is_rejected(
+        self,
+    ):
+        other_user = User.objects.create_user(
+            email="phone-change-other@example.com",
+            password="StrongPassword123!",
+            is_active=True,
+        )
+
+        UserPhone.objects.create(
+            user=other_user,
+            phone_number=self.new_phone,
+            verified_at=timezone.now(),
+        )
+
+        with self.assertRaises(
+            PhoneServiceError,
+        ):
+            request_phone_change(
+                user=self.user,
+                current_password="StrongPassword123!",
+                new_phone_number=self.new_phone,
+            )
+
+    def test_failed_verification_keeps_old_phone(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.new_phone,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        with self.assertRaises(
+            ValueError,
+        ):
+            verify_phone_change(
+                user=self.user,
+                new_phone_number=self.new_phone,
+                code="000000",
+            )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            self.current_phone,
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+    def test_successful_verification_replaces_old_phone(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.new_phone,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        phone = verify_phone_change(
+            user=self.user,
+            new_phone_number=self.new_phone,
+            code=raw_code,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            self.new_phone,
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+        self.assertEqual(
+            UserPhone.objects.filter(
+                user=self.user,
+            ).count(),
+            1,
+        )
+
+    def test_old_phone_remains_until_new_phone_is_verified(
+        self,
+    ):
+        otp, raw_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.new_phone,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        phone = UserPhone.objects.get(
+            user=self.user,
+        )
+
+        self.assertEqual(
+            phone.phone_number,
+            self.current_phone,
+        )
+
+        self.assertTrue(
+            phone.is_verified,
+        )
+
+    def test_new_phone_change_otp_replaces_previous_pending_otp(
+        self,
+    ):
+        first_otp, first_code = create_phone_otp(
+            user=self.user,
+            phone_number=self.new_phone,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        first_otp.created_at = (
+            timezone.now()
+            - PHONE_OTP_RESEND_COOLDOWN
+            - timedelta(seconds=1)
+        )
+
+        first_otp.save(
+            update_fields=["created_at"],
+        )
+
+        second_phone = "+2348077777777"
+
+        second_otp, second_code = create_phone_otp(
+            user=self.user,
+            phone_number=second_phone,
+            purpose=PhoneOTP.Purpose.CHANGE_PHONE,
+        )
+
+        first_otp.refresh_from_db()
+
+        self.assertIsNotNone(
+            first_otp.used_at,
+        )
+
+        self.assertIsNone(
+            second_otp.used_at,
+        )
+
+
+class GoogleTokenVerificationTests(TestCase):
+
+    @patch(
+        "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_valid_google_id_token_is_verified(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            claims = verify_google_id_token(
+                token="fake-google-id-token",
+            )
+
+        self.assertEqual(
+            claims["sub"],
+            "google-sub-123456789",
+        )
+
+        self.assertEqual(
+            claims["email"],
+            "google@example.com",
+        )
+
+        mock_verify.assert_called_once()
+
+    @patch(
+        "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_invalid_google_id_token_raises_error(
+        self,
+        mock_verify,
+    ):
+        mock_verify.side_effect = ValueError(
+            "Invalid token"
+        )
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="invalid-token",
+                )
+
+    def test_missing_google_token_raises_error(self):
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="",
+                )
+
+    def test_google_authentication_requires_client_id(self):
+        with self.settings(
+            GOOGLE_CLIENT_ID="",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="some-token",
+                )
+
+    @patch(
+        "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_invalid_google_issuer_raises_error(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://malicious.example.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="fake-google-id-token",
+                )
+
+    @patch(
+    "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_missing_google_subject_raises_error(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="fake-google-id-token",
+                )
+
+    @patch(
+        "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_missing_google_email_raises_error(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email_verified": True,
+        }
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="fake-google-id-token",
+                )
+
+    @patch(
+        "accounts.services.google.id_token.verify_oauth2_token"
+    )
+    def test_unverified_google_email_raises_error(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": False,
+        }
+
+        with self.settings(
+            GOOGLE_CLIENT_ID="test-client-id",
+        ):
+            with self.assertRaises(
+                InvalidGoogleTokenError,
+            ):
+                verify_google_id_token(
+                    token="fake-google-id-token",
+                )
+
+
+class GoogleAccountResolutionTests(TestCase):
+
+    def _google_claims(
+        self,
+        *,
+        sub="google-sub-123456789",
+        email="google@example.com",
+        email_verified=True,
+    ):
+        return {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": sub,
+            "email": email,
+            "email_verified": email_verified,
+        }
+
+    def test_new_google_account_creates_user_and_identity(self):
+        claims = self._google_claims()
+
+        user = resolve_google_user(
+            claims=claims,
+        )
+
+        self.assertIsNotNone(user)
+
+        self.assertEqual(
+            user.email,
+            "google@example.com",
+        )
+
+        self.assertTrue(
+            user.is_active,
+        )
+
+        self.assertFalse(
+            user.has_usable_password(),
+        )
+
+        identity = UserIdentity.objects.get(
+            provider=UserIdentity.Provider.GOOGLE,
+            provider_subject="google-sub-123456789",
+        )
+
+        self.assertEqual(
+            identity.user,
+            user,
+        )
+
+        self.assertEqual(
+            identity.email,
+            "google@example.com",
+        )
+
+    def test_existing_google_identity_returns_same_user(self):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        UserIdentity.objects.create(
+            user=user,
+            provider=UserIdentity.Provider.GOOGLE,
+            provider_subject="google-sub-123456789",
+            email="google@example.com",
+        )
+
+        claims = self._google_claims()
+
+        resolved_user = resolve_google_user(
+            claims=claims,
+        )
+
+        self.assertEqual(
+            resolved_user,
+            user,
+        )
+
+        self.assertEqual(
+            User.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            1,
+        )
+
+    def test_existing_email_account_is_not_automatically_linked(self):
+        existing_user = User.objects.create_user(
+            email="google@example.com",
+            password="ExistingPassword123!",
+            is_active=True,
+        )
+
+        claims = self._google_claims()
+
+        with self.assertRaises(
+            GoogleAccountError,
+        ):
+            resolve_google_user(
+                claims=claims,
+            )
+
+        self.assertEqual(
+            User.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            0,
+        )
+
+        self.assertTrue(
+            existing_user.check_password(
+                "ExistingPassword123!",
+            ),
+        )
+
+    def test_existing_google_identity_for_inactive_user_is_rejected(self):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=False,
+        )
+
+        UserIdentity.objects.create(
+            user=user,
+            provider=UserIdentity.Provider.GOOGLE,
+            provider_subject="google-sub-123456789",
+            email="google@example.com",
+        )
+
+        claims = self._google_claims()
+
+        with self.assertRaises(
+            GoogleAccountError,
+        ):
+            resolve_google_user(
+                claims=claims,
+            )
+
+    def test_google_subject_is_required(self):
+        claims = self._google_claims()
+
+        claims.pop("sub")
+
+        with self.assertRaises(
+            GoogleAccountError,
+        ):
+            resolve_google_user(
+                claims=claims,
+            )
+
+    def test_google_email_is_required(self):
+        claims = self._google_claims()
+
+        claims.pop("email")
+
+        with self.assertRaises(
+            GoogleAccountError,
+        ):
+            resolve_google_user(
+                claims=claims,
+            )
+
+    def test_different_google_subject_creates_different_identity(self):
+        first_user = resolve_google_user(
+            claims=self._google_claims(
+                sub="google-sub-111111111",
+                email="first@example.com",
+            ),
+        )
+
+        second_user = resolve_google_user(
+            claims=self._google_claims(
+                sub="google-sub-222222222",
+                email="second@example.com",
+            ),
+        )
+
+        self.assertNotEqual(
+            first_user,
+            second_user,
+        )
+
+        self.assertEqual(
+            User.objects.count(),
+            2,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            2,
+        )
+
+
+class GoogleLoginServiceTests(TestCase):
+
+    @patch(
+        "accounts.services.google.verify_google_id_token"
+    )
+    def test_google_login_returns_new_google_user(
+        self,
+        mock_verify,
+    ):
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        user = login_with_google(
+            token="fake-google-id-token",
+        )
+
+        self.assertEqual(
+            user.email,
+            "google@example.com",
+        )
+
+        self.assertTrue(
+            user.is_active,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            1,
+        )
+
+        mock_verify.assert_called_once_with(
+            token="fake-google-id-token",
+        )
+
+    @patch(
+        "accounts.services.google.verify_google_id_token"
+    )
+    def test_google_login_reuses_existing_google_account(
+        self,
+        mock_verify,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password=None,
+            is_active=True,
+        )
+
+        UserIdentity.objects.create(
+            user=user,
+            provider=UserIdentity.Provider.GOOGLE,
+            provider_subject="google-sub-123456789",
+            email="google@example.com",
+        )
+
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        resolved_user = login_with_google(
+            token="fake-google-id-token",
+        )
+
+        self.assertEqual(
+            resolved_user,
+            user,
+        )
+
+        self.assertEqual(
+            User.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            1,
+        )
+
+    @patch(
+        "accounts.services.google.verify_google_id_token"
+    )
+    def test_google_login_rejects_existing_email_account(
+        self,
+        mock_verify,
+    ):
+        user = User.objects.create_user(
+            email="google@example.com",
+            password="ExistingPassword123!",
+            is_active=True,
+        )
+
+        mock_verify.return_value = {
+            "iss": "https://accounts.google.com",
+            "aud": "test-client-id",
+            "sub": "google-sub-123456789",
+            "email": "google@example.com",
+            "email_verified": True,
+        }
+
+        with self.assertRaises(
+            GoogleAccountError,
+        ):
+            login_with_google(
+                token="fake-google-id-token",
+            )
+
+        self.assertEqual(
+            User.objects.count(),
+            1,
+        )
+
+        self.assertEqual(
+            UserIdentity.objects.count(),
+            0,
+        )
+
+        self.assertTrue(
+            user.check_password(
+                "ExistingPassword123!",
+            ),
         )
