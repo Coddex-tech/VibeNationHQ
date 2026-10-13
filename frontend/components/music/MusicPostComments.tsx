@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -28,6 +27,7 @@ import {
   createCommunityComment,
   deleteCommunityComment,
   getCommunityComments,
+  getCommunityCommentThread,
   likeCommunityComment,
   unlikeCommunityComment,
   updateCommunityComment,
@@ -45,9 +45,14 @@ type MusicPostCommentsProps = {
 };
 
 type ReplyState = {
+  // Only direct children of this parent are stored here.
   comments: CommunityComment[];
+  // Pagination belongs to the root conversation, not each nested reply.
   next: string | null;
+  // For a root, this is the total number of descendants in its thread.
   count: number;
+  // Number of unique descendants loaded for the root conversation.
+  loadedCount: number;
   loading: boolean;
   loaded: boolean;
   error: string | null;
@@ -59,14 +64,17 @@ type ComposerMode =
   | { type: 'edit'; comment: CommunityComment };
 
 const PAGE_SIZE = 20;
+const REPLY_PAGE_SIZE = 5;
 const MAX_COMMENT_LENGTH = 10000;
 const MAX_COMPOSER_LINES = 3;
 const INITIAL_COMPOSER_HEIGHT = 140;
+const COMMENT_HIGHLIGHT_DURATION_MS = 2000;
 
 const EMPTY_REPLY_STATE: ReplyState = {
   comments: [],
   next: null,
   count: 0,
+  loadedCount: 0,
   loading: false,
   loaded: false,
   error: null,
@@ -97,6 +105,10 @@ function getNextPage(nextUrl: string | null): number {
   } catch {
     return 1;
   }
+}
+
+function makeNextPageUrl(page: number): string {
+  return `?page=${page}`;
 }
 
 function mergeComments(
@@ -171,25 +183,27 @@ export default function MusicPostComments({
   const replyRequestVersionsRef = useRef<Record<number, number>>({});
   const likeRequestsRef = useRef<Set<number>>(new Set());
 
+  const highlightTimeoutRef = useRef<number | null>(null);
+
   const [comments, setComments] = useState<CommunityComment[]>([]);
   const [nextPage, setNextPage] = useState<string | null>(null);
   const [commentsCount, setCommentsCount] = useState(initialCommentsCount);
-
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
 
-  /*
-   * Reply lists are keyed by the ID of the exact parent comment.
-   *
-   * Root comment 10 -> repliesByComment[10]
-   * Reply 25 to comment 10 -> repliesByComment[25]
-   *
-   * This allows replies to replies without losing the real parent.
-   */
+  // Replies are stored under their exact parent comment ID.
+  // Only a root comment owns thread pagination and exposes thread controls.
   const [repliesByComment, setRepliesByComment] = useState<
     Record<number, ReplyState>
   >({});
+
+  const [highlightedCommentId, setHighlightedCommentId] =
+    useState<number | null>(null);
+
+  // Kept pending until React has rendered the target element into the DOM.
+  const [pendingNavigationId, setPendingNavigationId] =
+    useState<number | null>(null);
 
   const [draft, setDraft] = useState('');
   const [composerMode, setComposerMode] = useState<ComposerMode>({
@@ -215,13 +229,13 @@ export default function MusicPostComments({
 
   const resizeComposer = useCallback(() => {
     const textarea = textareaRef.current;
-
     if (!textarea) return;
 
     textarea.style.height = 'auto';
 
     const styles = window.getComputedStyle(textarea);
     const computedLineHeight = Number.parseFloat(styles.lineHeight);
+
     const lineHeight = Number.isFinite(computedLineHeight)
       ? computedLineHeight
       : 20;
@@ -251,7 +265,6 @@ export default function MusicPostComments({
 
   useEffect(() => {
     const container = composerContainerRef.current;
-
     if (!container) return;
 
     const updateHeight = () => {
@@ -348,7 +361,11 @@ export default function MusicPostComments({
         return;
       }
 
-      setComments(response.results);
+      // Preserve comments submitted while this request was in flight.
+      setComments((current) =>
+        mergeComments(response.results, current),
+      );
+
       setNextPage(response.next);
       setCommentsCount(response.count);
     } catch (error) {
@@ -373,6 +390,11 @@ export default function MusicPostComments({
     postGenerationRef.current += 1;
     requestVersionRef.current += 1;
 
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+
     setComments([]);
     setNextPage(null);
     setCommentsCount(initialCommentsCount);
@@ -386,6 +408,8 @@ export default function MusicPostComments({
     setIsDeleting(false);
     setCommentToDelete(null);
     setCommentToReport(null);
+    setHighlightedCommentId(null);
+    setPendingNavigationId(null);
 
     replyRequestVersionsRef.current = {};
     likeRequestsRef.current.clear();
@@ -395,12 +419,16 @@ export default function MusicPostComments({
     return () => {
       requestVersionRef.current += 1;
       postGenerationRef.current += 1;
+
+      if (highlightTimeoutRef.current !== null) {
+        window.clearTimeout(highlightTimeoutRef.current);
+        highlightTimeoutRef.current = null;
+      }
     };
   }, [initialCommentsCount, loadComments]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
-
     if (!viewport) return;
 
     const updateKeyboardOffset = () => {
@@ -423,10 +451,7 @@ export default function MusicPostComments({
     };
   }, []);
 
-  /*
-   * Find a comment anywhere in the currently loaded comment tree.
-   * This is used for attribution only. It does not change the reply target.
-   */
+  // Find a comment anywhere in the currently loaded conversation.
   const findLoadedComment = useCallback(
     (commentId: number): CommunityComment | null => {
       const root = comments.find((comment) => comment.id === commentId);
@@ -444,6 +469,33 @@ export default function MusicPostComments({
       return null;
     },
     [comments, repliesByComment],
+  );
+
+  // Follow actual parent IDs until the top-level comment is reached.
+  const findRootCommentId = useCallback(
+    (commentId: number): number => {
+      let current = findLoadedComment(commentId);
+      const visited = new Set<number>();
+
+      while (
+        current &&
+        current.parent !== null &&
+        !visited.has(current.id)
+      ) {
+        visited.add(current.id);
+
+        const parent = findLoadedComment(current.parent);
+
+        if (!parent) {
+          return current.parent;
+        }
+
+        current = parent;
+      }
+
+      return current?.id ?? commentId;
+    },
+    [findLoadedComment],
   );
 
   const updateCommentInState = useCallback(
@@ -483,6 +535,7 @@ export default function MusicPostComments({
     [],
   );
 
+  // Update direct-child counts when a reply is created or deleted.
   const updateRepliesCount = useCallback(
     (parentId: number, difference: number) => {
       const adjust = (comment: CommunityComment) =>
@@ -514,20 +567,70 @@ export default function MusicPostComments({
     [],
   );
 
-  const loadReplies = useCallback(
-    async (parentId: number, page = 1, append = false) => {
-      const generation = postGenerationRef.current;
-      const version =
-        (replyRequestVersionsRef.current[parentId] ?? 0) + 1;
+  // Keep the root's total descendant count separate from direct replies_count.
+  const updateThreadRepliesCount = useCallback(
+    (rootId: number, difference: number) => {
+      const adjust = (comment: CommunityComment) =>
+        comment.id === rootId
+          ? {
+              ...comment,
+              thread_replies_count: Math.max(
+                0,
+                comment.thread_replies_count + difference,
+              ),
+            }
+          : comment;
 
-      replyRequestVersionsRef.current[parentId] = version;
+      setComments((current) => current.map(adjust));
 
       setRepliesByComment((current) => {
-        const previous = current[parentId] ?? EMPTY_REPLY_STATE;
+        const next = { ...current };
+
+        for (const [id, state] of Object.entries(next)) {
+          const parentId = Number(id);
+
+          next[parentId] = {
+            ...state,
+            comments: state.comments.map(adjust),
+            count:
+              parentId === rootId
+                ? Math.max(0, state.count + difference)
+                : state.count,
+            loadedCount:
+              parentId === rootId && state.loaded
+                ? Math.max(0, state.loadedCount + difference)
+                : state.loadedCount,
+          };
+        }
+
+        return next;
+      });
+    },
+    [],
+  );
+
+  /**
+   * Load exactly one page from the root conversation's thread endpoint.
+   *
+   * The API returns descendants at every nesting level. Each result is
+   * inserted into the bucket identified by its real parent ID, so replies
+   * to replies retain their correct visual nesting.
+   */
+  const loadReplyThreadPage = useCallback(
+    async (rootCommentId: number, page = 1) => {
+      const generation = postGenerationRef.current;
+
+      const version =
+        (replyRequestVersionsRef.current[rootCommentId] ?? 0) + 1;
+
+      replyRequestVersionsRef.current[rootCommentId] = version;
+
+      setRepliesByComment((current) => {
+        const previous = current[rootCommentId] ?? EMPTY_REPLY_STATE;
 
         return {
           ...current,
-          [parentId]: {
+          [rootCommentId]: {
             ...previous,
             loading: true,
             error: null,
@@ -536,50 +639,93 @@ export default function MusicPostComments({
       });
 
       try {
-        const response = await getCommunityComments(postId, {
-          page,
-          pageSize: PAGE_SIZE,
-          parentId,
-        });
+        const response = await getCommunityCommentThread(
+          postId,
+          rootCommentId,
+          { page },
+        );
 
         if (
           postGenerationRef.current !== generation ||
-          replyRequestVersionsRef.current[parentId] !== version
+          replyRequestVersionsRef.current[rootCommentId] !== version
         ) {
           return;
         }
 
         setRepliesByComment((current) => {
-          const previous = current[parentId] ?? EMPTY_REPLY_STATE;
+          const next = { ...current };
 
-          return {
-            ...current,
-            [parentId]: {
-              comments: append
-                ? mergeComments(previous.comments, response.results)
-                : response.results,
-              next: response.next,
-              count: response.count,
+          const existingIds = new Set<number>();
+
+          for (const state of Object.values(current)) {
+            for (const comment of state.comments) {
+              existingIds.add(comment.id);
+            }
+          }
+
+          let newUniqueCount = 0;
+
+          for (const comment of response.results) {
+            if (!existingIds.has(comment.id)) {
+              existingIds.add(comment.id);
+              newUniqueCount += 1;
+            }
+
+            // A thread endpoint should only return descendants.
+            // Skip malformed entries without a parent instead of rendering
+            // a root comment as a reply.
+            if (comment.parent === null) {
+              continue;
+            }
+
+            const parentId = comment.parent;
+            const previousParentState =
+              next[parentId] ?? EMPTY_REPLY_STATE;
+
+            next[parentId] = {
+              ...previousParentState,
+              comments: mergeComments(
+                previousParentState.comments,
+                [comment],
+              ),
               loading: false,
               loaded: true,
               error: null,
-            },
+            };
+          }
+
+          const previousRootState =
+            next[rootCommentId] ?? EMPTY_REPLY_STATE;
+
+          next[rootCommentId] = {
+            ...previousRootState,
+            next: response.next,
+            count: response.count,
+            loadedCount: Math.min(
+              response.count,
+              previousRootState.loadedCount + newUniqueCount,
+            ),
+            loading: false,
+            loaded: true,
+            error: null,
           };
+
+          return next;
         });
       } catch (error) {
         if (
           postGenerationRef.current !== generation ||
-          replyRequestVersionsRef.current[parentId] !== version
+          replyRequestVersionsRef.current[rootCommentId] !== version
         ) {
           return;
         }
 
         setRepliesByComment((current) => {
-          const previous = current[parentId] ?? EMPTY_REPLY_STATE;
+          const previous = current[rootCommentId] ?? EMPTY_REPLY_STATE;
 
           return {
             ...current,
-            [parentId]: {
+            [rootCommentId]: {
               ...previous,
               loading: false,
               error: getErrorMessage(
@@ -594,12 +740,79 @@ export default function MusicPostComments({
     [postId],
   );
 
-  /*
-   * FIX: preserve the exact comment the user clicked.
+  /**
+   * Navigate to a comment or reply and briefly highlight it.
    *
-   * Do not replace a reply with its root comment. The selected comment's
-   * ID will be sent as the new reply's parent.
+   * The pending ID is resolved by an effect after React has rendered any
+   * newly loaded reply thread. This avoids querying the DOM too early.
    */
+  const navigateToComment = useCallback(
+    (commentId: number) => {
+      setPendingNavigationId(commentId);
+
+      const target = findLoadedComment(commentId);
+
+      if (!target || target.parent === null) {
+        return;
+      }
+
+      const rootId = findRootCommentId(commentId);
+      const rootState = repliesByComment[rootId];
+
+      // If the target is known but its root thread is not rendered yet,
+      // load the first thread page. The pending-navigation effect will
+      // scroll once the target is present in the DOM.
+      if (!rootState?.loaded && !rootState?.loading) {
+        void loadReplyThreadPage(rootId, 1);
+      }
+    },
+    [
+      findLoadedComment,
+      findRootCommentId,
+      loadReplyThreadPage,
+      repliesByComment,
+    ],
+  );
+
+  useEffect(() => {
+    if (pendingNavigationId === null) return;
+
+    const targetId = pendingNavigationId;
+    const targetElement = document.getElementById(
+      `community-comment-${targetId}`,
+    );
+
+    if (!targetElement) return;
+
+    targetElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center',
+    });
+
+    setHighlightedCommentId(targetId);
+    setPendingNavigationId(null);
+
+    if (highlightTimeoutRef.current !== null) {
+      window.clearTimeout(highlightTimeoutRef.current);
+    }
+
+    highlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedCommentId((current) =>
+        current === targetId ? null : current,
+      );
+
+      highlightTimeoutRef.current = null;
+    }, COMMENT_HIGHLIGHT_DURATION_MS);
+  }, [pendingNavigationId, comments, repliesByComment]);
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimeoutRef.current !== null) {
+        window.clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const startReply = useCallback(
     (comment: CommunityComment) => {
       if (isAuthLoading || isAuthenticated === null) {
@@ -616,20 +829,12 @@ export default function MusicPostComments({
       setDraft('');
       setSubmitError(null);
       focusComposer();
-
-      const existing = repliesByComment[comment.id];
-
-      if (!existing?.loaded && !existing?.loading) {
-        void loadReplies(comment.id);
-      }
     },
     [
       authenticated,
       focusComposer,
       isAuthLoading,
       isAuthenticated,
-      loadReplies,
-      repliesByComment,
       requireAuth,
     ],
   );
@@ -716,10 +921,7 @@ export default function MusicPostComments({
         return;
       }
 
-      /*
-       * Critical: use the exact selected comment as the parent.
-       * A reply to a reply must not be redirected to the root comment.
-       */
+      // Keep the selected comment as the direct parent, even for nested replies.
       const parentId =
         submittedMode.type === 'reply'
           ? submittedMode.comment.id
@@ -742,19 +944,36 @@ export default function MusicPostComments({
         setComments((current) => mergeComments([created], current));
         setCommentsCount((current) => current + 1);
       } else {
-        /*
-         * Insert the reply into the list belonging to its direct parent.
-         * If that parent is itself a reply, its own list is updated.
-         */
         setRepliesByComment((current) => {
           const previous = current[parentId] ?? EMPTY_REPLY_STATE;
+
+          const mergedComments = mergeComments(
+            previous.comments,
+            [created],
+          );
+
+          const newCount = Math.max(
+            previous.count + 1,
+            mergedComments.length,
+          );
+
+          const next =
+            previous.next ??
+            (newCount > mergedComments.length
+              ? makeNextPageUrl(
+                  Math.floor(
+                    mergedComments.length / REPLY_PAGE_SIZE,
+                  ) + 1,
+                )
+              : null);
 
           return {
             ...current,
             [parentId]: {
               ...previous,
-              comments: mergeComments(previous.comments, [created]),
-              count: previous.count + 1,
+              comments: mergedComments,
+              next,
+              count: newCount,
               loading: false,
               loaded: true,
               error: null,
@@ -764,6 +983,9 @@ export default function MusicPostComments({
 
         setCommentsCount((current) => current + 1);
         updateRepliesCount(parentId, 1);
+
+        const rootId = findRootCommentId(parentId);
+        updateThreadRepliesCount(rootId, 1);
       }
 
       cancelComposerMode();
@@ -870,6 +1092,11 @@ export default function MusicPostComments({
     const requestedPostId = postId;
     const generation = postGenerationRef.current;
 
+    const rootId =
+      deletedComment.parent === null
+        ? deletedId
+        : findRootCommentId(deletedId);
+
     setIsDeleting(true);
     setCommentsError(null);
 
@@ -891,9 +1118,15 @@ export default function MusicPostComments({
         repliesByComment,
       );
 
+      // Invalidate pending requests for the deleted subtree.
       for (const removedId of removedIds) {
         replyRequestVersionsRef.current[removedId] =
           (replyRequestVersionsRef.current[removedId] ?? 0) + 1;
+      }
+
+      if (directParentId !== null) {
+        replyRequestVersionsRef.current[directParentId] =
+          (replyRequestVersionsRef.current[directParentId] ?? 0) + 1;
       }
 
       setComments((current) =>
@@ -945,6 +1178,14 @@ export default function MusicPostComments({
         return next;
       });
 
+      setCommentsCount((current) =>
+        Math.max(0, current - removedIds.size),
+      );
+
+      if (directParentId !== null) {
+        updateThreadRepliesCount(rootId, -removedIds.size);
+      }
+
       setComposerMode((current) => {
         if (
           current.type !== 'comment' &&
@@ -964,6 +1205,19 @@ export default function MusicPostComments({
         setSubmitError(null);
       }
 
+      if (
+        highlightedCommentId !== null &&
+        removedIds.has(highlightedCommentId)
+      ) {
+        setHighlightedCommentId(null);
+        setPendingNavigationId(null);
+
+        if (highlightTimeoutRef.current !== null) {
+          window.clearTimeout(highlightTimeoutRef.current);
+          highlightTimeoutRef.current = null;
+        }
+      }
+
       setCommentToDelete(null);
 
       try {
@@ -979,7 +1233,13 @@ export default function MusicPostComments({
           return;
         }
 
-        setComments(response.results);
+        setComments((current) =>
+          mergeComments(
+            response.results,
+            current.filter((comment) => !removedIds.has(comment.id)),
+          ),
+        );
+
         setNextPage(response.next);
         setCommentsCount(response.count);
         setIsLoadingMore(false);
@@ -1083,12 +1343,11 @@ export default function MusicPostComments({
     }
   };
 
-  /*
-   * Render every reply in one flat visual thread under its root.
-   * The data remains hierarchical; only the visual indentation is flat.
-   */
+  // Render a reply and its loaded descendants. Thread pagination controls
+  // are rendered only by the root comment, after the complete reply tree.
   const renderReply = (reply: CommunityComment): ReactNode => {
     const replyState = repliesByComment[reply.id];
+
     const replyTo =
       reply.parent === null ? null : findLoadedComment(reply.parent);
 
@@ -1109,77 +1368,41 @@ export default function MusicPostComments({
           onReport={setCommentToReport}
           onLike={handleLike}
           onRequireAuth={requireAuth}
+          onNavigateToComment={navigateToComment}
+          isHighlighted={highlightedCommentId === reply.id}
           depth={1}
         />
 
-        {reply.replies_count > 0 && (
-          <div className="mt-1 pl-2">
-            {!replyState?.loaded && (
-              <button
-                type="button"
-                onClick={() => void loadReplies(reply.id)}
-                disabled={replyState?.loading}
-                className="inline-flex min-h-8 items-center gap-2 rounded-lg px-2 py-1 text-xs font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-              >
-                {replyState?.loading ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
-                ) : (
-                  <ArrowDown size={13} />
-                )}
-
-                View {reply.replies_count}{' '}
-                {reply.replies_count === 1 ? 'reply' : 'replies'}
-              </button>
-            )}
-
-            {replyState?.error && (
-              <div className="mt-1">
-                <p role="alert" className="text-xs text-red-600 dark:text-red-300">
-                  {replyState.error}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => void loadReplies(reply.id)}
-                  className="mt-1 text-xs font-semibold text-brand-teal hover:underline"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-          </div>
+        {replyState?.error && (
+          <p
+            role="alert"
+            className="ml-3 mt-1 text-xs text-red-600 dark:text-red-300"
+          >
+            We could not load some replies in this thread. Try loading the
+            conversation again from the original comment.
+          </p>
         )}
 
-        {replyState?.loaded && (
+        {replyState?.comments.length ? (
           <div className="mt-4 space-y-4">
             {replyState.comments.map((childReply) =>
               renderReply(childReply),
             )}
-
-            {replyState.next && (
-              <button
-                type="button"
-                onClick={() =>
-                  void loadReplies(
-                    reply.id,
-                    getNextPage(replyState.next),
-                    true,
-                  )
-                }
-                disabled={replyState.loading}
-                className="min-h-8 rounded-lg px-2 py-1 text-xs font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-              >
-                {replyState.loading ? 'Loading replies…' : 'Load more replies'}
-              </button>
-            )}
           </div>
-        )}
+        ) : null}
       </div>
     );
   };
 
   const renderRootComment = (comment: CommunityComment): ReactNode => {
     const replyState = repliesByComment[comment.id];
+
+    const totalThreadReplies = Math.max(
+      comment.thread_replies_count ?? 0,
+      replyState?.count ?? 0,
+    );
+
+    const nextThreadPage = getNextPage(replyState?.next ?? null);
 
     return (
       <div key={comment.id} className="min-w-0">
@@ -1197,17 +1420,32 @@ export default function MusicPostComments({
           onReport={setCommentToReport}
           onLike={handleLike}
           onRequireAuth={requireAuth}
+          onNavigateToComment={navigateToComment}
+          isHighlighted={highlightedCommentId === comment.id}
           depth={0}
         />
 
-        {comment.replies_count > 0 && (
+        {totalThreadReplies > 0 && (
           <div className="mt-3 pl-2">
-            {!replyState?.loaded && (
+            {/*
+              Render the entire loaded tree first. Since renderReply is
+              recursive, this includes every currently loaded nested reply.
+              The root's pagination and retry controls are placed afterward.
+            */}
+            {replyState?.loaded && replyState.comments.length > 0 && (
+              <div className="space-y-5 border-l border-light-border pl-3 dark:border-dark-border sm:pl-4">
+                {replyState.comments.map((reply) => renderReply(reply))}
+              </div>
+            )}
+
+            {!replyState?.loaded && !replyState?.error && (
               <button
                 type="button"
-                onClick={() => void loadReplies(comment.id)}
+                onClick={() =>
+                  void loadReplyThreadPage(comment.id, 1)
+                }
                 disabled={replyState?.loading}
-                className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
+                className="mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
               >
                 {replyState?.loading ? (
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
@@ -1215,53 +1453,76 @@ export default function MusicPostComments({
                   <ArrowDown size={15} />
                 )}
 
-                View {comment.replies_count}{' '}
-                {comment.replies_count === 1 ? 'reply' : 'replies'}
+                {replyState?.loading
+                  ? 'Loading replies…'
+                  : `View ${totalThreadReplies} ${
+                      totalThreadReplies === 1 ? 'reply' : 'replies'
+                    }`}
               </button>
             )}
 
+            {replyState?.loaded &&
+              replyState.next &&
+              !replyState.error && (
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void loadReplyThreadPage(
+                        comment.id,
+                        nextThreadPage,
+                      )
+                    }
+                    disabled={replyState.loading}
+                    className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
+                  >
+                    {replyState.loading ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
+                    ) : (
+                      <ArrowDown size={15} />
+                    )}
+
+                    {replyState.loading
+                      ? 'Loading replies…'
+                      : 'Load more replies'}
+                  </button>
+                </div>
+              )}
+
             {replyState?.error && (
-              <div className="mt-2">
-                <p role="alert" className="text-sm text-red-600 dark:text-red-300">
+              <div className="mt-3">
+                <p
+                  role="alert"
+                  className="text-sm text-red-600 dark:text-red-300"
+                >
                   {replyState.error}
                 </p>
 
                 <button
                   type="button"
-                  onClick={() => void loadReplies(comment.id)}
-                  className="mt-1 text-sm font-semibold text-brand-teal hover:underline"
+                  onClick={() =>
+                    void loadReplyThreadPage(
+                      comment.id,
+                      replyState.loaded
+                        ? nextThreadPage
+                        : 1,
+                    )
+                  }
+                  disabled={replyState.loading}
+                  className="mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
                 >
-                  Try again
+                  {replyState.loading ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
+                  ) : (
+                    <ArrowDown size={15} />
+                  )}
+
+                  {replyState.loading
+                    ? 'Retrying…'
+                    : replyState.loaded
+                      ? 'Retry loading more replies'
+                      : 'Try again'}
                 </button>
-              </div>
-            )}
-
-            {replyState?.loaded && (
-              /*
-               * A single thread container keeps every descendant aligned
-               * beneath the root, rather than adding indentation per level.
-               */
-              <div className="mt-3 space-y-5 border-l border-light-border pl-3 dark:border-dark-border sm:pl-4">
-                {replyState.comments.map((reply) => renderReply(reply))}
-
-                {replyState.next && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void loadReplies(
-                        comment.id,
-                        getNextPage(replyState.next),
-                        true,
-                      )
-                    }
-                    disabled={replyState.loading}
-                    className="min-h-9 rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-                  >
-                    {replyState.loading
-                      ? 'Loading replies…'
-                      : 'Load more replies'}
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -1284,7 +1545,9 @@ export default function MusicPostComments({
           className="flex items-center gap-2 text-lg font-bold text-light-text dark:text-dark-text sm:text-xl"
         >
           <MessageCircle size={21} />
+
           Comments
+
           <span className="text-sm font-medium text-light-text-muted dark:text-dark-text-muted">
             {commentsCount}
           </span>

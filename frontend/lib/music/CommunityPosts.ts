@@ -138,6 +138,7 @@ export type CommunityComment = {
   views_count: number;
   likes_count: number;
   replies_count: number;
+  thread_replies_count: number;
   status: CommunityCommentStatus;
   is_edited: boolean;
   created_at: string;
@@ -292,6 +293,41 @@ export async function getCommunityComments(
 
   return apiRequest<CommunityCommentsResponse>(endpoint);
 }
+
+
+/**
+ * Load one page of replies belonging to a root comment's entire thread.
+ *
+ * The backend returns descendants at every nesting level, preserving
+ * each comment's actual parent ID.
+ *
+ * The backend controls the page size (five comments per request).
+ */
+export async function getCommunityCommentThread(
+  postId: number,
+  rootCommentId: number,
+  {
+    page,
+  }: {
+    page?: number;
+  } = {},
+): Promise<CommunityCommentsResponse> {
+  const params = new URLSearchParams();
+
+  if (page !== undefined) {
+    params.set('page', String(page));
+  }
+
+  const queryString = params.toString();
+
+  const endpoint =
+    `/api/v1/music/community/posts/${postId}/comments/` +
+    `${rootCommentId}/thread/` +
+    (queryString ? `?${queryString}` : '');
+
+  return apiRequest<CommunityCommentsResponse>(endpoint);
+}
+
 
 /**
  * Create a top-level comment or a reply.

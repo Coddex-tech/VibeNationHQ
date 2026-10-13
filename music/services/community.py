@@ -292,15 +292,14 @@ class CommunityPostCommentService:
         """
         Create a comment or reply on a published community post.
 
-        Locking the post serializes comment creation against
-        comment-tree deletion for the same post.
+        Every reply stores a reference to its original root
+        comment. Root comments keep root_comment=None.
 
-        If parent is provided, it must belong to the same post
-        and must itself be published.
+        This supports efficient, paginated retrieval of an
+        entire conversation without recursively querying
+        every reply's children.
         """
 
-        # Always lock the current database record rather than
-        # relying on a potentially stale model instance.
         locked_post = (
             CommunityPost.objects
             .select_for_update()
@@ -318,6 +317,7 @@ class CommunityPostCommentService:
             )
 
         locked_parent = None
+        root_comment = None
 
         if parent is not None:
             locked_parent = (
@@ -344,10 +344,19 @@ class CommunityPostCommentService:
                     "You can only reply to published comments."
                 )
 
+            # If the parent is itself a reply, reuse its root.
+            # Otherwise, the parent is the root comment.
+            root_comment = (
+                locked_parent.root_comment
+                if locked_parent.root_comment_id is not None
+                else locked_parent
+            )
+
         comment = CommunityPostComment.objects.create(
             user=user,
             post=locked_post,
             parent=locked_parent,
+            root_comment=root_comment,
             content=content,
         )
 
@@ -363,7 +372,9 @@ class CommunityPostCommentService:
             ).update(
                 replies_count=models.F("replies_count") + 1,
             )
+
         return comment
+
 
     @staticmethod
     @transaction.atomic

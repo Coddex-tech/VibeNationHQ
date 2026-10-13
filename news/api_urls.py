@@ -15,12 +15,6 @@ from news.api_views import (
 app_name = 'news_api'
 
 urlpatterns = [
-    # HOMEPAGE
-    path(
-        "homepage/",
-        HomePageAPIView.as_view(),
-        name="news-home-api"
-    ),
 
     # NEWS HOMEPAGE
     path(

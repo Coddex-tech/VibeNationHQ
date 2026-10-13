@@ -1774,6 +1774,18 @@ class CommunityPostComment(TimeStampedModel):
         related_name="replies",
     )
 
+    # Identifies the root comment for this conversation.
+    # Root comments keep this field NULL.
+    # Every reply, including replies to replies, points to
+    # the original top-level comment.
+    root_comment = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="thread_replies",
+    )
+
     content = models.TextField(
         max_length=10000,
     )
@@ -1830,6 +1842,13 @@ class CommunityPostComment(TimeStampedModel):
                 fields=[
                     "user",
                     "-created_at",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "root_comment",
+                    "status",
+                    "created_at",
                 ],
             ),
         ]

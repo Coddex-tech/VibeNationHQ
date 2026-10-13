@@ -1,7 +1,7 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Flag,
   Heart,
@@ -29,20 +29,27 @@ type MusicPostCommentItemProps = {
     comment: CommunityComment,
   ) => Promise<CommunityCommentLikeResponse>;
   onRequireAuth: () => void;
+  onNavigateToComment?: (commentId: number) => void;
+  isHighlighted?: boolean;
   depth?: number;
 };
 
 const COMMENT_EDIT_WINDOW_MS = 15 * 60 * 1000;
+const COMMENT_COLLAPSED_LINES = 4;
 
 const AVATAR_COLORS = [
-  'bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-200',
-  'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200',
-  'bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200',
-  'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
-  'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200',
-  'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
-  'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/50 dark:text-indigo-200',
-  'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-200',
+  { background: '#1E3A8A', foreground: '#FFFFFF' },
+  { background: '#831843', foreground: '#FFFFFF' },
+  { background: '#065F46', foreground: '#FFFFFF' },
+  { background: '#92400E', foreground: '#FFFFFF' },
+  { background: '#5B21B6', foreground: '#FFFFFF' },
+  { background: '#9A3412', foreground: '#FFFFFF' },
+  { background: '#155E75', foreground: '#FFFFFF' },
+  { background: '#991B1B', foreground: '#FFFFFF' },
+  { background: '#334155', foreground: '#FFFFFF' },
+  { background: '#166534', foreground: '#FFFFFF' },
+  { background: '#4338CA', foreground: '#FFFFFF' },
+  { background: '#6D28D9', foreground: '#FFFFFF' },
 ];
 
 function normalizeUserId(
@@ -52,14 +59,32 @@ function normalizeUserId(
   return String(value);
 }
 
-function getAvatarColor(username: string): string {
+/**
+ * Keep this palette and hashing algorithm aligned with MusicPost.tsx.
+ * Normalizing the username makes the colour consistent regardless of case
+ * or whether the username is displayed with a leading @.
+ */
+function getAvatarColor(username: string): {
+  background: string;
+  foreground: string;
+} {
+  const normalizedUsername = username
+    .trim()
+    .replace(/^@/, '')
+    .toLowerCase();
+
   let hash = 0;
 
-  for (let index = 0; index < username.length; index += 1) {
-    hash = (hash * 31 + username.charCodeAt(index)) | 0;
+  for (
+    let index = 0;
+    index < normalizedUsername.length;
+    index += 1
+  ) {
+    hash =
+      (hash * 31 + normalizedUsername.charCodeAt(index)) >>> 0;
   }
 
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
 function formatCommentDate(value: string): string {
@@ -117,6 +142,8 @@ export default function MusicPostCommentItem({
   onReport,
   onLike,
   onRequireAuth,
+  onNavigateToComment,
+  isHighlighted = false,
 }: MusicPostCommentItemProps) {
   const [isLiked, setIsLiked] = useState(comment.is_liked ?? false);
   const [likesCount, setLikesCount] = useState(comment.likes_count);
@@ -125,10 +152,88 @@ export default function MusicPostCommentItem({
   const [menuOpen, setMenuOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
 
+  const commentContentRef = useRef<HTMLParagraphElement>(null);
+
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
+  const [canExpandContent, setCanExpandContent] = useState(false);
+
   useEffect(() => {
     setIsLiked(comment.is_liked ?? false);
     setLikesCount(comment.likes_count);
   }, [comment.is_liked, comment.likes_count]);
+
+  useEffect(() => {
+    setIsContentExpanded(false);
+    setCanExpandContent(false);
+  }, [comment.id, comment.content]);
+
+  const isRemoved = comment.status === 'removed';
+  const isHidden = comment.status === 'hidden';
+  const unavailable = isRemoved || isHidden;
+
+  useEffect(() => {
+    const element = commentContentRef.current;
+
+    if (!element || unavailable) {
+      setCanExpandContent(false);
+      return;
+    }
+
+    let animationFrame = 0;
+
+    const measureOverflow = () => {
+      window.cancelAnimationFrame(animationFrame);
+
+      animationFrame = window.requestAnimationFrame(() => {
+        const currentElement = commentContentRef.current;
+
+        if (!currentElement) return;
+
+        const previousStyles = {
+          display: currentElement.style.display,
+          webkitBoxOrient: currentElement.style.webkitBoxOrient,
+          webkitLineClamp: currentElement.style.webkitLineClamp,
+          overflow: currentElement.style.overflow,
+        };
+
+        currentElement.style.display = '-webkit-box';
+        currentElement.style.webkitBoxOrient = 'vertical';
+        currentElement.style.webkitLineClamp = String(
+          COMMENT_COLLAPSED_LINES,
+        );
+        currentElement.style.overflow = 'hidden';
+
+        const hasOverflow =
+          currentElement.scrollHeight >
+          currentElement.clientHeight + 1;
+
+        currentElement.style.display = previousStyles.display;
+        currentElement.style.webkitBoxOrient =
+          previousStyles.webkitBoxOrient;
+        currentElement.style.webkitLineClamp =
+          previousStyles.webkitLineClamp;
+        currentElement.style.overflow = previousStyles.overflow;
+
+        setCanExpandContent(hasOverflow);
+      });
+    };
+
+    measureOverflow();
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(measureOverflow)
+        : null;
+
+    resizeObserver?.observe(element);
+    window.addEventListener('resize', measureOverflow);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', measureOverflow);
+    };
+  }, [comment.content, unavailable, isContentExpanded]);
 
   const normalizedCurrentUserId = normalizeUserId(currentUserId);
   const normalizedCommentUserId = normalizeUserId(comment.user.id);
@@ -137,17 +242,11 @@ export default function MusicPostCommentItem({
     normalizedCurrentUserId !== null &&
     normalizedCurrentUserId === normalizedCommentUserId;
 
-  const normalizedCreatorId = normalizeUserId(
-    comment.post_creator_id,
-  );
+  const normalizedCreatorId = normalizeUserId(comment.post_creator_id);
 
   const isPostCreator =
     normalizedCreatorId !== null &&
     normalizedCreatorId === normalizedCommentUserId;
-
-  const isRemoved = comment.status === 'removed';
-  const isHidden = comment.status === 'hidden';
-  const unavailable = isRemoved || isHidden;
 
   const createdAt = new Date(comment.created_at).getTime();
 
@@ -158,9 +257,10 @@ export default function MusicPostCommentItem({
     currentTime < createdAt + COMMENT_EDIT_WINDOW_MS;
 
   const buttonClass =
-    'inline-flex min-h-8 items-center gap-1.5 rounded-full px-2.5 py-1.5 ' +
-    'text-xs font-medium transition-colors disabled:cursor-not-allowed ' +
-    'disabled:opacity-50';
+    'inline-flex min-h-8 items-center justify-center gap-1 rounded-full ' +
+    'px-2 py-1.5 text-xs font-medium transition-colors ' +
+    'disabled:cursor-not-allowed disabled:opacity-50 ' +
+    'sm:gap-1.5 sm:px-2.5';
 
   useEffect(() => {
     if (!isOwner || unavailable) return;
@@ -205,37 +305,69 @@ export default function MusicPostCommentItem({
   }
 
   const username = comment.user.username.trim();
-  const avatarLetter = username.charAt(0).toUpperCase() || '?';
-  const replyTargetUsername = replyTo?.user.username.trim();
+  const cleanUsername = username.replace(/^@/, '');
+  const avatarLetter = cleanUsername.charAt(0).toUpperCase() || '?';
+  const avatarColor = getAvatarColor(cleanUsername);
+
+  const replyTargetUsername = replyTo?.user.username
+    .trim()
+    .replace(/^@/, '');
+
+  const canNavigateToReplyTarget =
+    Boolean(replyTo) &&
+    !unavailable &&
+    typeof onNavigateToComment === 'function';
+
+  const handleNavigateToReplyTarget = () => {
+    if (!replyTo || !onNavigateToComment) return;
+
+    onNavigateToComment(replyTo.id);
+  };
 
   return (
     <article
-      className="min-w-0"
+      id={`community-comment-${comment.id}`}
       aria-label={`Comment by ${comment.user.username}`}
+      className={[
+        'w-full min-w-0 rounded-2xl transition-colors duration-300',
+        isHighlighted
+          ? 'bg-brand-teal/10 ring-2 ring-brand-teal/70 ring-offset-2 ring-offset-light-bg dark:ring-offset-dark-bg'
+          : 'ring-2 ring-transparent',
+      ].join(' ')}
+      style={{ scrollMarginTop: '110px' }}
     >
-      <div className="flex items-start gap-3">
-        <div
-          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${getAvatarColor(username)}`}
-          aria-hidden="true"
+      <div className="flex min-w-0 items-start gap-2 p-1 sm:gap-3">
+        <Link
+          href={`/account/${encodeURIComponent(cleanUsername)}`}
+          aria-label={`View ${cleanUsername}'s profile`}
+          title={`View ${cleanUsername}'s profile`}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg sm:h-9 sm:w-9"
+          style={{
+            backgroundColor: avatarColor.background,
+            color: avatarColor.foreground,
+          }}
         >
           {avatarLetter}
-        </div>
+        </Link>
 
         <div className="min-w-0 flex-1">
-          <div className="inline-block max-w-full rounded-2xl rounded-tl-md border border-light-border/70 bg-light-surface-soft px-3.5 py-2.5 dark:border-dark-border/70 dark:bg-dark-surface-soft">
-            <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="break-all text-sm font-semibold text-light-text dark:text-dark-text">
-                @{comment.user.username}
-              </span>
+          <div className="inline-block max-w-full min-w-0 rounded-2xl rounded-tl-md border border-light-border/70 bg-light-surface-soft px-3 py-2 dark:border-dark-border/70 dark:bg-dark-surface-soft sm:px-3.5 sm:py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:gap-x-2">
+              <Link
+                href={`/account/${encodeURIComponent(cleanUsername)}`}
+                className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[13px] font-semibold leading-5 text-light-text transition-colors hover:text-brand-teal focus-visible:outline-none focus-visible:underline dark:text-dark-text sm:text-sm"
+              >
+                {comment.user.username}
+              </Link>
 
               {isPostCreator && (
-                <span className="inline-flex items-center rounded-full border border-brand-teal/20 bg-brand-teal/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-teal">
+                <span className="shrink-0 text-[9px] font-semibold leading-4 text-brand-teal sm:text-[10px]">
                   Creator
                 </span>
               )}
 
               <span
-                className="text-xs text-light-text-muted dark:text-dark-text-muted"
+                className="shrink-0 text-[10px] leading-4 text-light-text-muted dark:text-dark-text-muted sm:text-xs"
                 title={new Date(comment.created_at).toLocaleString()}
               >
                 {formatCommentDate(comment.created_at)}
@@ -243,7 +375,7 @@ export default function MusicPostCommentItem({
 
               {comment.is_edited && !unavailable && (
                 <span
-                  className="text-xs text-light-text-muted dark:text-dark-text-muted"
+                  className="shrink-0 text-[10px] leading-4 text-light-text-muted dark:text-dark-text-muted sm:text-xs"
                   title="This comment has been edited."
                 >
                   · edited
@@ -251,39 +383,96 @@ export default function MusicPostCommentItem({
               )}
             </div>
 
-            {replyTargetUsername && !unavailable && (
-              <p className="mb-2 flex flex-wrap items-center gap-1 text-xs text-light-text-muted dark:text-dark-text-muted">
-                <MessageCircle
-                  size={12}
-                  className="shrink-0 text-brand-teal"
-                  aria-hidden="true"
-                />
+            {replyTargetUsername &&
+              canNavigateToReplyTarget &&
+              replyTo && (
+                <p className="mb-1.5 mt-1 flex min-w-0 flex-wrap items-center gap-x-1 text-xs leading-relaxed text-light-text-muted dark:text-dark-text-muted sm:mb-2">
+                  <span>Replying to</span>
 
-                <span>Replying to</span>
-
-                <span className="break-all font-semibold text-brand-teal">
-                  @{replyTargetUsername}
-                </span>
-              </p>
-            )}
+                  <button
+                    type="button"
+                    onClick={handleNavigateToReplyTarget}
+                    aria-label={`Jump to ${replyTargetUsername}'s comment`}
+                    className="break-words font-semibold text-brand-teal [overflow-wrap:anywhere] hover:underline focus-visible:outline-none focus-visible:underline"
+                  >
+                    @{replyTargetUsername}
+                  </button>
+                </p>
+              )}
 
             {isRemoved ? (
-              <p className="text-sm italic text-light-text-muted dark:text-dark-text-muted">
+              <p className="break-words text-sm italic leading-relaxed text-light-text-muted dark:text-dark-text-muted">
                 This comment has been removed.
               </p>
             ) : isHidden ? (
-              <p className="text-sm italic text-light-text-muted dark:text-dark-text-muted">
+              <p className="break-words text-sm italic leading-relaxed text-light-text-muted dark:text-dark-text-muted">
                 This comment is unavailable.
               </p>
             ) : (
-              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-light-text dark:text-dark-text">
-                {comment.content}
-              </p>
+              <>
+                <p
+                  ref={commentContentRef}
+                  role={canNavigateToReplyTarget ? 'link' : undefined}
+                  tabIndex={canNavigateToReplyTarget ? 0 : undefined}
+                  aria-label={
+                    canNavigateToReplyTarget && replyTargetUsername
+                      ? `Jump to the comment by ${replyTargetUsername} that this reply responds to`
+                      : undefined
+                  }
+                  onClick={
+                    canNavigateToReplyTarget
+                      ? handleNavigateToReplyTarget
+                      : undefined
+                  }
+                  onKeyDown={
+                    canNavigateToReplyTarget
+                      ? (event) => {
+                          if (
+                            event.key === 'Enter' ||
+                            event.key === ' '
+                          ) {
+                            event.preventDefault();
+                            handleNavigateToReplyTarget();
+                          }
+                        }
+                      : undefined
+                  }
+                  className={[
+                    'whitespace-pre-wrap break-words text-sm leading-relaxed [overflow-wrap:anywhere] text-light-text dark:text-dark-text',
+                    canNavigateToReplyTarget
+                      ? 'cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal'
+                      : '',
+                  ].join(' ')}
+                  style={{
+                    display: isContentExpanded ? 'block' : '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: isContentExpanded
+                      ? 'unset'
+                      : COMMENT_COLLAPSED_LINES,
+                    overflow: isContentExpanded ? 'visible' : 'hidden',
+                  }}
+                >
+                  {comment.content}
+                </p>
+
+                {(canExpandContent || isContentExpanded) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsContentExpanded((expanded) => !expanded);
+                    }}
+                    aria-expanded={isContentExpanded}
+                    className="mt-1 text-xs font-semibold text-brand-teal transition-colors hover:text-brand-teal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface"
+                  >
+                    {isContentExpanded ? 'See less' : 'See more'}
+                  </button>
+                )}
+              </>
             )}
           </div>
 
           {!unavailable && (
-            <div className="mt-1 flex flex-wrap items-center gap-1">
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-0.5 gap-y-0.5 sm:gap-x-1">
               <button
                 type="button"
                 onClick={handleLike}
@@ -316,7 +505,6 @@ export default function MusicPostCommentItem({
                     return;
                   }
 
-                  // Pass the exact comment clicked, not its root.
                   onReply(comment);
                 }}
                 className={`${buttonClass} text-light-text-muted hover:bg-light-surface-soft hover:text-light-text dark:text-dark-text-muted dark:hover:bg-dark-surface-soft dark:hover:text-dark-text`}
@@ -337,7 +525,7 @@ export default function MusicPostCommentItem({
                 </button>
               )}
 
-              <div className="relative ml-auto">
+              <div className="relative ml-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => setMenuOpen((open) => !open)}
@@ -357,7 +545,7 @@ export default function MusicPostCommentItem({
                       onClick={() => setMenuOpen(false)}
                     />
 
-                    <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-light-border bg-light-surface p-1 shadow-lg dark:border-dark-border dark:bg-dark-surface">
+                    <div className="absolute right-0 top-full z-20 mt-1 w-44 max-w-[calc(100vw-2rem)] rounded-xl border border-light-border bg-light-surface p-1 shadow-lg dark:border-dark-border dark:bg-dark-surface">
                       {isOwner ? (
                         <>
                           {canEdit && (
@@ -415,14 +603,14 @@ export default function MusicPostCommentItem({
           {likeError && (
             <p
               role="alert"
-              className="mt-1 text-xs text-red-600 dark:text-red-300"
+              className="mt-1 break-words text-xs text-red-600 dark:text-red-300"
             >
               {likeError}
             </p>
           )}
 
           {comment.replies_count > 0 && (
-            <p className="mt-1 pl-2 text-xs text-light-text-muted dark:text-dark-text-muted">
+            <p className="mt-1 pl-1 text-xs text-light-text-muted dark:text-dark-text-muted sm:pl-2">
               {comment.replies_count}{' '}
               {comment.replies_count === 1 ? 'reply' : 'replies'}
             </p>

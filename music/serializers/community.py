@@ -694,6 +694,8 @@ class CommunityPostCommentSerializer(
         read_only=True,
     )
 
+    thread_replies_count = serializers.SerializerMethodField()
+
     is_liked = serializers.SerializerMethodField()
 
     class Meta:
@@ -710,6 +712,7 @@ class CommunityPostCommentSerializer(
             "views_count",
             "likes_count",
             "replies_count",
+            "thread_replies_count",
 
             "is_liked",
 
@@ -744,6 +747,29 @@ class CommunityPostCommentSerializer(
                 False,
             )
         )
+
+    def get_thread_replies_count(self, obj):
+        """
+        Return the total number of published descendants
+        belonging to a root comment, including nested replies.
+        """
+        # Nested replies do not display their own thread count.
+        if obj.parent_id is not None:
+            return 0
+
+        # The root-list queryset annotates this count to avoid
+        # making a separate database query for every root comment.
+        annotated_count = getattr(obj, "thread_replies_count", None)
+
+        if annotated_count is not None:
+            return annotated_count
+
+        # Fallback for objects serialized outside that queryset,
+        # such as a newly created root comment.
+        return obj.thread_replies.filter(
+            status=CommunityPostComment.Status.PUBLISHED,
+            post__status=CommunityPost.Status.PUBLISHED,
+        ).count()
 
 
 # ============================================================

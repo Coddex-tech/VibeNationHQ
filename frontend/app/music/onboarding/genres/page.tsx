@@ -133,8 +133,6 @@ export default function GenreOnboardingPage() {
         dark:text-dark-text
       "
     >
-      <HomeNav />
-
       <main
         className="
           mx-auto flex min-h-[calc(100vh-4rem)]

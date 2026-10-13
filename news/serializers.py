@@ -42,7 +42,6 @@ class NewsHomeSerializer(serializers.Serializer):
     """
 
     hero_blocks = serializers.SerializerMethodField()
-    music_feeds = serializers.SerializerMethodField()
     categorized_feeds = serializers.SerializerMethodField()
 
 

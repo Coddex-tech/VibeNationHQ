@@ -29,6 +29,7 @@ from music.api.views.community import (
     CommunityPostCommentReportAPIView,
     CommunityPostFavoriteAPIView,
     CommunityPostFavoriteListAPIView,
+    CommunityPostCommentThreadAPIView,
 )
 
 from music.api.views.ratings import (
@@ -210,6 +211,13 @@ urlpatterns = [
         "community/comments/<int:pk>/",
         CommunityPostCommentDetailAPIView.as_view(),
         name="community-comment-detail",
+    ),
+
+    
+    path(
+        "community/posts/<int:post_id>/comments/<int:root_comment_id>/thread/",
+        CommunityPostCommentThreadAPIView.as_view(),
+        name="community-post-comment-thread",
     ),
 
     path(

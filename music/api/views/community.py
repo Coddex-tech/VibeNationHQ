@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from django.db.models import (
     BooleanField,
     Count,
@@ -6,6 +7,7 @@ from django.db.models import (
     OuterRef,
     Prefetch,
     Value,
+    Q,
 )
 
 from rest_framework import generics, status
@@ -13,7 +15,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
-from music.api.pagination import MusicPagination
+from music.api.pagination import (
+    MusicPagination,
+    CommunityCommentThreadPagination,
+)
 
 from music.models import (
     CommunityPost,
@@ -608,6 +613,20 @@ class CommunityPostCommentListCreateAPIView(
                 ),
             )
 
+        queryset = queryset.annotate(
+            thread_replies_count=Count(
+                "thread_replies",
+                filter=Q(
+                    thread_replies__status=(
+                        CommunityPostComment.Status.PUBLISHED
+                    ),
+                    thread_replies__post__status=(
+                        CommunityPost.Status.PUBLISHED
+                    ),
+                ),
+            )
+        )
+
         parent_id = self.request.query_params.get("parent")
 
         if parent_id:
@@ -720,6 +739,79 @@ class CommunityPostCommentListCreateAPIView(
             output_serializer.data,
             status=status.HTTP_201_CREATED,
         )
+
+
+
+class CommunityPostCommentThreadAPIView(
+    generics.ListAPIView
+):
+    """
+    Paginated list of all published descendants of a root
+    community comment.
+
+    Unlike the ordinary comments endpoint, this endpoint
+    includes replies at every nesting level.
+
+    The response count represents all published descendants
+    of the root comment.
+    """
+
+    serializer_class = CommunityPostCommentSerializer
+    pagination_class = CommunityCommentThreadPagination
+    permission_classes = []
+
+    def get_queryset(self):
+        post_id = self.kwargs["post_id"]
+        root_comment_id = self.kwargs["root_comment_id"]
+
+        # Confirm that the requested root is a published,
+        # top-level comment belonging to this published post.
+        root_comment = get_object_or_404(
+            CommunityPostComment.objects.filter(
+                post_id=post_id,
+                parent__isnull=True,
+                status=CommunityPostComment.Status.PUBLISHED,
+                post__status=CommunityPost.Status.PUBLISHED,
+            ),
+            pk=root_comment_id,
+        )
+
+        queryset = (
+            CommunityPostComment.objects
+            .filter(
+                post_id=post_id,
+                root_comment_id=root_comment.pk,
+                status=CommunityPostComment.Status.PUBLISHED,
+                post__status=CommunityPost.Status.PUBLISHED,
+            )
+            .select_related(
+                "user",
+                "post",
+                "parent",
+                "root_comment",
+            )
+            .order_by("created_at", "pk")
+        )
+
+        # Preserve the current user's like state without
+        # issuing a separate like query for each reply.
+        if self.request.user.is_authenticated:
+            liked_comments = CommunityPostCommentLike.objects.filter(
+                user=self.request.user,
+                comment_id=OuterRef("pk"),
+            )
+
+            queryset = queryset.annotate(
+                is_liked=Exists(liked_comments),
+            )
+        else:
+            queryset = queryset.annotate(
+                is_liked=Value(
+                    False,
+                    output_field=BooleanField(),
+                ),
+            )
+        return queryset
 
 
 class CommunityPostCommentDetailAPIView(
