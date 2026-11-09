@@ -9,41 +9,44 @@ from music.models import (
     Artist,
     CommunityPost,
     EditorialArticle,
-    MusicFeedInteraction,
     Song,
 )
 
 
-class MusicFeedInteractionSerializer(
-    serializers.Serializer,
-):
+class MusicFeedInteractionSerializer(serializers.Serializer):
     """
-    Validates behavioral interaction events before they are
-    passed to MusicFeedInteractionService.
+    Validates passive behavioral events submitted by clients.
 
-    This serializer does not create MusicFeedInteraction
-    records directly.
+    Clients may report views and preview plays.
 
-    The API layer is responsible for resolving the target
-    object and passing it to the interaction service.
+    Engagement events such as likes, comments, favorites,
+    ratings, and follows must be recorded server-side after
+    their corresponding persistent action succeeds.
     """
+
+    ALLOWED_INTERACTIONS = {
+        "view_song": "song",
+        "play_preview": "song",
+        "view_album": "album",
+        "view_artist": "artist",
+        "view_community_post": "community_post",
+        "view_editorial": "editorial",
+    }
+
+    TARGET_MODEL_BY_TYPE = {
+        "song": Song,
+        "album": Album,
+        "artist": Artist,
+        "community_post": CommunityPost,
+        "editorial": EditorialArticle,
+    }
 
     interaction_type = serializers.ChoiceField(
-        choices=[
-            interaction_type.value
-            for interaction_type
-            in MusicFeedInteraction.InteractionType
-        ],
+        choices=tuple(ALLOWED_INTERACTIONS.keys()),
     )
 
     target_type = serializers.ChoiceField(
-        choices=[
-            "song",
-            "album",
-            "artist",
-            "community_post",
-            "editorial",
-        ],
+        choices=tuple(TARGET_MODEL_BY_TYPE.keys()),
     )
 
     target_id = serializers.IntegerField(
@@ -54,35 +57,6 @@ class MusicFeedInteractionSerializer(
         required=False,
         allow_null=True,
     )
-
-    TARGET_TYPE_BY_INTERACTION = {
-        "view_song": "song",
-        "play_preview": "song",
-        "favorite_song": "song",
-        "rate_song": "song",
-
-        "view_album": "album",
-        "favorite_album": "album",
-        "rate_album": "album",
-
-        "view_artist": "artist",
-        "follow_artist": "artist",
-
-        "view_community_post": "community_post",
-        "like_community_post": "community_post",
-        "comment_community_post": "community_post",
-
-        "view_editorial": "editorial",
-        "like_editorial": "editorial",
-    }
-
-    TARGET_MODEL_BY_TYPE = {
-        "song": Song,
-        "album": Album,
-        "artist": Artist,
-        "community_post": CommunityPost,
-        "editorial": EditorialArticle,
-    }
 
     def validate_interaction_type(
         self,
@@ -96,17 +70,12 @@ class MusicFeedInteractionSerializer(
     ) -> str:
         return value.strip().lower()
 
-    def validate(
-        self,
-        attrs,
-    ):
-        interaction_type = attrs[
-            "interaction_type"
-        ]
+    def validate(self, attrs):
+        interaction_type = attrs["interaction_type"]
         target_type = attrs["target_type"]
 
         expected_target_type = (
-            self.TARGET_TYPE_BY_INTERACTION.get(
+            self.ALLOWED_INTERACTIONS.get(
                 interaction_type,
             )
         )
@@ -115,8 +84,7 @@ class MusicFeedInteractionSerializer(
             raise serializers.ValidationError(
                 {
                     "interaction_type": (
-                        "Unsupported music feed "
-                        "interaction type."
+                        "Unsupported passive interaction type."
                     )
                 }
             )
@@ -136,8 +104,8 @@ class MusicFeedInteractionSerializer(
 
     def get_target_model(self):
         """
-        Return the Django model associated with the
-        validated target type.
+        Return the model associated with the validated
+        target type.
 
         Call is_valid() before using this method.
         """
@@ -147,13 +115,9 @@ class MusicFeedInteractionSerializer(
                 "the interaction target model."
             )
 
-        target_type = self.validated_data[
-            "target_type"
-        ]
+        target_type = self.validated_data["target_type"]
 
-        return self.TARGET_MODEL_BY_TYPE[
-            target_type
-        ]
+        return self.TARGET_MODEL_BY_TYPE[target_type]
 
     def get_target_id(self) -> int:
         """
@@ -167,13 +131,9 @@ class MusicFeedInteractionSerializer(
                 "the interaction target ID."
             )
 
-        return self.validated_data[
-            "target_id"
-        ]
+        return self.validated_data["target_id"]
 
-    def get_idempotency_key(
-        self,
-    ) -> UUID | None:
+    def get_idempotency_key(self) -> UUID | None:
         """
         Return the optional validated idempotency key.
 
@@ -185,6 +145,4 @@ class MusicFeedInteractionSerializer(
                 "the idempotency key."
             )
 
-        return self.validated_data.get(
-            "idempotency_key",
-        )
+        return self.validated_data.get("idempotency_key")

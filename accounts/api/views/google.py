@@ -26,10 +26,10 @@ class GoogleLoginView(APIView):
 
         try:
             user = login_with_google(
-            token=serializer.validated_data[
-                "credential"
-            ],
-        )
+                token=serializer.validated_data[
+                    "credential"
+                ],
+            )
 
         except InvalidGoogleTokenError as exc:
             return Response(
@@ -47,6 +47,11 @@ class GoogleLoginView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
+        profile_image = None
+
+        if user.profile_image:
+            profile_image = user.profile_image.url
+
         response = Response(
             {
                 "message": "Google login successful.",
@@ -54,7 +59,17 @@ class GoogleLoginView(APIView):
                     "id": user.id,
                     "email": user.email,
                     "username": user.username,
+                    "display_name": user.display_name,
+                    "bio": user.bio,
+                    "profile_image": profile_image,
                     "is_active": user.is_active,
+                    "onboarding_completed": (
+                        user.onboarding_completed
+                    ),
+                    "is_verified": user.is_verified,
+                    "is_identity_verified": (
+                        user.is_identity_verified
+                    ),
                 },
             },
             status=status.HTTP_200_OK,

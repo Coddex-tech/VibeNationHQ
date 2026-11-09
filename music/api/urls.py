@@ -2,6 +2,8 @@ from django.urls import path
 
 from music.api.views.search import MusicSearchAPIView
 
+from music.api.views.global_search import GlobalSearchAPIView
+
 # EXTERNAL PROVIDER
 from music.api.views.provider_search import MusicProviderSearchView
 
@@ -28,18 +30,14 @@ from music.api.views.community import (
     CommunityPostReportAPIView,
     CommunityPostCommentReportAPIView,
     CommunityPostFavoriteAPIView,
-    CommunityPostFavoriteListAPIView,
     CommunityPostCommentThreadAPIView,
-)
-
-from music.api.views.ratings import (
-    SongRatingAPIView,
-    AlbumRatingAPIView,
 )
 
 from music.api.views.favorites import (
     SongFavoriteAPIView,
     AlbumFavoriteAPIView,
+    EditorialArticleFavoriteAPIView,
+    CombinedFavoritesListAPIView,
 )
 
 from music.api.views.follows import (
@@ -75,10 +73,12 @@ from music.api.views.discovery import (
 from music.api.views.editorial import (
     EditorialArticleListAPIView,
     EditorialArticleDetailAPIView,
+    EditorialArticleViewAPIView,
     EditorialCommentListCreateAPIView,
     EditorialCommentDetailAPIView,
     EditorialArticleReportAPIView,
     EditorialCommentReportAPIView,
+    EditorialCommentThreadAPIView,
 )
 
 from music.api.views.feed_interactions import (
@@ -104,6 +104,11 @@ urlpatterns = [
     # ============================================================
     # SEARCH
     # ============================================================
+    path(
+        "global-search/",
+        GlobalSearchAPIView.as_view(),
+        name="global-search",
+    ),
 
     path(
         "search/",
@@ -233,22 +238,6 @@ urlpatterns = [
     ),
 
     # ============================================================
-    # RATINGS
-    # ============================================================
-
-    path(
-        "songs/<int:pk>/rating/",
-        SongRatingAPIView.as_view(),
-        name="song-rating",
-    ),
-
-    path(
-        "albums/<int:pk>/rating/",
-        AlbumRatingAPIView.as_view(),
-        name="album-rating",
-    ),
-
-    # ============================================================
     # FAVORITES
     # ============================================================
 
@@ -264,6 +253,13 @@ urlpatterns = [
         name="album-favorite",
     ),
 
+    
+    path(
+        "editorial/<int:pk>/favorite/",
+        EditorialArticleFavoriteAPIView.as_view(),
+        name="editorial-article-favorite",
+    ),
+
     path(
         "community/posts/<int:pk>/favorite/",
         CommunityPostFavoriteAPIView.as_view(),
@@ -271,9 +267,9 @@ urlpatterns = [
     ),
 
     path(
-        "community/favorites/",
-        CommunityPostFavoriteListAPIView.as_view(),
-        name="community-post-favorites",
+        "favorites/",
+        CombinedFavoritesListAPIView.as_view(),
+        name="combined-favorites-list",
     ),
 
     # ============================================================
@@ -431,9 +427,22 @@ urlpatterns = [
     ),
 
     path(
+        "editorial/<int:pk>/view/",
+        EditorialArticleViewAPIView.as_view(),
+        name="editorial-article-view",
+    ),
+
+    path(
         "editorial/<int:article_id>/comments/",
         EditorialCommentListCreateAPIView.as_view(),
         name="editorial-comment-list",
+    ),
+
+    path(
+        "editorial/<int:article_id>/comments/"
+        "<int:root_comment_id>/thread/",
+        EditorialCommentThreadAPIView.as_view(),
+        name="editorial-comment-thread",
     ),
 
     path(

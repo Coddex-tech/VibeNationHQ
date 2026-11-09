@@ -9,10 +9,13 @@ import {
   ArrowRightIcon,
   MusicIcon,
 } from '@/components/Icons';
+import { getMediaUrl } from '@/lib/api';
 import {
   getCommunityPosts,
   type CommunityPost,
 } from '@/lib/music/CommunityPosts';
+
+const POST_PREVIEW_LENGTH = 160;
 
 function formatPostDate(value: string) {
   const date = new Date(value);
@@ -28,9 +31,7 @@ function formatPostDate(value: string) {
   }).format(date);
 }
 
-function getTargetTitle(
-  post: CommunityPost,
-) {
+function getTargetTitle(post: CommunityPost) {
   const target = post.target;
 
   if (!target) {
@@ -52,9 +53,7 @@ function getTargetTitle(
   return target.title;
 }
 
-function getTargetSubtitle(
-  post: CommunityPost,
-) {
+function getTargetSubtitle(post: CommunityPost) {
   const target = post.target;
 
   if (!target) {
@@ -93,9 +92,7 @@ function getTargetSubtitle(
   return target.artist_name;
 }
 
-function getTargetArtwork(
-  post: CommunityPost,
-) {
+function getTargetArtwork(post: CommunityPost) {
   const target = post.target;
 
   if (!target) {
@@ -122,32 +119,46 @@ function CommunityPostCard({
 }: {
   post: CommunityPost;
 }) {
-  const targetTitle =
-    getTargetTitle(post);
+  const [isExpanded, setIsExpanded] = useState(false);
 
-  const targetSubtitle =
-    getTargetSubtitle(post);
+  const targetTitle = getTargetTitle(post);
+  const targetSubtitle = getTargetSubtitle(post);
+  const artworkUrl = getMediaUrl(getTargetArtwork(post));
 
-  const targetArtwork =
-    getTargetArtwork(post);
+  const username = post.user.username || 'vibenation';
 
-  const username =
-    post.user.username || 'vibenation';
+  const isLongPost =
+    post.content.length > POST_PREVIEW_LENGTH;
+
+  const displayedContent =
+    isLongPost && !isExpanded
+      ? `${post.content.slice(0, POST_PREVIEW_LENGTH).trimEnd()}…`
+      : post.content;
 
   return (
     <article
       className="
-        rounded-2xl
-        border border-light-border
+        box-border w-full max-w-full min-w-0
+        overflow-hidden rounded-2xl
         bg-light-surface
-        p-5
+        p-4
         shadow-sm shadow-black/[0.03]
-        dark:border-dark-border
+        transition-shadow duration-200
+        hover:shadow-md hover:shadow-black/[0.05]
+        sm:p-5
         dark:bg-dark-surface
         dark:shadow-black/10
+        dark:hover:shadow-black/20
       "
     >
-      <div className="flex items-start gap-3">
+      <div
+        className="
+          grid w-full min-w-0
+          grid-cols-[2.5rem_minmax(0,1fr)]
+          items-start gap-3
+          sm:gap-4
+        "
+      >
         {/* User avatar */}
         <div
           className="
@@ -162,22 +173,22 @@ function CommunityPostCard({
           "
           aria-hidden="true"
         >
-          {username
-            .charAt(0)
-            .toUpperCase()}
+          {username.charAt(0).toUpperCase()}
         </div>
 
-        <div className="min-w-0 flex-1">
-          {/* User + date */}
+        {/* min-w-0 prevents content from expanding the grid column */}
+        <div className="w-full min-w-0">
+          {/* User and date */}
           <div
             className="
-              flex flex-wrap
+              flex w-full min-w-0 flex-wrap
               items-center gap-x-2 gap-y-1
             "
           >
             <p
               className="
-                break-words
+                min-w-0 max-w-full
+                break-words [overflow-wrap:anywhere]
                 text-sm font-bold
                 text-light-text
                 dark:text-dark-text
@@ -189,7 +200,7 @@ function CommunityPostCard({
             <span
               aria-hidden="true"
               className="
-                text-xs
+                shrink-0 text-xs
                 text-light-text-soft
                 dark:text-dark-text-soft
               "
@@ -200,59 +211,85 @@ function CommunityPostCard({
             <time
               dateTime={post.created_at}
               className="
-                text-xs
+                shrink-0 text-xs
                 text-light-text-soft
                 dark:text-dark-text-soft
               "
             >
-              {formatPostDate(
-                post.created_at,
-              )}
+              {formatPostDate(post.created_at)}
             </time>
           </div>
 
           {/* Post content */}
-          <p
-            className="
-              mt-3
-              whitespace-pre-line
-              break-words
-              text-sm leading-6
-              text-light-text-muted
-              dark:text-dark-text-muted
-            "
-          >
-            {post.content}
-          </p>
+          <div className="mt-3 w-full min-w-0">
+            <p
+              className="
+                w-full min-w-0
+                whitespace-pre-line
+                break-words [overflow-wrap:anywhere]
+                text-sm leading-6
+                text-light-text-muted
+                dark:text-dark-text-muted
+              "
+            >
+              {displayedContent}
+            </p>
+
+            {isLongPost && (
+              <button
+                type="button"
+                onClick={() =>
+                  setIsExpanded((current) => !current)
+                }
+                aria-expanded={isExpanded}
+                className="
+                  mt-1 inline-flex max-w-full
+                  items-center rounded-md
+                  text-sm font-bold
+                  text-brand-teal-dark
+                  transition-colors
+                  hover:text-brand-teal
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-brand-teal
+                  focus-visible:ring-offset-2
+                  dark:text-brand-teal-light
+                  dark:focus-visible:ring-offset-dark-surface
+                "
+              >
+                {isExpanded ? 'See less' : 'See more'}
+              </button>
+            )}
+          </div>
 
           {/* Music target */}
           {targetTitle && (
             <div
               className="
-                mt-4 flex items-center gap-3
-                rounded-xl
-                border border-light-border-soft
+                mt-4 box-border flex w-full min-w-0
+                items-center gap-2.5
+                overflow-hidden rounded-xl
                 bg-light-surface-soft
-                p-3
-                dark:border-dark-border-soft
+                p-2.5
+                sm:gap-3 sm:p-3
                 dark:bg-dark-surface-soft
               "
             >
               <div
                 className="
-                  relative flex h-11 w-11
-                  shrink-0 items-center
-                  justify-center
+                  relative flex h-10 w-10 shrink-0
+                  items-center justify-center
                   overflow-hidden rounded-lg
                   bg-light-surface-muted
                   text-light-text-soft
+                  sm:h-11 sm:w-11
                   dark:bg-dark-surface-muted
                   dark:text-dark-text-soft
                 "
               >
-                {targetArtwork ? (
+                {artworkUrl ? (
                   <Image
-                    src={targetArtwork}
+                    src={artworkUrl}
                     alt=""
                     fill
                     sizes="44px"
@@ -263,11 +300,10 @@ function CommunityPostCard({
                 )}
               </div>
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p
                   className="
-                    truncate
-                    text-sm font-bold
+                    truncate text-sm font-bold
                     text-light-text
                     dark:text-dark-text
                   "
@@ -278,8 +314,7 @@ function CommunityPostCard({
                 {targetSubtitle && (
                   <p
                     className="
-                      mt-0.5 truncate
-                      text-xs
+                      mt-0.5 truncate text-xs
                       text-light-text-muted
                       dark:text-dark-text-muted
                     "
@@ -292,12 +327,12 @@ function CommunityPostCard({
               {post.rating !== null && (
                 <div
                   className="
-                    shrink-0
-                    rounded-full
+                    shrink-0 rounded-full
                     bg-brand-teal/10
-                    px-2.5 py-1
+                    px-2 py-1
                     text-xs font-bold
                     text-brand-teal-dark
+                    sm:px-2.5
                     dark:bg-brand-teal/15
                     dark:text-brand-teal-light
                   "
@@ -311,7 +346,7 @@ function CommunityPostCard({
           {/* Engagement */}
           <div
             className="
-              mt-4 flex flex-wrap
+              mt-4 flex w-full min-w-0 flex-wrap
               items-center gap-x-4 gap-y-2
               text-xs font-medium
               text-light-text-soft
@@ -320,9 +355,7 @@ function CommunityPostCard({
           >
             <span>
               {post.likes_count}{' '}
-              {post.likes_count === 1
-                ? 'like'
-                : 'likes'}
+              {post.likes_count === 1 ? 'like' : 'likes'}
             </span>
 
             <span>
@@ -332,9 +365,7 @@ function CommunityPostCard({
                 : 'comments'}
             </span>
 
-            {post.is_edited && (
-              <span>Edited</span>
-            )}
+            {post.is_edited && <span>Edited</span>}
           </div>
         </div>
       </div>
@@ -346,16 +377,21 @@ function CommunitySkeletonCard() {
   return (
     <div
       className="
-        animate-pulse
-        rounded-2xl
-        border border-light-border
+        box-border w-full max-w-full min-w-0
+        animate-pulse rounded-2xl
         bg-light-surface
-        p-5
-        dark:border-dark-border
+        p-4 sm:p-5
         dark:bg-dark-surface
       "
+      aria-hidden="true"
     >
-      <div className="flex items-start gap-3">
+      <div
+        className="
+          grid w-full min-w-0
+          grid-cols-[2.5rem_minmax(0,1fr)]
+          items-start gap-3 sm:gap-4
+        "
+      >
         <div
           className="
             h-10 w-10 shrink-0
@@ -365,10 +401,10 @@ function CommunitySkeletonCard() {
           "
         />
 
-        <div className="min-w-0 flex-1">
+        <div className="w-full min-w-0">
           <div
             className="
-              h-4 w-32 max-w-full rounded
+              h-4 w-32 max-w-full rounded-full
               bg-light-surface-muted
               dark:bg-dark-surface-muted
             "
@@ -376,7 +412,7 @@ function CommunitySkeletonCard() {
 
           <div
             className="
-              mt-4 h-4 w-full rounded
+              mt-4 h-4 w-full rounded-full
               bg-light-surface-soft
               dark:bg-dark-surface-soft
             "
@@ -384,7 +420,7 @@ function CommunitySkeletonCard() {
 
           <div
             className="
-              mt-2 h-4 w-4/5 rounded
+              mt-2 h-4 w-4/5 max-w-full rounded-full
               bg-light-surface-soft
               dark:bg-dark-surface-soft
             "
@@ -404,14 +440,9 @@ function CommunitySkeletonCard() {
 }
 
 export default function HomeCommunitySection() {
-  const [posts, setPosts] =
-    useState<CommunityPost[]>([]);
-
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState<string | null>(null);
+  const [posts, setPosts] = useState<CommunityPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -421,10 +452,9 @@ export default function HomeCommunitySection() {
       setError(null);
 
       try {
-        const response =
-          await getCommunityPosts({
-            pageSize: 3,
-          });
+        const response = await getCommunityPosts({
+          pageSize: 3,
+        });
 
         if (!isMounted) {
           return;
@@ -457,30 +487,33 @@ export default function HomeCommunitySection() {
     <section
       aria-labelledby="home-community-heading"
       className="
-        border-b border-light-border
+        w-full min-w-0 max-w-full
+        overflow-x-clip
         bg-light-bg
-        dark:border-dark-border
         dark:bg-dark-bg
       "
     >
       <div
         className="
-          mx-auto w-full max-w-7xl
-          px-5 py-14
+          mx-auto box-border
+          w-full min-w-0 max-w-7xl
+          px-4 py-12
           sm:px-6 sm:py-16
           lg:px-8 lg:py-20
         "
       >
         <div
           className="
-            grid items-start gap-10
-            lg:grid-cols-[0.85fr_1.15fr]
+            grid w-full min-w-0
+            grid-cols-1
+            items-start gap-8
+            lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]
             lg:gap-16
           "
         >
           {/* Section introduction */}
           <FadeIn>
-            <div className="max-w-xl">
+            <div className="w-full min-w-0 max-w-xl">
               <div
                 className="
                   mb-3 inline-flex
@@ -494,9 +527,8 @@ export default function HomeCommunitySection() {
                 <span
                   aria-hidden="true"
                   className="
-                    h-1.5 w-1.5
-                    rounded-full
-                    bg-brand-teal
+                    h-1.5 w-1.5 shrink-0
+                    rounded-full bg-brand-teal
                   "
                 />
 
@@ -511,6 +543,7 @@ export default function HomeCommunitySection() {
                   text-light-text
                   dark:text-dark-text
                   sm:text-3xl
+                  lg:text-4xl
                 "
               >
                 Music is better when
@@ -525,170 +558,181 @@ export default function HomeCommunitySection() {
                   sm:text-base
                 "
               >
-                Find a song, share what it
-                means to you, rate it, and see
-                what other people are saying.
-                VibeNationHQ brings music
-                discovery and genuine
-                conversation together.
+                Find a song, share what it means to you,
+                rate it, and see what other people are
+                saying. VibeNationHQ brings music discovery
+                and genuine conversation together.
               </p>
 
               <Link
                 href="/music"
                 className="
                   mt-6 inline-flex
-                  items-center gap-2
+                  min-h-11 max-w-full
+                  items-center justify-center gap-2
                   rounded-xl
                   bg-brand-teal
                   px-4 py-2.5
-                  text-sm font-bold
-                  text-white
-                  shadow-sm
-                  shadow-brand-teal/20
-                  transition-all duration-200
+                  text-sm font-bold text-white
+                  shadow-sm shadow-brand-teal/20
+                  transition-colors duration-200
                   hover:bg-brand-teal-dark
-                  active:scale-[0.99]
+                  focus-visible:outline-none
+                  focus-visible:ring-2
+                  focus-visible:ring-brand-teal
+                  focus-visible:ring-offset-2
+                  dark:focus-visible:ring-offset-dark-bg
                 "
               >
                 Explore the community
-                <ArrowRightIcon className="h-4 w-4" />
+                <ArrowRightIcon className="h-4 w-4 shrink-0" />
               </Link>
             </div>
           </FadeIn>
 
           {/* Community feed */}
           <FadeIn delay={0.1}>
-            {isLoading ? (
-              <div className="space-y-4">
-                <CommunitySkeletonCard />
-                <CommunitySkeletonCard />
-              </div>
-            ) : error ? (
-              <div
-                role="alert"
-                className="
-                  rounded-2xl
-                  border border-red-200
-                  bg-red-50
-                  px-5 py-6
-                  dark:border-red-500/20
-                  dark:bg-red-500/10
-                "
-              >
-                <p
+            <div className="w-full min-w-0 max-w-full">
+              {isLoading ? (
+                <div className="w-full min-w-0 space-y-4">
+                  <CommunitySkeletonCard />
+                  <CommunitySkeletonCard />
+                </div>
+              ) : error ? (
+                <div
+                  role="alert"
                   className="
-                    text-sm font-bold
-                    text-red-700
-                    dark:text-red-300
+                    box-border w-full min-w-0
+                    rounded-2xl
+                    bg-red-50
+                    px-4 py-6 sm:px-5
+                    dark:bg-red-500/10
                   "
                 >
-                  Community unavailable
-                </p>
+                  <p
+                    className="
+                      text-sm font-bold
+                      text-red-700
+                      dark:text-red-300
+                    "
+                  >
+                    Community unavailable
+                  </p>
 
-                <p
-                  className="
-                    mt-1 text-sm leading-6
-                    text-red-600
-                    dark:text-red-300/80
-                  "
-                >
-                  We couldn&apos;t load the
-                  latest conversations. Please
-                  try again later.
-                </p>
-              </div>
-            ) : posts.length === 0 ? (
-              <div
-                className="
-                  rounded-2xl
-                  border border-light-border
-                  bg-light-surface
-                  px-6 py-10
-                  text-center
-                  shadow-sm shadow-black/[0.03]
-                  dark:border-dark-border
-                  dark:bg-dark-surface
-                  dark:shadow-black/10
-                "
-              >
+                  <p
+                    className="
+                      mt-1 text-sm leading-6
+                      text-red-600
+                      dark:text-red-300/80
+                    "
+                  >
+                    We couldn&apos;t load the latest
+                    conversations. Please try again later.
+                  </p>
+                </div>
+              ) : posts.length === 0 ? (
                 <div
                   className="
-                    mx-auto flex h-12 w-12
-                    items-center justify-center
-                    rounded-xl
-                    bg-brand-teal/10
-                    text-brand-teal
-                    dark:bg-brand-teal/15
+                    box-border w-full min-w-0
+                    rounded-2xl
+                    bg-light-surface
+                    px-4 py-8
+                    text-center
+                    shadow-sm shadow-black/[0.03]
+                    sm:px-6 sm:py-10
+                    dark:bg-dark-surface
+                    dark:shadow-black/10
                   "
                 >
-                  <MusicIcon className="h-6 w-6" />
-                </div>
+                  <div
+                    className="
+                      mx-auto flex h-12 w-12
+                      items-center justify-center
+                      rounded-2xl
+                      bg-brand-teal/10
+                      text-brand-teal
+                      dark:bg-brand-teal/15
+                    "
+                  >
+                    <MusicIcon className="h-6 w-6" />
+                  </div>
 
-                <h3
-                  className="
-                    mt-4 text-base font-bold
-                    text-light-text
-                    dark:text-dark-text
-                  "
-                >
-                  The conversation starts here.
-                </h3>
+                  <h3
+                    className="
+                      mt-4 text-base font-bold
+                      text-light-text
+                      dark:text-dark-text
+                    "
+                  >
+                    The conversation starts here.
+                  </h3>
 
-                <p
-                  className="
-                    mx-auto mt-2 max-w-md
-                    text-sm leading-6
-                    text-light-text-muted
-                    dark:text-dark-text-muted
-                  "
-                >
-                  Community conversations will
-                  appear here once people start
-                  sharing their thoughts on music.
-                </p>
+                  <p
+                    className="
+                      mx-auto mt-2 max-w-md
+                      text-sm leading-6
+                      text-light-text-muted
+                      dark:text-dark-text-muted
+                    "
+                  >
+                    Community conversations will appear
+                    here once people start sharing their
+                    thoughts on music.
+                  </p>
 
-                <Link
-                  href="/music"
-                  className="
-                    mt-5 inline-flex
-                    items-center gap-2
-                    text-sm font-bold
-                    text-brand-teal-dark
-                    hover:text-brand-teal
-                    dark:text-brand-teal-light
-                  "
-                >
-                  Explore music
-                  <ArrowRightIcon className="h-4 w-4" />
-                </Link>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {posts.map((post) => (
-                  <CommunityPostCard
-                    key={post.id}
-                    post={post}
-                  />
-                ))}
-
-                <div className="pt-1">
                   <Link
                     href="/music"
                     className="
-                      inline-flex
+                      mt-5 inline-flex
                       items-center gap-2
+                      rounded-lg
                       text-sm font-bold
                       text-brand-teal-dark
+                      transition-colors
                       hover:text-brand-teal
+                      focus-visible:outline-none
+                      focus-visible:ring-2
+                      focus-visible:ring-brand-teal
                       dark:text-brand-teal-light
                     "
                   >
-                    See more community
+                    Explore music
                     <ArrowRightIcon className="h-4 w-4" />
                   </Link>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="w-full min-w-0 space-y-4">
+                  {posts.map((post) => (
+                    <CommunityPostCard
+                      key={post.id}
+                      post={post}
+                    />
+                  ))}
+
+                  <div className="min-w-0 pt-1">
+                    <Link
+                      href="/music"
+                      className="
+                        inline-flex max-w-full
+                        items-center gap-2
+                        rounded-lg
+                        text-sm font-bold
+                        text-brand-teal-dark
+                        transition-colors
+                        hover:text-brand-teal
+                        focus-visible:outline-none
+                        focus-visible:ring-2
+                        focus-visible:ring-brand-teal
+                        dark:text-brand-teal-light
+                      "
+                    >
+                      See more community
+                      <ArrowRightIcon className="h-4 w-4 shrink-0" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
           </FadeIn>
         </div>
       </div>

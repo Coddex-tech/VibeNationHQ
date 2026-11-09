@@ -5,7 +5,7 @@ import {
   permanentRedirect,
 } from 'next/navigation';
 
-import MusicPost from '@/components/music/MusicPost';
+import MusicPost from '@/components/music/CommunityPost';
 import CommunityPostViewTracker from '@/components/music/CommunityPostViewTracker';
 
 import {

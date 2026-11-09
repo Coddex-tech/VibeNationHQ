@@ -26,12 +26,14 @@ class ArtistFollowAPITestCase(APITestCase):
             username="artist_follower",
             password="testpass123",
             email="artist_follower@example.com",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="another_artist_follower",
             password="testpass123",
             email="another_artist_follower@example.com",
+            onboarding_completed=True,
         )
 
         self.artist = Artist.objects.create(
@@ -668,18 +670,21 @@ class UserFollowAPITestCase(APITestCase):
             username="follower",
             password="testpass123",
             email="follower@example.com",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="following_user",
             password="testpass123",
             email="following_user@example.com",
+            onboarding_completed=True,
         )
 
         self.third_user = User.objects.create_user(
             username="third_user",
             password="testpass123",
             email="third_user@example.com",
+            onboarding_completed=True,
         )
 
         self.url = reverse(
@@ -970,3 +975,196 @@ class UserFollowAPITestCase(APITestCase):
                 following=self.other_user,
             ).exists()
         )
+
+
+
+# ============================================================
+# FOLLOW ACCOUNT PERMISSIONS
+# ============================================================
+
+class FollowAccountPermissionAPITests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="follow_permission_user",
+            email="followpermission@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.incomplete_user = User.objects.create_user(
+            username="follow_incomplete_user",
+            email="followincomplete@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=False,
+        )
+
+        self.staff_user = User.objects.create_superuser(
+            username="follow_staff_user",
+            email="followstaff@example.com",
+            password="testpass123",
+        )
+        self.staff_user.is_superuser = False
+        self.staff_user.save(update_fields=["is_superuser"])
+
+        self.superuser = User.objects.create_superuser(
+            username="follow_superuser",
+            email="followsuperuser@example.com",
+            password="testpass123",
+        )
+
+        self.artist = Artist.objects.create(
+            name="Follow Permission Artist",
+            slug="follow-permission-artist",
+            is_active=True,
+        )
+
+        self.target_user = User.objects.create_user(
+            username="follow_target_user",
+            email="followtarget@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.follow_urls = [
+            (
+                "artist",
+                reverse(
+                    "music_api:artist-follow",
+                    kwargs={"pk": self.artist.id},
+                ),
+            ),
+            (
+                "user",
+                reverse(
+                    "music_api:user-follow",
+                    kwargs={"pk": self.target_user.id},
+                ),
+            ),
+        ]
+
+    def test_incomplete_user_cannot_follow(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_incomplete_user_cannot_unfollow(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_follow(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_unfollow(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_follow(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_unfollow(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_onboarded_user_can_follow_artist_and_user(self):
+        self.client.force_authenticate(user=self.user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+    def test_onboarded_user_can_unfollow_artist_and_user(self):
+        self.client.force_authenticate(user=self.user)
+
+        for follow_type, url in self.follow_urls:
+            with self.subTest(follow_type=follow_type):
+                follow_response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    follow_response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+                unfollow_response = self.client.delete(url)
+
+                self.assertEqual(
+                    unfollow_response.status_code,
+                    status.HTTP_200_OK,
+                )

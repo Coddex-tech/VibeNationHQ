@@ -1,4 +1,5 @@
-from django.contrib.auth import authenticate, get_user_model
+
+from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
@@ -26,6 +27,11 @@ def login_user(*, email, password):
         )
 
     if not user.check_password(password):
+        raise InvalidLoginError(
+            "Invalid email or password."
+        )
+
+    if user.is_staff or user.is_superuser:
         raise InvalidLoginError(
             "Invalid email or password."
         )

@@ -1,8 +1,10 @@
+
 'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { getMediaUrl } from '@/lib/api';
 
 import FadeIn from '@/components/FadeIn';
 import {
@@ -36,7 +38,9 @@ function MusicArtwork({
         ? 'h-32 w-32 rounded-xl sm:h-40 sm:w-40 sm:rounded-2xl'
         : 'h-16 w-16 rounded-xl';
 
-  if (!src) {
+  const imageUrl = getMediaUrl(src);
+
+  if (!imageUrl) {
     return (
       <div
         className={`
@@ -68,7 +72,7 @@ function MusicArtwork({
       `}
     >
       <Image
-        src={src}
+        src={imageUrl}
         alt={alt}
         fill
         sizes={
@@ -84,13 +88,8 @@ function MusicArtwork({
   );
 }
 
-function formatRating(
-  rating: number | null,
-) {
-  if (
-    rating === null ||
-    Number.isNaN(rating)
-  ) {
+function formatRating(rating: number | null) {
+  if (rating === null || Number.isNaN(rating)) {
     return null;
   }
 
@@ -106,34 +105,27 @@ function SongCard({
     .map((artist) => artist.name)
     .join(', ');
 
-  const rating = formatRating(
-    song.average_rating,
-  );
+  const rating = formatRating(song.average_rating);
 
   return (
     <Link
       href={`/music/songs/${song.slug}`}
       className="
-        group
-        flex min-w-0 gap-3
-        rounded-xl
-        border border-light-border-soft
+        group flex min-w-0 gap-3
+        rounded-2xl
         bg-light-surface-soft
         p-3
         transition-all duration-200
         hover:-translate-y-0.5
-        hover:border-brand-teal/30
         hover:bg-light-surface
-        hover:shadow-md hover:shadow-black/[0.04]
+        hover:shadow-lg hover:shadow-black/[0.04]
         focus:outline-none
-        focus:ring-4
-        focus:ring-brand-teal/10
-        dark:border-dark-border-soft
+        focus-visible:ring-4
+        focus-visible:ring-brand-teal/20
         dark:bg-dark-surface-soft
-        dark:hover:border-brand-teal/30
         dark:hover:bg-dark-surface
         dark:hover:shadow-black/20
-        dark:focus:ring-brand-teal/15
+        dark:focus-visible:ring-brand-teal/20
       "
     >
       <MusicArtwork
@@ -145,8 +137,7 @@ function SongCard({
         <div className="flex items-start gap-2">
           <h3
             className="
-              min-w-0 flex-1
-              truncate
+              min-w-0 flex-1 truncate
               text-sm font-bold
               text-light-text
               dark:text-dark-text
@@ -168,8 +159,7 @@ function SongCard({
 
         <p
           className="
-            mt-1 truncate
-            text-xs
+            mt-1 truncate text-xs
             text-light-text-muted
             dark:text-dark-text-muted
           "
@@ -177,12 +167,7 @@ function SongCard({
           {artistNames || 'Unknown artist'}
         </p>
 
-        <div
-          className="
-            mt-2 flex flex-wrap
-            items-center gap-x-3 gap-y-1
-          "
-        >
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           {song.duration_display && (
             <span
               className="
@@ -223,34 +208,27 @@ function AlbumCard({
     .map((artist) => artist.name)
     .join(', ');
 
-  const rating = formatRating(
-    album.average_rating,
-  );
+  const rating = formatRating(album.average_rating);
 
   return (
     <Link
       href={`/music/albums/${album.slug}`}
       className="
-        group
-        flex min-w-0 gap-3
-        rounded-xl
-        border border-light-border-soft
+        group flex min-w-0 gap-3
+        rounded-2xl
         bg-light-surface-soft
         p-3
         transition-all duration-200
         hover:-translate-y-0.5
-        hover:border-brand-teal/30
         hover:bg-light-surface
-        hover:shadow-md hover:shadow-black/[0.04]
+        hover:shadow-lg hover:shadow-black/[0.04]
         focus:outline-none
-        focus:ring-4
-        focus:ring-brand-teal/10
-        dark:border-dark-border-soft
+        focus-visible:ring-4
+        focus-visible:ring-brand-teal/20
         dark:bg-dark-surface-soft
-        dark:hover:border-brand-teal/30
         dark:hover:bg-dark-surface
         dark:hover:shadow-black/20
-        dark:focus:ring-brand-teal/15
+        dark:focus-visible:ring-brand-teal/20
       "
     >
       <MusicArtwork
@@ -262,8 +240,7 @@ function AlbumCard({
         <div className="flex items-start gap-2">
           <h3
             className="
-              min-w-0 flex-1
-              truncate
+              min-w-0 flex-1 truncate
               text-sm font-bold
               text-light-text
               dark:text-dark-text
@@ -285,8 +262,7 @@ function AlbumCard({
 
         <p
           className="
-            mt-1 truncate
-            text-xs
+            mt-1 truncate text-xs
             text-light-text-muted
             dark:text-dark-text-muted
           "
@@ -297,8 +273,7 @@ function AlbumCard({
         {rating && (
           <div
             className="
-              mt-2 inline-flex
-              items-center gap-1
+              mt-2 inline-flex items-center gap-1
               text-[11px] font-semibold
               text-brand-teal-dark
               dark:text-brand-teal-light
@@ -318,44 +293,40 @@ function ArtistCard({
 }: {
   artist: MusicDiscoveryArtist;
 }) {
+  const profileImageUrl = getMediaUrl(artist.profile_image);
+
   return (
     <Link
       href={`/music/artists/${artist.slug}`}
       className="
-        group
-        flex min-w-0 items-center gap-3
-        rounded-xl
-        border border-light-border-soft
+        group flex min-w-0 items-center gap-3
+        rounded-2xl
         bg-light-surface-soft
         p-3
         transition-all duration-200
         hover:-translate-y-0.5
-        hover:border-brand-teal/30
         hover:bg-light-surface
-        hover:shadow-md hover:shadow-black/[0.04]
+        hover:shadow-lg hover:shadow-black/[0.04]
         focus:outline-none
-        focus:ring-4
-        focus:ring-brand-teal/10
-        dark:border-dark-border-soft
+        focus-visible:ring-4
+        focus-visible:ring-brand-teal/20
         dark:bg-dark-surface-soft
-        dark:hover:border-brand-teal/30
         dark:hover:bg-dark-surface
         dark:hover:shadow-black/20
-        dark:focus:ring-brand-teal/15
+        dark:focus-visible:ring-brand-teal/20
       "
     >
-      {artist.profile_image ? (
+      {profileImageUrl ? (
         <div
           className="
-            relative h-12 w-12
-            shrink-0 overflow-hidden
-            rounded-full
+            relative h-12 w-12 shrink-0
+            overflow-hidden rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
         >
           <Image
-            src={artist.profile_image}
+            src={profileImageUrl}
             alt={artist.name}
             fill
             sizes="48px"
@@ -391,10 +362,7 @@ function ArtistCard({
 
           {artist.is_verified && (
             <CheckCircleIcon
-              className="
-                h-4 w-4 shrink-0
-                text-brand-teal
-              "
+              className="h-4 w-4 shrink-0 text-brand-teal"
               aria-label="Verified artist"
             />
           )}
@@ -407,8 +375,7 @@ function ArtistCard({
             dark:text-dark-text-muted
           "
         >
-          {artist.followers_count.toLocaleString()}
-          {' '}
+          {artist.followers_count.toLocaleString()}{' '}
           {artist.followers_count === 1
             ? 'follower'
             : 'followers'}
@@ -474,8 +441,7 @@ function SectionHeading({
         <Link
           href={href}
           className="
-            inline-flex shrink-0
-            items-center gap-2
+            inline-flex shrink-0 items-center gap-2
             text-sm font-bold
             text-brand-teal-dark
             transition-colors
@@ -496,108 +462,10 @@ function SongSkeleton() {
   return (
     <div
       className="
-        animate-pulse
-        flex gap-3
-        rounded-xl
-        border border-light-border-soft
+        flex animate-pulse gap-3
+        rounded-2xl
         bg-light-surface-soft
         p-3
-        dark:border-dark-border-soft
-        dark:bg-dark-surface-soft
-      "
-    >
-      <div
-        className="
-          h-16 w-16 shrink-0
-          rounded-xl
-          bg-light-surface-muted
-          dark:bg-dark-surface-muted
-        "
-      />
-
-      <div className="min-w-0 flex-1 py-1">
-        <div
-          className="
-            h-4 w-3/4 max-w-48 rounded
-            bg-light-surface-muted
-            dark:bg-dark-surface-muted
-          "
-        />
-
-        <div
-          className="
-            mt-2 h-3 w-1/2 max-w-32 rounded
-            bg-light-surface-muted
-            dark:bg-dark-surface-muted
-          "
-        />
-
-        <div
-          className="
-            mt-3 h-3 w-20 rounded
-            bg-light-surface-muted
-            dark:bg-dark-surface-muted
-          "
-        />
-      </div>
-    </div>
-  );
-}
-
-function ArtistSkeleton() {
-  return (
-    <div
-      className="
-        animate-pulse
-        flex items-center gap-3
-        rounded-xl
-        border border-light-border-soft
-        bg-light-surface-soft
-        p-3
-        dark:border-dark-border-soft
-        dark:bg-dark-surface-soft
-      "
-    >
-      <div
-        className="
-          h-12 w-12 shrink-0 rounded-full
-          bg-light-surface-muted
-          dark:bg-dark-surface-muted
-        "
-      />
-
-      <div className="min-w-0 flex-1">
-        <div
-          className="
-            h-4 w-3/4 max-w-40 rounded
-            bg-light-surface-muted
-            dark:bg-dark-surface-muted
-          "
-        />
-
-        <div
-          className="
-            mt-2 h-3 w-24 rounded
-            bg-light-surface-muted
-            dark:bg-dark-surface-muted
-          "
-        />
-      </div>
-    </div>
-  );
-}
-
-function AlbumSkeleton() {
-  return (
-    <div
-      className="
-        animate-pulse
-        flex gap-3
-        rounded-xl
-        border border-light-border-soft
-        bg-light-surface-soft
-        p-3
-        dark:border-dark-border-soft
         dark:bg-dark-surface-soft
       "
     >
@@ -612,7 +480,7 @@ function AlbumSkeleton() {
       <div className="min-w-0 flex-1 py-1">
         <div
           className="
-            h-4 w-3/4 max-w-44 rounded
+            h-4 w-3/4 max-w-48 rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -620,7 +488,7 @@ function AlbumSkeleton() {
 
         <div
           className="
-            mt-2 h-3 w-1/2 max-w-28 rounded
+            mt-2 h-3 w-1/2 max-w-32 rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -628,7 +496,95 @@ function AlbumSkeleton() {
 
         <div
           className="
-            mt-3 h-3 w-16 rounded
+            mt-3 h-3 w-20 rounded-full
+            bg-light-surface-muted
+            dark:bg-dark-surface-muted
+          "
+        />
+      </div>
+    </div>
+  );
+}
+
+function ArtistSkeleton() {
+  return (
+    <div
+      className="
+        flex animate-pulse items-center gap-3
+        rounded-2xl
+        bg-light-surface-soft
+        p-3
+        dark:bg-dark-surface-soft
+      "
+    >
+      <div
+        className="
+          h-12 w-12 shrink-0 rounded-full
+          bg-light-surface-muted
+          dark:bg-dark-surface-muted
+        "
+      />
+
+      <div className="min-w-0 flex-1">
+        <div
+          className="
+            h-4 w-3/4 max-w-40 rounded-full
+            bg-light-surface-muted
+            dark:bg-dark-surface-muted
+          "
+        />
+
+        <div
+          className="
+            mt-2 h-3 w-24 rounded-full
+            bg-light-surface-muted
+            dark:bg-dark-surface-muted
+          "
+        />
+      </div>
+    </div>
+  );
+}
+
+function AlbumSkeleton() {
+  return (
+    <div
+      className="
+        flex animate-pulse gap-3
+        rounded-2xl
+        bg-light-surface-soft
+        p-3
+        dark:bg-dark-surface-soft
+      "
+    >
+      <div
+        className="
+          h-16 w-16 shrink-0 rounded-xl
+          bg-light-surface-muted
+          dark:bg-dark-surface-muted
+        "
+      />
+
+      <div className="min-w-0 flex-1 py-1">
+        <div
+          className="
+            h-4 w-3/4 max-w-44 rounded-full
+            bg-light-surface-muted
+            dark:bg-dark-surface-muted
+          "
+        />
+
+        <div
+          className="
+            mt-2 h-3 w-1/2 max-w-28 rounded-full
+            bg-light-surface-muted
+            dark:bg-dark-surface-muted
+          "
+        />
+
+        <div
+          className="
+            mt-3 h-3 w-16 rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -644,8 +600,7 @@ function DiscoverySkeleton() {
       <section>
         <div
           className="
-            animate-pulse
-            h-6 w-40 rounded
+            h-6 w-40 animate-pulse rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -658,21 +613,16 @@ function DiscoverySkeleton() {
             lg:grid-cols-3
           "
         >
-          {Array.from({ length: 6 }).map(
-            (_, index) => (
-              <SongSkeleton
-                key={`song-${index}`}
-              />
-            ),
-          )}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <SongSkeleton key={`song-${index}`} />
+          ))}
         </div>
       </section>
 
       <section>
         <div
           className="
-            animate-pulse
-            h-6 w-44 rounded
+            h-6 w-44 animate-pulse rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -685,21 +635,16 @@ function DiscoverySkeleton() {
             lg:grid-cols-3
           "
         >
-          {Array.from({ length: 6 }).map(
-            (_, index) => (
-              <ArtistSkeleton
-                key={`artist-${index}`}
-              />
-            ),
-          )}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <ArtistSkeleton key={`artist-${index}`} />
+          ))}
         </div>
       </section>
 
       <section>
         <div
           className="
-            animate-pulse
-            h-6 w-48 rounded
+            h-6 w-48 animate-pulse rounded-full
             bg-light-surface-muted
             dark:bg-dark-surface-muted
           "
@@ -712,13 +657,9 @@ function DiscoverySkeleton() {
             lg:grid-cols-3
           "
         >
-          {Array.from({ length: 6 }).map(
-            (_, index) => (
-              <AlbumSkeleton
-                key={`album-${index}`}
-              />
-            ),
-          )}
+          {Array.from({ length: 6 }).map((_, index) => (
+            <AlbumSkeleton key={`album-${index}`} />
+          ))}
         </div>
       </section>
     </div>
@@ -727,15 +668,10 @@ function DiscoverySkeleton() {
 
 export default function HomeMusicSection() {
   const [discovery, setDiscovery] =
-    useState<MusicDiscoveryResponse | null>(
-      null,
-    );
+    useState<MusicDiscoveryResponse | null>(null);
 
-  const [isLoading, setIsLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -745,8 +681,7 @@ export default function HomeMusicSection() {
       setError('');
 
       try {
-        const data =
-          await getMusicDiscovery();
+        const data = await getMusicDiscovery();
 
         if (!isMounted) {
           return;
@@ -788,16 +723,10 @@ export default function HomeMusicSection() {
     discovery?.featured_albums.slice(0, 3) ?? [];
 
   const recentlyReleasedSongs =
-    discovery?.recently_released_songs.slice(
-      0,
-      6,
-    ) ?? [];
+    discovery?.recently_released_songs.slice(0, 6) ?? [];
 
   const recentlyReleasedAlbums =
-    discovery?.recently_released_albums.slice(
-      0,
-      6,
-    ) ?? [];
+    discovery?.recently_released_albums.slice(0, 6) ?? [];
 
   const hasDiscoveryContent =
     trendingSongs.length > 0 ||
@@ -811,10 +740,8 @@ export default function HomeMusicSection() {
     <section
       aria-labelledby="home-music-heading"
       className="
-        border-b border-light-border
-        bg-light-surface
-        dark:border-dark-border
-        dark:bg-dark-surface
+        bg-light-bg
+        dark:bg-dark-bg
       "
     >
       <div
@@ -900,20 +827,18 @@ export default function HomeMusicSection() {
               group mt-8
               flex items-center gap-3
               rounded-2xl
-              border border-light-border
-              bg-light-bg
+              bg-light-surface
               px-4 py-4
               transition-all duration-200
-              hover:border-brand-teal/30
               hover:bg-light-surface-soft
+              hover:shadow-lg hover:shadow-black/[0.03]
               focus:outline-none
-              focus:ring-4
-              focus:ring-brand-teal/10
-              dark:border-dark-border
-              dark:bg-dark-bg
-              dark:hover:border-brand-teal/30
+              focus-visible:ring-4
+              focus-visible:ring-brand-teal/20
+              dark:bg-dark-surface
               dark:hover:bg-dark-surface-soft
-              dark:focus:ring-brand-teal/15
+              dark:hover:shadow-black/20
+              dark:focus-visible:ring-brand-teal/20
               sm:px-5
             "
           >
@@ -924,6 +849,7 @@ export default function HomeMusicSection() {
                 rounded-xl
                 bg-brand-teal/10
                 text-brand-teal
+                dark:bg-brand-teal/15
               "
             >
               <SearchIcon className="h-5 w-5" />
@@ -942,8 +868,7 @@ export default function HomeMusicSection() {
 
               <p
                 className="
-                  mt-0.5 truncate
-                  text-xs
+                  mt-0.5 truncate text-xs
                   text-light-text-muted
                   dark:text-dark-text-muted
                 "
@@ -970,23 +895,15 @@ export default function HomeMusicSection() {
               role="alert"
               className="
                 flex items-start gap-3
-                rounded-xl
-                border border-red-200
+                rounded-2xl
                 bg-red-50
                 px-4 py-3.5
-                text-sm leading-6
-                text-red-700
-                dark:border-red-500/20
+                text-sm leading-6 text-red-700
                 dark:bg-red-500/10
                 dark:text-red-300
               "
             >
-              <AlertTriangleIcon
-                className="
-                  mt-0.5 h-5 w-5 shrink-0
-                "
-              />
-
+              <AlertTriangleIcon className="mt-0.5 h-5 w-5 shrink-0" />
               <p>{error}</p>
             </div>
           </FadeIn>
@@ -1001,12 +918,10 @@ export default function HomeMusicSection() {
             <div
               className="
                 mt-8 rounded-2xl
-                border border-light-border
-                bg-light-bg
+                bg-light-surface
                 px-5 py-10
                 text-center
-                dark:border-dark-border
-                dark:bg-dark-bg
+                dark:bg-dark-surface
               "
             >
               <div
@@ -1016,6 +931,7 @@ export default function HomeMusicSection() {
                   rounded-xl
                   bg-brand-teal/10
                   text-brand-teal
+                  dark:bg-brand-teal/15
                 "
               >
                 <MusicIcon className="h-6 w-6" />
@@ -1047,8 +963,7 @@ export default function HomeMusicSection() {
               <Link
                 href="/music"
                 className="
-                  mt-5 inline-flex
-                  items-center gap-2
+                  mt-5 inline-flex items-center gap-2
                   rounded-xl
                   bg-brand-teal
                   px-4 py-2.5
@@ -1056,8 +971,8 @@ export default function HomeMusicSection() {
                   transition-colors
                   hover:bg-brand-teal-dark
                   focus:outline-none
-                  focus:ring-4
-                  focus:ring-brand-teal/20
+                  focus-visible:ring-4
+                  focus-visible:ring-brand-teal/20
                 "
               >
                 Explore music
@@ -1085,10 +1000,7 @@ export default function HomeMusicSection() {
                     "
                   >
                     {trendingSongs.map((song) => (
-                      <SongCard
-                        key={song.id}
-                        song={song}
-                      />
+                      <SongCard key={song.id} song={song} />
                     ))}
                   </div>
                 </section>
@@ -1112,14 +1024,12 @@ export default function HomeMusicSection() {
                       lg:grid-cols-3
                     "
                   >
-                    {trendingArtists.map(
-                      (artist) => (
-                        <ArtistCard
-                          key={artist.id}
-                          artist={artist}
-                        />
-                      ),
-                    )}
+                    {trendingArtists.map((artist) => (
+                      <ArtistCard
+                        key={artist.id}
+                        artist={artist}
+                      />
+                    ))}
                   </div>
                 </section>
               </FadeIn>
@@ -1135,35 +1045,20 @@ export default function HomeMusicSection() {
                     title="Picked for the VibeNation community"
                   />
 
-                  <div
-                    className="
-                      mt-5 grid gap-3
-                      lg:grid-cols-2
-                    "
-                  >
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
                     {featuredSongs.length > 0 && (
                       <div className="space-y-3">
-                        {featuredSongs.map(
-                          (song) => (
-                            <SongCard
-                              key={song.id}
-                              song={song}
-                            />
-                          ),
-                        )}
+                        {featuredSongs.map((song) => (
+                          <SongCard key={song.id} song={song} />
+                        ))}
                       </div>
                     )}
 
                     {featuredAlbums.length > 0 && (
                       <div className="space-y-3">
-                        {featuredAlbums.map(
-                          (album) => (
-                            <AlbumCard
-                              key={album.id}
-                              album={album}
-                            />
-                          ),
-                        )}
+                        {featuredAlbums.map((album) => (
+                          <AlbumCard key={album.id} album={album} />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1181,37 +1076,20 @@ export default function HomeMusicSection() {
                     title="Recently released"
                   />
 
-                  <div
-                    className="
-                      mt-5 grid gap-3
-                      lg:grid-cols-2
-                    "
-                  >
-                    {recentlyReleasedSongs.length >
-                      0 && (
+                  <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                    {recentlyReleasedSongs.length > 0 && (
                       <div className="space-y-3">
-                        {recentlyReleasedSongs.map(
-                          (song) => (
-                            <SongCard
-                              key={song.id}
-                              song={song}
-                            />
-                          ),
-                        )}
+                        {recentlyReleasedSongs.map((song) => (
+                          <SongCard key={song.id} song={song} />
+                        ))}
                       </div>
                     )}
 
-                    {recentlyReleasedAlbums.length >
-                      0 && (
+                    {recentlyReleasedAlbums.length > 0 && (
                       <div className="space-y-3">
-                        {recentlyReleasedAlbums.map(
-                          (album) => (
-                            <AlbumCard
-                              key={album.id}
-                              album={album}
-                            />
-                          ),
-                        )}
+                        {recentlyReleasedAlbums.map((album) => (
+                          <AlbumCard key={album.id} album={album} />
+                        ))}
                       </div>
                     )}
                   </div>
@@ -1225,21 +1103,17 @@ export default function HomeMusicSection() {
         <FadeIn delay={0.12}>
           <div
             className="
-              mt-12
-              rounded-2xl
-              border border-brand-teal/20
-              bg-brand-teal/[0.06]
+              mt-12 rounded-2xl
+              bg-brand-teal/[0.07]
               px-5 py-6
-              dark:border-brand-teal/20
-              dark:bg-brand-teal/[0.07]
+              dark:bg-brand-teal/[0.10]
               sm:px-6
             "
           >
             <div
               className="
                 flex flex-col gap-4
-                sm:flex-row
-                sm:items-center
+                sm:flex-row sm:items-center
                 sm:justify-between
               "
             >
@@ -1280,8 +1154,8 @@ export default function HomeMusicSection() {
                   hover:bg-brand-teal-dark
                   active:scale-[0.99]
                   focus:outline-none
-                  focus:ring-4
-                  focus:ring-brand-teal/20
+                  focus-visible:ring-4
+                  focus-visible:ring-brand-teal/20
                 "
               >
                 Explore Music HQ

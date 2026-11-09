@@ -2,6 +2,8 @@ import secrets
 import hashlib
 import uuid
 
+from django.db.models.functions import Lower
+from django.db.models import Q
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -13,12 +15,76 @@ from .managers import UserManager
 class User(AbstractUser):
     """
     Custom VibeNationHQ user model.
+
+    Normal VibeNation users use the public profile fields.
+    Staff accounts use the inherited Django administrative fields.
+    Both account types share this database model.
     """
 
     email = models.EmailField(
         unique=True,
         db_index=True,
     )
+
+    # ========================================================
+    # PUBLIC PROFILE
+    # ========================================================
+
+    display_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Public display name. Supports Unicode and emojis.",
+    )
+
+    bio = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional public profile biography.",
+    )
+
+    profile_image = models.ImageField(
+        upload_to="users/profile_images/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Optional user profile picture.",
+    )
+
+    # ========================================================
+    # PLATFORM VERIFICATION
+    # ========================================================
+
+    is_verified = models.BooleanField(
+        default=False,
+        help_text="Blue verification badge.",
+    )
+
+    is_identity_verified = models.BooleanField(
+        default=False,
+        help_text="Yellow identity verification badge.",
+    )
+
+    # PERSONAL PLATFORM ACCOUNT
+    is_official_account = models.BooleanField(
+        default=False,
+        help_text=(
+            "Designates the official VibeNationHQ platform account. "
+            "Only one account can hold this designation."
+        ),
+    )
+
+    # ========================================================
+    # ACCOUNT ONBOARDING
+    # ========================================================
+
+    onboarding_completed = models.BooleanField(
+        default=False,
+        help_text="Whether the user has completed required account onboarding.",
+    )
+
+    # ========================================================
+    # ACCOUNT TIMESTAMPS
+    # ========================================================
 
     updated_at = models.DateTimeField(
         auto_now=True,
@@ -29,6 +95,18 @@ class User(AbstractUser):
 
     objects = UserManager()
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower("username"),
+                name="unique_username_case_insensitive",
+            ),
+            models.UniqueConstraint(
+                fields=["is_official_account"],
+                condition=Q(is_official_account=True),
+                name="unique_official_vibenation_account",
+            ),
+        ]
     def __str__(self):
         return self.email
 

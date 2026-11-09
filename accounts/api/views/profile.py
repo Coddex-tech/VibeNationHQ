@@ -1,3 +1,4 @@
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -22,9 +23,7 @@ class CurrentUserView(APIView):
 
         phone = (
             UserPhone.objects
-            .filter(
-                user=user,
-            )
+            .filter(user=user)
             .first()
         )
 
@@ -37,13 +36,28 @@ class CurrentUserView(APIView):
                 "verified_at": phone.verified_at,
             }
 
+        profile_image = None
+
+        if user.profile_image:
+            profile_image = user.profile_image.url
+
         return Response(
             {
                 "user": {
                     "id": user.id,
                     "email": user.email,
                     "username": user.username,
+                    "display_name": user.display_name,
+                    "bio": user.bio,
+                    "profile_image": profile_image,
                     "is_active": user.is_active,
+                    "onboarding_completed": (
+                        user.onboarding_completed
+                    ),
+                    "is_verified": user.is_verified,
+                    "is_identity_verified": (
+                        user.is_identity_verified
+                    ),
                     "phone": phone_data,
                 },
             },

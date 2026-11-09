@@ -1,6 +1,9 @@
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+
+from django.db import transaction
+
+from accounts.api.permissions import IsOrdinaryVibeNationUser
 
 from music.models import (
     EditorialArticle,
@@ -40,21 +43,21 @@ class EditorialArticleLikeAPIView(generics.GenericAPIView):
     queryset = EditorialArticle.objects.filter(
         status=EditorialArticle.Status.PUBLISHED,
     )
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def post(self, request, *args, **kwargs):
         article = self.get_object()
 
-        EditorialArticleLikeService.create(
-            user=request.user,
-            article=article,
-        )
+        with transaction.atomic():
+            EditorialArticleLikeService.create(
+                user=request.user,
+                article=article,
+            )
 
-        # Record the successful like as feed history.
-        MusicFeedInteractionService.record_editorial_like(
-            user=request.user,
-            article=article,
-        )
+            MusicFeedInteractionService.record_editorial_like(
+                user=request.user,
+                article=article,
+            )
 
         article.refresh_from_db()
 
@@ -113,21 +116,21 @@ class CommunityPostLikeAPIView(generics.GenericAPIView):
     queryset = CommunityPost.objects.filter(
         status=CommunityPost.Status.PUBLISHED,
     )
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def post(self, request, *args, **kwargs):
         post = self.get_object()
 
-        CommunityPostLikeService.create(
-            user=request.user,
-            post=post,
-        )
+        with transaction.atomic():
+            CommunityPostLikeService.create(
+                user=request.user,
+                post=post,
+            )
 
-        # Record the successful like as feed history.
-        MusicFeedInteractionService.record_community_post_like(
-            user=request.user,
-            post=post,
-        )
+            MusicFeedInteractionService.record_community_post_like(
+                user=request.user,
+                post=post,
+            )
 
         post.refresh_from_db()
 
@@ -191,7 +194,7 @@ class EditorialCommentLikeAPIView(generics.GenericAPIView):
         )
         .select_related("article")
     )
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def post(self, request, *args, **kwargs):
         comment = self.get_object()
@@ -263,7 +266,7 @@ class CommunityPostCommentLikeAPIView(generics.GenericAPIView):
         )
         .select_related("post")
     )
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def post(self, request, *args, **kwargs):
         comment = self.get_object()

@@ -31,6 +31,7 @@ from music.models import (
     EditorialCommentReport,
     EditorialComment,
     CommunityPostCommentReport,
+    ContentDailyView,
 )
 
 User = get_user_model()
@@ -239,13 +240,17 @@ class CommunityPostService:
     @transaction.atomic
     def record_view(*, post):
         """
-        Increment the view count for a published community post.
+        Record a view for a published community post.
 
-        F() performs the increment in the database, preventing
-        simultaneous view requests from overwriting each other.
+        Updates the lifetime view counter and daily view total
+        within the same transaction.
 
-        Returns the updated view count, or None if the post
-        is no longer published.
+        Existing daily records are incremented atomically.
+        Concurrent attempts to create the first daily record are
+        handled using the database uniqueness constraint.
+
+        Returns the updated lifetime view count, or None if
+        the post is no longer published.
         """
 
         updated_rows = (
@@ -262,12 +267,51 @@ class CommunityPostService:
         if updated_rows == 0:
             return None
 
+        today = timezone.localdate()
+        now = timezone.now()
+
+        daily_filter = {
+            "community_post_id": post.pk,
+            "date": today,
+        }
+
+        # Atomically increment the daily record if it already exists.
+        daily_updated = ContentDailyView.objects.filter(
+            **daily_filter,
+        ).update(
+            views_count=F("views_count") + 1,
+            updated_at=now,
+        )
+
+        if daily_updated == 0:
+            # No daily record exists yet. Another request may try
+            # to create it at the same time, so use a savepoint.
+            try:
+                with transaction.atomic():
+                    ContentDailyView.objects.create(
+                        **daily_filter,
+                        views_count=1,
+                    )
+
+            except IntegrityError:
+                # A concurrent request may have created the record
+                # first. Increment that record atomically.
+                daily_updated = ContentDailyView.objects.filter(
+                    **daily_filter,
+                ).update(
+                    views_count=F("views_count") + 1,
+                    updated_at=now,
+                )
+
+                # If no row was updated, this was not the expected
+                # uniqueness race. Roll back rather than silently
+                # recording inconsistent counters.
+                if daily_updated != 1:
+                    raise
+
         return (
             CommunityPost.objects
-            .values_list(
-                "views_count",
-                flat=True,
-            )
+            .values_list("views_count", flat=True)
             .get(pk=post.pk)
         )
 

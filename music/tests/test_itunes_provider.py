@@ -1,585 +1,298 @@
-from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
-from urllib.error import HTTPError, URLError
-
-from django.test import SimpleTestCase
+from unittest import TestCase
+from unittest.mock import patch
 
 from music.providers.base import (
     MusicEntityType,
-    MusicProviderError,
-    MusicProviderName,
     MusicProviderResponseError,
-    MusicProviderUnavailableError,
-    MusicSearchQuery,
 )
 from music.providers.itunes import ITunesProvider
 
 
-class ITunesProviderTests(SimpleTestCase):
+class ITunesGetAlbumTracksTests(TestCase):
     def setUp(self):
         self.provider = ITunesProvider()
+        self.album_id = "12345"
 
-    def make_song_item(
-        self,
-        **overrides,
-    ) -> dict:
-        item = {
-            "wrapperType": "track",
-            "kind": "song",
-            "artistId": 123,
-            "collectionId": 456,
-            "trackId": 789,
-            "artistName": "Rema",
-            "collectionName": "HEIS",
-            "trackName": "Calm Down",
-            "artworkUrl100": (
-                "https://example.com/100x100bb.jpg"
-            ),
-            "releaseDate": "2022-02-11T00:00:00Z",
-            "trackTimeMillis": 239000,
-            "previewUrl": (
-                "https://example.com/preview.m4a"
-            ),
-            "trackViewUrl": (
-                "https://music.apple.com/song/789"
-            ),
-            "country": "Nigeria",
-            "isrc": "NGABC2200001",
-            "primaryGenreName": "Afrobeats",
-            "trackNumber": 1,
-            "trackCount": 17,
-        }
-
-        item.update(overrides)
-        return item
-
-    def make_album_item(
-        self,
-        **overrides,
-    ) -> dict:
-        item = {
+    def album_result(self, *, track_count=3, collection_id=12345):
+        return {
             "wrapperType": "collection",
             "collectionType": "Album",
-            "collectionId": 456,
-            "artistId": 123,
-            "artistName": "Rema",
-            "collectionName": "HEIS",
-            "artworkUrl100": (
-                "https://example.com/100x100bb.jpg"
-            ),
-            "releaseDate": "2024-07-11T00:00:00Z",
-            "collectionViewUrl": (
-                "https://music.apple.com/album/456"
-            ),
-            "country": "Nigeria",
-            "primaryGenreName": "Afrobeats",
+            "collectionId": collection_id,
+            "collectionName": "Test Album",
+            "artistName": "Test Artist",
+            "trackCount": track_count,
         }
 
-        item.update(overrides)
-        return item
-
-    def make_artist_item(
+    def track_result(
         self,
-        **overrides,
-    ) -> dict:
-        item = {
-            "wrapperType": "artist",
-            "artistType": "Artist",
-            "artistId": 123,
-            "artistName": "Rema",
+        *,
+        track_id,
+        track_number,
+        disc_number=1,
+        collection_id=12345,
+    ):
+        return {
+            "wrapperType": "track",
+            "kind": "song",
+            "trackId": track_id,
+            "trackName": f"Track {track_id}",
+            "artistName": "Test Artist",
+            "collectionId": collection_id,
+            "collectionName": "Test Album",
+            "trackNumber": track_number,
+            "discNumber": disc_number,
+            "trackTimeMillis": 180000,
         }
 
-        item.update(overrides)
-        return item
-
-    def make_response(
-        self,
-        payload: dict,
-    ):
-        response = MagicMock()
-        response.read.return_value = json.dumps(
-            payload
-        ).encode("utf-8")
-        response.__enter__.return_value = response
-        response.__exit__.return_value = False
-
-        return response
-
-    def test_normalizes_song_result(self):
-        result = self.provider._normalize_result(
-            self.make_song_item()
+    def mock_lookup(self, results):
+        return patch.object(
+            self.provider,
+            "_request",
+            return_value={"results": results},
         )
 
-        self.assertIsNotNone(result)
+    def test_returns_tracks_in_disc_and_track_order(self):
+        response = [
+            self.album_result(track_count=3),
+            self.track_result(track_id=103, track_number=1, disc_number=2),
+            self.track_result(track_id=102, track_number=2, disc_number=1),
+            self.track_result(track_id=101, track_number=1, disc_number=1),
+        ]
 
-        assert result is not None
-
-        self.assertEqual(
-            result.provider,
-            MusicProviderName.ITUNES,
-        )
-        self.assertEqual(
-            result.provider_id,
-            "789",
-        )
-        self.assertEqual(
-            result.entity_type,
-            MusicEntityType.SONG,
-        )
-        self.assertEqual(
-            result.title,
-            "Calm Down",
-        )
-        self.assertEqual(
-            result.artist_name,
-            "Rema",
-        )
-        self.assertEqual(
-            result.album_name,
-            "HEIS",
-        )
-
-    def test_extracts_primary_genre_name_into_metadata(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                primaryGenreName="Afrobeats"
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.metadata["primary_genre_name"],
-            "Afrobeats",
-        )
-
-    def test_cleans_primary_genre_name(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                primaryGenreName="  Afrobeats  "
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.metadata["primary_genre_name"],
-            "Afrobeats",
-        )
-
-    def test_omits_blank_primary_genre_name(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                primaryGenreName="   "
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertNotIn(
-            "primary_genre_name",
-            result.metadata,
-        )
-
-    def test_omits_non_string_primary_genre_name(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                primaryGenreName=123
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertNotIn(
-            "primary_genre_name",
-            result.metadata,
-        )
-
-    def test_normalizes_album_result(self):
-        result = self.provider._normalize_result(
-            self.make_album_item()
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.provider_id,
-            "456",
-        )
-        self.assertEqual(
-            result.entity_type,
-            MusicEntityType.ALBUM,
-        )
-        self.assertEqual(
-            result.title,
-            "HEIS",
-        )
-        self.assertEqual(
-            result.metadata["primary_genre_name"],
-            "Afrobeats",
-        )
-
-    def test_normalizes_artist_result(self):
-        result = self.provider._normalize_result(
-            self.make_artist_item()
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.provider_id,
-            "123",
-        )
-        self.assertEqual(
-            result.entity_type,
-            MusicEntityType.ARTIST,
-        )
-        self.assertEqual(
-            result.title,
-            "Rema",
-        )
-
-    def test_normalizes_artwork_to_600_by_600(self):
-        result = self.provider._normalize_result(
-            self.make_song_item()
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.artwork_url,
-            "https://example.com/600x600bb.jpg",
-        )
-
-    def test_normalizes_duration_to_seconds(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                trackTimeMillis=239500
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.duration_seconds,
-            240,
-        )
-
-    def test_normalizes_release_date(self):
-        result = self.provider._normalize_result(
-            self.make_song_item(
-                releaseDate="2022-02-11T12:34:56Z"
-            )
-        )
-
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
-        self.assertEqual(
-            result.release_date,
-            "2022-02-11",
-        )
-
-    def test_search_returns_normalized_results(self):
-        response = self.make_response(
-            {
-                "resultCount": 1,
-                "results": [
-                    self.make_song_item()
-                ],
-            }
-        )
-
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ):
-            results = self.provider.search(
-                MusicSearchQuery(
-                    query="Rema Calm Down",
-                    entity_type=MusicEntityType.SONG,
-                    country="NG",
-                    limit=10,
-                )
-            )
-
-        self.assertEqual(
-            len(results),
-            1,
-        )
-
-        self.assertEqual(
-            results[0].entity_type,
-            MusicEntityType.SONG,
-        )
-
-        self.assertEqual(
-            results[0].metadata[
-                "primary_genre_name"
-            ],
-            "Afrobeats",
-        )
-
-    def test_search_clamps_limit_to_50(self):
-        response = self.make_response(
-            {
-                "resultCount": 0,
-                "results": [],
-            }
-        )
-
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ) as mocked_urlopen:
-            self.provider.search(
-                MusicSearchQuery(
-                    query="Rema",
-                    limit=1000,
-                )
-            )
-
-        request = mocked_urlopen.call_args.args[0]
-
-        self.assertIn(
-            "limit=50",
-            request.full_url,
-        )
-
-    def test_search_returns_empty_for_blank_query(
-        self,
-    ):
-        with patch(
-            "music.providers.itunes.urlopen"
-        ) as mocked_urlopen:
-            results = self.provider.search(
-                MusicSearchQuery(
-                    query="   "
-                )
-            )
-
-        self.assertEqual(
-            results,
-            [],
-        )
-
-        mocked_urlopen.assert_not_called()
-
-    def test_get_returns_matching_song(self):
-        response = self.make_response(
-            {
-                "resultCount": 1,
-                "results": [
-                    self.make_song_item()
-                ],
-            }
-        )
-
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ):
-            result = self.provider.get(
-                entity_type=MusicEntityType.SONG,
-                provider_id="789",
+        with self.mock_lookup(response):
+            tracks = self.provider.get_album_tracks(
+                album_provider_id=self.album_id,
                 country="NG",
             )
 
-        self.assertIsNotNone(result)
-
-        assert result is not None
-
         self.assertEqual(
-            result.provider_id,
-            "789",
+            [track.provider_id for track in tracks],
+            ["101", "102", "103"],
+        )
+        self.assertTrue(
+            all(track.entity_type == MusicEntityType.SONG for track in tracks)
         )
         self.assertEqual(
-            result.metadata[
-                "primary_genre_name"
-            ],
-            "Afrobeats",
+            [track.metadata["track_number"] for track in tracks],
+            [1, 2, 1],
+        )
+        self.assertEqual(
+            [track.metadata["disc_number"] for track in tracks],
+            [1, 1, 2],
         )
 
-    def test_get_returns_none_when_entity_type_does_not_match(
-        self,
-    ):
-        response = self.make_response(
-            {
-                "resultCount": 1,
-                "results": [
-                    self.make_song_item()
-                ],
-            }
+    def test_requests_album_lookup_with_country_and_song_entity(self):
+        with self.mock_lookup(
+            [
+                self.album_result(track_count=1),
+                self.track_result(track_id=101, track_number=1),
+            ]
+        ) as request:
+            self.provider.get_album_tracks(
+                album_provider_id=self.album_id,
+                country="NG",
+            )
+
+        request.assert_called_once_with(
+            url=self.provider.LOOKUP_URL,
+            params={
+                "id": 12345,
+                "entity": "song",
+                "country": "NG",
+            },
         )
 
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ):
-            result = self.provider.get(
-                entity_type=MusicEntityType.ALBUM,
-                provider_id="789",
-            )
+    def test_rejects_empty_album_provider_id(self):
+        with patch.object(self.provider, "_request") as request:
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(album_provider_id=" ")
 
-        self.assertIsNone(result)
+        request.assert_not_called()
 
-    def test_get_returns_none_for_blank_provider_id(
-        self,
-    ):
-        with patch(
-            "music.providers.itunes.urlopen"
-        ) as mocked_urlopen:
-            result = self.provider.get(
-                entity_type=MusicEntityType.SONG,
-                provider_id="   ",
-            )
-
-        self.assertIsNone(result)
-
-        mocked_urlopen.assert_not_called()
-
-    def test_get_rejects_non_numeric_provider_id(self):
-        with self.assertRaises(
-            MusicProviderResponseError
-        ):
-            self.provider.get(
-                entity_type=MusicEntityType.SONG,
-                provider_id="abc",
-            )
-
-    def test_search_rejects_invalid_response_shape(
-        self,
-    ):
-        response = self.make_response(
-            {
-                "resultCount": 1,
-                "results": {},
-            }
-        )
-
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ):
-            with self.assertRaises(
-                MusicProviderResponseError
-            ):
-                self.provider.search(
-                    MusicSearchQuery(
-                        query="Rema"
-                    )
+    def test_rejects_non_numeric_album_provider_id(self):
+        with patch.object(self.provider, "_request") as request:
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id="not-a-number"
                 )
 
-    def test_request_handles_rate_limit(self):
-        error = HTTPError(
-            url="https://itunes.apple.com/search",
-            code=429,
-            msg="Too Many Requests",
-            hdrs=None,
-            fp=None,
-        )
+        request.assert_not_called()
 
-        with patch(
-            "music.providers.itunes.urlopen",
-            side_effect=error,
+    def test_rejects_non_positive_album_provider_id(self):
+        for invalid_id in ("0", "-123"):
+            with self.subTest(invalid_id=invalid_id):
+                with patch.object(self.provider, "_request") as request:
+                    with self.assertRaises(MusicProviderResponseError):
+                        self.provider.get_album_tracks(
+                            album_provider_id=invalid_id
+                        )
+
+                    request.assert_not_called()
+
+    def test_rejects_malformed_results(self):
+        with patch.object(
+            self.provider,
+            "_request",
+            return_value={"results": None},
         ):
-            with self.assertRaises(
-                MusicProviderUnavailableError
-            ):
-                self.provider.search(
-                    MusicSearchQuery(
-                        query="Rema"
-                    )
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
                 )
 
-    def test_request_handles_connection_error(self):
-        with patch(
-            "music.providers.itunes.urlopen",
-            side_effect=URLError(
-                "Connection failed"
+    def test_rejects_response_without_requested_album(self):
+        response = [
+            self.album_result(collection_id=99999),
+            self.track_result(
+                track_id=101,
+                track_number=1,
+                collection_id=99999,
             ),
-        ):
-            with self.assertRaises(
-                MusicProviderUnavailableError
-            ):
-                self.provider.search(
-                    MusicSearchQuery(
-                        query="Rema"
-                    )
+        ]
+
+        with self.mock_lookup(response):
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
                 )
 
-    def test_request_handles_invalid_json(self):
-        response = MagicMock()
-        response.read.return_value = (
-            b"not-valid-json"
-        )
-        response.__enter__.return_value = response
-        response.__exit__.return_value = False
-
-        with patch(
-            "music.providers.itunes.urlopen",
-            return_value=response,
-        ):
-            with self.assertRaises(
-                MusicProviderResponseError
-            ):
-                self.provider.search(
-                    MusicSearchQuery(
-                        query="Rema"
-                    )
+    def test_rejects_empty_album_tracklist(self):
+        with self.mock_lookup([self.album_result(track_count=3)]):
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
                 )
 
-    def test_normalize_result_returns_none_without_provider_id(
-        self,
-    ):
-        item = self.make_song_item(
-            trackId=None
+    def test_rejects_incomplete_tracklist(self):
+        response = [
+            self.album_result(track_count=3),
+            self.track_result(track_id=101, track_number=1),
+            self.track_result(track_id=102, track_number=2),
+        ]
+
+        with self.mock_lookup(response):
+            with self.assertRaisesRegex(
+                MusicProviderResponseError,
+                "incomplete album tracklist",
+            ):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
+
+    def test_rejects_invalid_album_track_count(self):
+        response = [
+            self.album_result(track_count=0),
+            self.track_result(track_id=101, track_number=1),
+        ]
+
+        with self.mock_lookup(response):
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
+
+    def test_rejects_track_without_valid_track_number(self):
+        invalid_track = self.track_result(
+            track_id=101,
+            track_number=0,
         )
+        response = [
+            self.album_result(track_count=1),
+            invalid_track,
+        ]
 
-        result = self.provider._normalize_result(
-            item
+        with self.mock_lookup(response):
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
+
+    def test_rejects_invalid_disc_number(self):
+        invalid_track = self.track_result(
+            track_id=101,
+            track_number=1,
+            disc_number=0,
         )
+        response = [
+            self.album_result(track_count=1),
+            invalid_track,
+        ]
 
-        self.assertIsNone(result)
+        with self.mock_lookup(response):
+            with self.assertRaises(MusicProviderResponseError):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
 
-    def test_normalize_result_returns_none_without_title(
-        self,
-    ):
-        item = self.make_song_item(
-            trackName="   "
-        )
+    def test_rejects_duplicate_provider_track_ids(self):
+        response = [
+            self.album_result(track_count=2),
+            self.track_result(track_id=101, track_number=1),
+            self.track_result(track_id=101, track_number=2),
+        ]
 
-        result = self.provider._normalize_result(
-            item
-        )
+        with self.mock_lookup(response):
+            with self.assertRaisesRegex(
+                MusicProviderResponseError,
+                "duplicate track IDs",
+            ):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
 
-        self.assertIsNone(result)
+    def test_rejects_duplicate_disc_and_track_positions(self):
+        response = [
+            self.album_result(track_count=2),
+            self.track_result(track_id=101, track_number=1, disc_number=1),
+            self.track_result(track_id=102, track_number=1, disc_number=1),
+        ]
 
-    def test_unsupported_entity_type_raises_provider_error(
-        self,
-    ):
-        with self.assertRaises(
-            MusicProviderError
-        ):
-            self.provider._get_entity(
-                object()
+        with self.mock_lookup(response):
+            with self.assertRaisesRegex(
+                MusicProviderResponseError,
+                "duplicate track positions",
+            ):
+                self.provider.get_album_tracks(
+                    album_provider_id=self.album_id
+                )
+
+    def test_ignores_tracks_from_another_album(self):
+        response = [
+            self.album_result(track_count=1),
+            self.track_result(
+                track_id=101,
+                track_number=1,
+                collection_id=12345,
+            ),
+            self.track_result(
+                track_id=999,
+                track_number=2,
+                collection_id=88888,
+            ),
+        ]
+
+        with self.mock_lookup(response):
+            tracks = self.provider.get_album_tracks(
+                album_provider_id=self.album_id
             )
+
+        self.assertEqual(len(tracks), 1)
+        self.assertEqual(tracks[0].provider_id, "101")
+
+    def test_accepts_album_without_track_count_metadata(self):
+        album = self.album_result()
+        album.pop("trackCount")
+
+        response = [
+            album,
+            self.track_result(track_id=101, track_number=1),
+        ]
+
+        with self.mock_lookup(response):
+            tracks = self.provider.get_album_tracks(
+                album_provider_id=self.album_id
+            )
+
+        self.assertEqual(len(tracks), 1)
+        self.assertEqual(tracks[0].provider_id, "101")

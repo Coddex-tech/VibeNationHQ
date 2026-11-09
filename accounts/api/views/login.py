@@ -1,3 +1,4 @@
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -46,6 +47,11 @@ class LoginView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        profile_image = None
+
+        if user.profile_image:
+            profile_image = user.profile_image.url
+
         response = Response(
             {
                 "message": "Login successful.",
@@ -53,7 +59,17 @@ class LoginView(APIView):
                     "id": user.id,
                     "email": user.email,
                     "username": user.username,
+                    "display_name": user.display_name,
+                    "bio": user.bio,
+                    "profile_image": profile_image,
                     "is_active": user.is_active,
+                    "onboarding_completed": (
+                        user.onboarding_completed
+                    ),
+                    "is_verified": user.is_verified,
+                    "is_identity_verified": (
+                        user.is_identity_verified
+                    ),
                 },
             },
             status=status.HTTP_200_OK,

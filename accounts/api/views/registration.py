@@ -9,6 +9,8 @@ from ...services.registration import register_user
 class RegistrationView(APIView):
     """
     Create a new VibeNationHQ account.
+
+    The user must verify their email before onboarding begins.
     """
 
     authentication_classes = []
@@ -19,7 +21,9 @@ class RegistrationView(APIView):
             data=request.data,
         )
 
-        serializer.is_valid(raise_exception=True)
+        serializer.is_valid(
+            raise_exception=True,
+        )
 
         user = register_user(
             email=serializer.validated_data["email"],
@@ -35,8 +39,10 @@ class RegistrationView(APIView):
                 "user": {
                     "id": user.id,
                     "email": user.email,
-                    "username": user.username,
                     "is_active": user.is_active,
+                    "onboarding_completed": (
+                        user.onboarding_completed
+                    ),
                 },
             },
             status=status.HTTP_201_CREATED,

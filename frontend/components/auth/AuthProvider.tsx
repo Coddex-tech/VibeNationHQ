@@ -15,8 +15,14 @@ export type CurrentUser = {
   id: string;
   email: string;
   username: string;
-  is_active?: boolean;
-  phone?: {
+  display_name: string;
+  bio: string;
+  profile_image: string | null;
+  is_active: boolean;
+  onboarding_completed: boolean;
+  is_verified: boolean;
+  is_identity_verified: boolean;
+  phone: {
     phone_number: string;
     is_verified: boolean;
     verified_at: string | null;

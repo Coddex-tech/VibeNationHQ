@@ -1,3 +1,4 @@
+
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.timezone import now
@@ -34,8 +35,7 @@ class VibeNationUserAdmin(
     """
     Administration for normal VibeNation platform users.
 
-    Staff and superuser accounts are intentionally excluded
-    from this admin.
+    Staff and superuser accounts are intentionally excluded.
     """
 
     form = UserChangeForm
@@ -47,33 +47,31 @@ class VibeNationUserAdmin(
         VibeNation users must register through the platform's
         authentication system, not through Django admin.
         """
-
         return False
-
-    filter_horizontal = (
-        "groups",
-        "user_permissions",
-    )
 
     list_display = (
         "email",
-        "first_name",
-        "last_name",
+        "username",
+        "display_name",
+        "is_verified",
+        "is_identity_verified",
+        "onboarding_completed",
         "is_active",
         "date_joined",
-        "last_login",
     )
 
     list_filter = (
         "is_active",
+        "is_verified",
+        "is_identity_verified",
+        "onboarding_completed",
         "date_joined",
-        "last_login",
     )
 
     search_fields = (
         "email",
-        "first_name",
-        "last_name",
+        "username",
+        "display_name",
     )
 
     ordering = (
@@ -84,6 +82,7 @@ class VibeNationUserAdmin(
         "date_joined",
         "last_login",
         "updated_at",
+        "onboarding_completed",
     )
 
     fieldsets = (
@@ -92,16 +91,27 @@ class VibeNationUserAdmin(
             {
                 "fields": (
                     "email",
+                    "username",
                     "password",
                 ),
             },
         ),
         (
-            "Personal Information",
+            "Public Profile",
             {
                 "fields": (
-                    "first_name",
-                    "last_name",
+                    "display_name",
+                    "bio",
+                    "profile_image",
+                ),
+            },
+        ),
+        (
+            "Verification",
+            {
+                "fields": (
+                    "is_verified",
+                    "is_identity_verified",
                 ),
             },
         ),
@@ -110,6 +120,7 @@ class VibeNationUserAdmin(
             {
                 "fields": (
                     "is_active",
+                    "onboarding_completed",
                 ),
             },
         ),
@@ -131,7 +142,6 @@ class VibeNationUserAdmin(
 
         Staff and superusers are excluded.
         """
-
         queryset = super().get_queryset(request)
 
         return queryset.filter(
@@ -169,7 +179,6 @@ class VibeNationUserAdmin(
         Prevent staff accounts from being edited through
         the VibeNation Users section.
         """
-
         if obj is not None:
             if obj.is_staff or obj.is_superuser:
                 return False
@@ -188,7 +197,6 @@ class VibeNationUserAdmin(
         Prevent accidental deletion of staff accounts
         from the normal user section.
         """
-
         if obj is not None:
             if obj.is_staff or obj.is_superuser:
                 return False
@@ -212,23 +220,13 @@ class StaffAccountAdmin(
     Administration for VibeNationHQ staff accounts.
 
     Normal VibeNation users are intentionally excluded.
+
+    Only superusers can manage staff accounts.
     """
 
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
-
-    def has_view_permission(self, request, obj=None):
-        return request.user.is_superuser
-
-    def has_add_permission(self, request):
-        return request.user.is_superuser
-
-    def has_change_permission(self, request, obj=None):
-        return request.user.is_superuser
-
-    def has_delete_permission(self, request, obj=None):
-        return request.user.is_superuser
 
     filter_horizontal = (
         "groups",
@@ -237,6 +235,7 @@ class StaffAccountAdmin(
 
     list_display = (
         "email",
+        "username",
         "first_name",
         "last_name",
         "staff_status",
@@ -253,6 +252,7 @@ class StaffAccountAdmin(
 
     search_fields = (
         "email",
+        "username",
         "first_name",
         "last_name",
     )
@@ -274,6 +274,7 @@ class StaffAccountAdmin(
             {
                 "fields": (
                     "email",
+                    "username",
                     "password",
                 ),
             },
@@ -311,13 +312,48 @@ class StaffAccountAdmin(
         ),
     )
 
+    def has_view_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        if not request.user.is_superuser:
+            return False
+
+        if obj is not None and not obj.is_staff:
+            return False
+
+        return True
+
+    def has_delete_permission(
+        self,
+        request,
+        obj=None,
+    ):
+        if not request.user.is_superuser:
+            return False
+
+        if obj is not None and not obj.is_staff:
+            return False
+
+        return True
+
     def get_queryset(self, request):
         """
         Only show staff accounts.
 
         Normal VibeNation users are excluded.
         """
-
         queryset = super().get_queryset(request)
 
         return queryset.filter(
@@ -354,17 +390,6 @@ class StaffAccountAdmin(
 
         return form
 
-    def has_delete_permission(
-        self,
-        request,
-        obj=None,
-    ):
-        """
-        Only superusers may delete staff accounts.
-        """
-
-        return request.user.is_superuser
-
     def save_model(
         self,
         request,
@@ -373,12 +398,12 @@ class StaffAccountAdmin(
         change,
     ):
         """
-        Ensure accounts created through Staff Accounts
-        are staff accounts.
-        """
+        Every account managed through this section
+        must remain a staff account.
 
-        if not change:
-            obj.is_staff = True
+        Superuser creation remains a separate operation.
+        """
+        obj.is_staff = True
 
         super().save_model(
             request,
@@ -435,10 +460,7 @@ class UserIdentityAdmin(
         "-created_at",
     )
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -523,10 +545,7 @@ class UserSessionAdmin(
 
         return "Active"
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -619,10 +638,7 @@ class UserPhoneAdmin(
     def verification_status(self, obj):
         return obj.is_verified
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -709,10 +725,7 @@ class PhoneOTPAdmin(
 
         return "Active"
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -784,10 +797,7 @@ class EmailVerificationTokenAdmin(
 
         return "Active"
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -859,10 +869,7 @@ class PasswordResetTokenAdmin(
 
         return "Active"
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(
@@ -937,10 +944,7 @@ class EmailChangeTokenAdmin(
 
         return "Active"
 
-    def has_add_permission(
-        self,
-        request,
-    ):
+    def has_add_permission(self, request):
         return False
 
     def has_change_permission(

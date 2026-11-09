@@ -1,5 +1,7 @@
+
 from __future__ import annotations
 
+import uuid
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -7,17 +9,15 @@ from django.test import TestCase
 from django.utils import timezone
 
 from music.models import (
-    Album,
     Artist,
     ArtistFollow,
     CommunityPost,
+    CommunityPostComment,
+    CommunityPostFavorite,
     CommunityPostLike,
     CommunityPostTarget,
-    Genre,
     MusicFeedInteraction,
-    Song,
     UserFollow,
-    UserGenrePreference,
 )
 from music.services.feed import (
     FeedCandidate,
@@ -63,99 +63,41 @@ class MusicFeedServiceTests(TestCase):
             is_active=True,
         )
 
-        cls.genre = Genre.objects.create(
-            name="Afrobeats",
-            slug="afrobeats",
-            is_active=True,
-        )
-
-        cls.other_genre = Genre.objects.create(
-            name="Rock",
-            slug="rock",
-            is_active=True,
-        )
-
     # ============================================================
     # HELPERS
     # ============================================================
 
     @classmethod
-    def create_song(
-        cls,
-        *,
-        title,
-        slug,
-        artist=None,
-        genre=None,
-        published_at=None,
-        is_featured=False,
-    ):
-        song = Song.objects.create(
-            title=title,
-            slug=slug,
-            status=Song.Status.PUBLISHED,
-            published_at=(
-                published_at
-                if published_at is not None
-                else timezone.now()
-            ),
-            is_featured=is_featured,
-        )
-
-        song.artists.add(
-            artist or cls.artist,
-        )
-
-        if genre is not None:
-            song.genres.add(genre)
-
-        return song
-
-    @classmethod
-    def create_album(
-        cls,
-        *,
-        title,
-        slug,
-        artist=None,
-        published_at=None,
-        is_featured=False,
-    ):
-        album = Album.objects.create(
-            title=title,
-            slug=slug,
-            status=Album.Status.PUBLISHED,
-            published_at=(
-                published_at
-                if published_at is not None
-                else timezone.now()
-            ),
-            is_featured=is_featured,
-        )
-
-        album.artists.add(
-            artist or cls.artist,
-        )
-
-        return album
-
-    @classmethod
     def create_community_post(
         cls,
-        *,
         user=None,
-        content="Community post",
-        song=None,
-        created_at=None,
+        content="Test community post",
         status=None,
+        created_at=None,
+        artist=None,
+        **kwargs,
     ):
-        if status is None:
-            status = CommunityPost.Status.PUBLISHED
+        """
+        Create a community post with a unique slug.
+
+        Optional artist attachment is created through
+        CommunityPostTarget.
+
+        created_at is applied after creating the post so tests
+        can control feed ordering.
+        """
+
+        post_status = (
+            status
+            if status is not None
+            else CommunityPost.Status.PUBLISHED
+        )
 
         post = CommunityPost.objects.create(
             user=user or cls.other_user,
             content=content,
-            status=status,
+            status=post_status,
+            slug=f"test-post-{uuid.uuid4().hex}",
         )
 
         if created_at is not None:
@@ -164,15 +106,14 @@ class MusicFeedServiceTests(TestCase):
             ).update(
                 created_at=created_at,
             )
+
             post.refresh_from_db()
 
-        if song is not None:
+        if artist is not None:
             CommunityPostTarget.objects.create(
                 post=post,
-                target_type=(
-                    CommunityPostTarget.TargetType.SONG
-                ),
-                song=song,
+                target_type=CommunityPostTarget.TargetType.ARTIST,
+                artist=artist,
             )
 
         return post
@@ -185,6 +126,7 @@ class MusicFeedServiceTests(TestCase):
         song=None,
         album=None,
         artist=None,
+        community_post=None,
         created_at=None,
     ):
         interaction = MusicFeedInteraction.objects.create(
@@ -193,6 +135,7 @@ class MusicFeedServiceTests(TestCase):
             song=song,
             album=album,
             artist=artist,
+            community_post=community_post,
         )
 
         if created_at is not None:
@@ -201,20 +144,32 @@ class MusicFeedServiceTests(TestCase):
             ).update(
                 created_at=created_at,
             )
+
             interaction.refresh_from_db()
 
         return interaction
 
     @staticmethod
-    def get_content_ids(
-        results,
-        content_type,
-    ):
+    def get_post_ids(results):
         return [
             candidate.object_id
             for candidate in results
-            if candidate.content_type == content_type
+            if candidate.content_type == "community_post"
         ]
+
+    @staticmethod
+    def get_post_candidate(results, post_id):
+        return next(
+            (
+                candidate
+                for candidate in results
+                if (
+                    candidate.content_type == "community_post"
+                    and candidate.object_id == post_id
+                )
+            ),
+            None,
+        )
 
     @staticmethod
     def get_unpublished_community_status():
@@ -230,13 +185,12 @@ class MusicFeedServiceTests(TestCase):
         )
 
     # ============================================================
-    # BASIC FEED BEHAVIOR
+    # BASIC COMMUNITY FEED BEHAVIOR
     # ============================================================
 
-    def test_anonymous_feed_returns_candidates(self):
-        song = self.create_song(
-            title="Public Song",
-            slug="public-song",
+    def test_anonymous_feed_returns_community_posts(self):
+        post = self.create_community_post(
+            content="Public community post",
         )
 
         result = self.service.get_feed(
@@ -245,17 +199,13 @@ class MusicFeedServiceTests(TestCase):
         )
 
         self.assertIn(
-            song.id,
-            self.get_content_ids(
-                result["results"],
-                "song",
-            ),
+            post.id,
+            self.get_post_ids(result["results"]),
         )
 
-    def test_authenticated_feed_returns_candidates(self):
-        song = self.create_song(
-            title="Authenticated Song",
-            slug="authenticated-song",
+    def test_authenticated_feed_returns_community_posts(self):
+        post = self.create_community_post(
+            content="Authenticated community post",
         )
 
         result = self.service.get_feed(
@@ -264,18 +214,63 @@ class MusicFeedServiceTests(TestCase):
         )
 
         self.assertIn(
-            song.id,
-            self.get_content_ids(
-                result["results"],
-                "song",
-            ),
+            post.id,
+            self.get_post_ids(result["results"]),
+        )
+
+    def test_feed_returns_only_community_posts(self):
+        self.create_community_post(
+            content="First community post",
+        )
+
+        self.create_community_post(
+            content="Second community post",
+            user=self.third_user,
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+        )
+
+        self.assertTrue(result["results"])
+
+        for candidate in result["results"]:
+            self.assertEqual(
+                candidate.content_type,
+                "community_post",
+            )
+
+    def test_feed_does_not_return_standalone_music_entities(self):
+        self.create_community_post(
+            content="Community-only result",
+            artist=self.artist,
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+        )
+
+        content_types = {
+            candidate.content_type
+            for candidate in result["results"]
+        }
+
+        self.assertEqual(
+            content_types,
+            {"community_post"},
         )
 
     def test_limit_is_respected(self):
         for index in range(10):
-            self.create_song(
-                title=f"Song {index}",
-                slug=f"song-{index}",
+            self.create_community_post(
+                content=f"Community post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
+                ),
             )
 
         result = self.service.get_feed(
@@ -290,9 +285,13 @@ class MusicFeedServiceTests(TestCase):
 
     def test_limit_is_capped(self):
         for index in range(60):
-            self.create_song(
-                title=f"Song {index}",
-                slug=f"song-{index}",
+            self.create_community_post(
+                content=f"Community post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
+                ),
             )
 
         result = self.service.get_feed(
@@ -306,56 +305,8 @@ class MusicFeedServiceTests(TestCase):
         )
 
     # ============================================================
-    # PUBLISHED / ACTIVE CONTENT
+    # PUBLISHED CONTENT
     # ============================================================
-
-    def test_unpublished_song_is_excluded(self):
-        song = Song.objects.create(
-            title="Draft Song",
-            slug="draft-song",
-            status=Song.Status.DRAFT,
-        )
-
-        song.artists.add(
-            self.artist,
-        )
-
-        result = self.service.get_feed(
-            user=None,
-            limit=20,
-        )
-
-        returned_ids = self.get_content_ids(
-            result["results"],
-            "song",
-        )
-
-        self.assertNotIn(
-            song.id,
-            returned_ids,
-        )
-
-    def test_inactive_artist_is_excluded(self):
-        artist = Artist.objects.create(
-            name="Inactive Artist",
-            slug="inactive-artist",
-            is_active=False,
-        )
-
-        result = self.service.get_feed(
-            user=None,
-            limit=20,
-        )
-
-        returned_ids = self.get_content_ids(
-            result["results"],
-            "artist",
-        )
-
-        self.assertNotIn(
-            artist.id,
-            returned_ids,
-        )
 
     def test_unpublished_community_post_is_excluded(self):
         unpublished_status = (
@@ -372,21 +323,12 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        returned_ids = self.get_content_ids(
-            result["results"],
-            "community_post",
-        )
-
         self.assertNotIn(
             post.id,
-            returned_ids,
+            self.get_post_ids(result["results"]),
         )
 
-    # ============================================================
-    # COMMUNITY CONTENT
-    # ============================================================
-
-    def test_recent_community_post_is_included(self):
+    def test_recent_published_post_is_included(self):
         post = self.create_community_post(
             content="Fresh community thought",
         )
@@ -396,15 +338,14 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        returned_ids = self.get_content_ids(
-            result["results"],
-            "community_post",
-        )
-
         self.assertIn(
             post.id,
-            returned_ids,
+            self.get_post_ids(result["results"]),
         )
+
+    # ============================================================
+    # USER FOLLOWING
+    # ============================================================
 
     def test_followed_user_post_gets_personalization_boost(self):
         UserFollow.objects.create(
@@ -427,26 +368,25 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        followed_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.object_id == followed_post.id
-            and candidate.content_type == "community_post"
+        followed_candidate = self.get_post_candidate(
+            result["results"],
+            followed_post.id,
         )
 
-        unrelated_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.object_id == unrelated_post.id
-            and candidate.content_type == "community_post"
+        unrelated_candidate = self.get_post_candidate(
+            result["results"],
+            unrelated_post.id,
         )
+
+        self.assertIsNotNone(followed_candidate)
+        self.assertIsNotNone(unrelated_candidate)
 
         self.assertGreater(
             followed_candidate.score,
             unrelated_candidate.score,
         )
 
-    def test_mutual_user_post_gets_personalization_boost(self):
+    def test_mutual_user_post_gets_mutual_source(self):
         UserFollow.objects.create(
             follower=self.user,
             following=self.other_user,
@@ -459,7 +399,7 @@ class MusicFeedServiceTests(TestCase):
 
         mutual_post = self.create_community_post(
             user=self.other_user,
-            content="Mutual's post",
+            content="Mutual user's post",
         )
 
         result = self.service.get_feed(
@@ -467,12 +407,12 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "community_post"
-            and candidate.object_id == mutual_post.id
+        candidate = self.get_post_candidate(
+            result["results"],
+            mutual_post.id,
         )
+
+        self.assertIsNotNone(candidate)
 
         self.assertEqual(
             candidate.source,
@@ -480,18 +420,17 @@ class MusicFeedServiceTests(TestCase):
         )
 
     # ============================================================
-    # ARTIST FOLLOWING
+    # FOLLOWED ARTIST CONTEXT
     # ============================================================
 
-    def test_followed_artist_song_is_added_to_feed(self):
+    def test_followed_artist_post_is_added_to_feed(self):
         ArtistFollow.objects.create(
             user=self.user,
             artist=self.artist,
         )
 
-        song = self.create_song(
-            title="Followed Artist Song",
-            slug="followed-artist-song",
+        post = self.create_community_post(
+            content="Discussion about a followed artist",
             artist=self.artist,
         )
 
@@ -500,30 +439,32 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        candidates = [
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == song.id
-        ]
+        candidate = self.get_post_candidate(
+            result["results"],
+            post.id,
+        )
 
-        self.assertTrue(candidates)
+        self.assertIsNotNone(candidate)
 
-    def test_followed_artist_song_gets_personalization_boost(self):
+        self.assertEqual(
+            candidate.source,
+            "followed_artist",
+        )
+
+    def test_followed_artist_attachment_gets_personalization_boost(self):
         ArtistFollow.objects.create(
             user=self.user,
             artist=self.artist,
         )
 
-        followed_song = self.create_song(
-            title="Followed Song",
-            slug="followed-song",
+        followed_artist_post = self.create_community_post(
+            content="Talking about my followed artist",
             artist=self.artist,
         )
 
-        unrelated_song = self.create_song(
-            title="Unrelated Song",
-            slug="unrelated-song",
+        unrelated_artist_post = self.create_community_post(
+            content="Talking about another artist",
+            user=self.third_user,
             artist=self.other_artist,
         )
 
@@ -532,45 +473,33 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        followed_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == followed_song.id
+        followed_candidate = self.get_post_candidate(
+            result["results"],
+            followed_artist_post.id,
         )
 
-        unrelated_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == unrelated_song.id
+        unrelated_candidate = self.get_post_candidate(
+            result["results"],
+            unrelated_artist_post.id,
         )
+
+        self.assertIsNotNone(followed_candidate)
+        self.assertIsNotNone(unrelated_candidate)
 
         self.assertGreater(
             followed_candidate.score,
             unrelated_candidate.score,
         )
 
-    # ============================================================
-    # GENRE PREFERENCES
-    # ============================================================
-
-    def test_preferred_genre_song_gets_personalization_boost(self):
-        UserGenrePreference.objects.create(
+    def test_artist_attachment_does_not_create_standalone_feed_item(self):
+        ArtistFollow.objects.create(
             user=self.user,
-            genre=self.genre,
+            artist=self.artist,
         )
 
-        preferred_song = self.create_song(
-            title="Preferred Genre Song",
-            slug="preferred-genre-song",
-            genre=self.genre,
-        )
-
-        other_song = self.create_song(
-            title="Other Genre Song",
-            slug="other-genre-song",
-            genre=self.other_genre,
+        post = self.create_community_post(
+            content="Artist discussion",
+            artist=self.artist,
         )
 
         result = self.service.get_feed(
@@ -578,97 +507,86 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        preferred_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == preferred_song.id
+        self.assertIn(
+            post.id,
+            self.get_post_ids(result["results"]),
         )
 
-        other_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == other_song.id
-        )
-
-        self.assertGreater(
-            preferred_candidate.score,
-            other_candidate.score,
-        )
+        for candidate in result["results"]:
+            self.assertEqual(
+                candidate.content_type,
+                "community_post",
+            )
 
     # ============================================================
     # INTERACTION HISTORY
     # ============================================================
 
-    def test_interacted_song_gets_personalization_boost(self):
-        interacted_song = self.create_song(
-            title="Previously Viewed",
-            slug="previously-viewed",
-        )
-
-        other_song = self.create_song(
-            title="Never Viewed",
-            slug="never-viewed",
+    def test_community_post_interaction_is_loaded_into_context(self):
+        post = self.create_community_post(
+            content="Previously viewed post",
         )
 
         self.create_interaction(
             user=self.user,
-            interaction_type="view_song",
-            song=interacted_song,
+            interaction_type=(
+                MusicFeedInteraction.InteractionType.VIEW_COMMUNITY_POST
+            ),
+            community_post=post,
             created_at=timezone.now(),
         )
 
-        result = self.service.get_feed(
+        context = self.service._build_user_context(
             user=self.user,
-            limit=20,
+            candidates=[
+                FeedCandidate(
+                    content_type="community_post",
+                    source="recent",
+                    object=post,
+                )
+            ],
         )
 
-        interacted_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == interacted_song.id
+        self.assertIn(
+            post.id,
+            context.interacted_community_post_ids,
         )
 
-        other_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == other_song.id
-        )
-
-        self.assertGreater(
-            interacted_candidate.score,
-            other_candidate.score,
-        )
-
-    def test_old_interaction_is_ignored(self):
-        old_song = self.create_song(
-            title="Old Interaction Song",
-            slug="old-interaction-song",
-        )
-
-        current_song = self.create_song(
-            title="Current Interaction Song",
-            slug="current-interaction-song",
+    def test_old_community_interaction_is_ignored(self):
+        post = self.create_community_post(
+            content="Old interaction post",
         )
 
         self.create_interaction(
             user=self.user,
-            interaction_type="view_song",
-            song=old_song,
+            interaction_type=(
+                MusicFeedInteraction.InteractionType.VIEW_COMMUNITY_POST
+            ),
+            community_post=post,
             created_at=(
-                timezone.now()
-                - timedelta(days=120)
+                timezone.now() - timedelta(days=120)
             ),
         )
 
-        self.create_interaction(
+        context = self.service._build_user_context(
             user=self.user,
-            interaction_type="view_song",
-            song=current_song,
-            created_at=timezone.now(),
+            candidates=[
+                FeedCandidate(
+                    content_type="community_post",
+                    source="recent",
+                    object=post,
+                )
+            ],
+        )
+
+        self.assertNotIn(
+            post.id,
+            context.interacted_community_post_ids,
+        )
+
+    def test_generated_candidates_contain_only_community_posts(self):
+        post = self.create_community_post(
+            content="Normal community post",
         )
 
         candidates = self.service._generate_candidates(
@@ -676,23 +594,19 @@ class MusicFeedServiceTests(TestCase):
             candidate_limit=20,
         )
 
-        context = self.service._build_user_context(
-            user=self.user,
-            candidates=candidates,
-        )
-
-        self.assertNotIn(
-            old_song.id,
-            context.interacted_song_ids,
-        )
-
         self.assertIn(
-            current_song.id,
-            context.interacted_song_ids,
+            post.id,
+            self.get_post_ids(candidates),
         )
+
+        for candidate in candidates:
+            self.assertEqual(
+                candidate.content_type,
+                "community_post",
+            )
 
     # ============================================================
-    # LIKE SIGNALS
+    # ENGAGEMENT SIGNALS
     # ============================================================
 
     def test_liked_community_post_gets_penalty(self):
@@ -716,46 +630,565 @@ class MusicFeedServiceTests(TestCase):
             limit=20,
         )
 
-        liked_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "community_post"
-            and candidate.object_id == liked_post.id
+        liked_candidate = self.get_post_candidate(
+            result["results"],
+            liked_post.id,
         )
 
-        other_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "community_post"
-            and candidate.object_id == other_post.id
+        other_candidate = self.get_post_candidate(
+            result["results"],
+            other_post.id,
         )
+
+        self.assertIsNotNone(liked_candidate)
+        self.assertIsNotNone(other_candidate)
 
         self.assertLess(
             liked_candidate.score,
             other_candidate.score,
         )
 
+    def test_favorited_community_post_gets_penalty(self):
+        favorited_post = self.create_community_post(
+            user=self.other_user,
+            content="Already favorited",
+        )
+
+        other_post = self.create_community_post(
+            user=self.third_user,
+            content="Not favorited",
+        )
+
+        CommunityPostFavorite.objects.create(
+            user=self.user,
+            post=favorited_post,
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+        )
+
+        favorited_candidate = self.get_post_candidate(
+            result["results"],
+            favorited_post.id,
+        )
+
+        other_candidate = self.get_post_candidate(
+            result["results"],
+            other_post.id,
+        )
+
+        self.assertIsNotNone(favorited_candidate)
+        self.assertIsNotNone(other_candidate)
+
+        self.assertLess(
+            favorited_candidate.score,
+            other_candidate.score,
+        )
+
+    def test_commented_community_post_gets_penalty(self):
+        commented_post = self.create_community_post(
+            user=self.other_user,
+            content="Already commented",
+        )
+
+        other_post = self.create_community_post(
+            user=self.third_user,
+            content="Not commented",
+        )
+
+        CommunityPostComment.objects.create(
+            user=self.user,
+            post=commented_post,
+            content="Interesting post",
+            status=CommunityPostComment.Status.PUBLISHED,
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+        )
+
+        commented_candidate = self.get_post_candidate(
+            result["results"],
+            commented_post.id,
+        )
+
+        other_candidate = self.get_post_candidate(
+            result["results"],
+            other_post.id,
+        )
+
+        self.assertIsNotNone(commented_candidate)
+        self.assertIsNotNone(other_candidate)
+
+        self.assertLess(
+            commented_candidate.score,
+            other_candidate.score,
+        )
+
+    # ============================================================
+    # CREATOR AFFINITY
+    # ============================================================
+
+    def test_engaged_creator_gets_personalization_boost(self):
+        engaged_creator_post = self.create_community_post(
+            user=self.other_user,
+            content="Previously engaged creator",
+        )
+
+        unrelated_creator_post = self.create_community_post(
+            user=self.third_user,
+            content="Unrelated creator",
+        )
+
+        # Establish creator affinity without liking either candidate post.
+        previous_post = self.create_community_post(
+            user=self.other_user,
+            content="Previously engaged post",
+        )
+
+        CommunityPostLike.objects.create(
+            user=self.user,
+            post=previous_post,
+        )
+
+        candidates = [
+            FeedCandidate(
+                content_type="community_post",
+                source="recent",
+                object=engaged_creator_post,
+            ),
+            FeedCandidate(
+                content_type="community_post",
+                source="recent",
+                object=unrelated_creator_post,
+            ),
+        ]
+
+        context = self.service._build_user_context(
+            user=self.user,
+            candidates=candidates,
+        )
+
+        engaged_candidate = candidates[0]
+        unrelated_candidate = candidates[1]
+
+        engaged_personalization = (
+            self.service._personalization_score(
+                candidate=engaged_candidate,
+                context=context,
+            )
+        )
+
+        unrelated_personalization = (
+            self.service._personalization_score(
+                candidate=unrelated_candidate,
+                context=context,
+            )
+        )
+
+        self.assertIn(
+            self.other_user.id,
+            context.engaged_creator_ids,
+        )
+
+        self.assertGreater(
+            engaged_personalization,
+            unrelated_personalization,
+        )
+
+        self.assertEqual(
+            engaged_personalization - unrelated_personalization,
+            12.0,
+        )
+
+    # ============================================================
+    # NEWLY PUBLISHED POST PRIORITY
+    # ============================================================
+
+    def test_own_newly_published_post_appears_first(self):
+        older_post = self.create_community_post(
+            user=self.other_user,
+            content="Older community post",
+            created_at=timezone.now() - timedelta(days=2),
+        )
+
+        new_post = self.create_community_post(
+            user=self.user,
+            content="My newly published post",
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id=new_post.id,
+        )
+
+        self.assertTrue(result["results"])
+
+        first_candidate = result["results"][0]
+
+        self.assertEqual(
+            first_candidate.object_id,
+            new_post.id,
+        )
+
+        self.assertEqual(
+            first_candidate.source,
+            "just_published",
+        )
+
+        self.assertIn(
+            older_post.id,
+            self.get_post_ids(result["results"]),
+        )
+
+    def test_another_users_post_does_not_receive_priority(self):
+        another_users_post = self.create_community_post(
+            user=self.other_user,
+            content="Not my post",
+            created_at=timezone.now() - timedelta(days=2),
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id=another_users_post.id,
+        )
+
+        candidate = self.get_post_candidate(
+            result["results"],
+            another_users_post.id,
+        )
+
+        self.assertIsNotNone(candidate)
+
+        self.assertNotEqual(
+            candidate.source,
+            "just_published",
+        )
+
+    def test_unpublished_post_does_not_receive_priority(self):
+        post = self.create_community_post(
+            user=self.user,
+            content="Not published",
+            status=self.get_unpublished_community_status(),
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id=post.id,
+        )
+
+        self.assertNotIn(
+            post.id,
+            self.get_post_ids(result["results"]),
+        )
+
+    def test_anonymous_user_cannot_prioritize_a_post(self):
+        post = self.create_community_post(
+            user=self.other_user,
+            content="Anonymous priority attempt",
+        )
+
+        result = self.service.get_feed(
+            user=None,
+            limit=20,
+            new_post_id=post.id,
+        )
+
+        candidate = self.get_post_candidate(
+            result["results"],
+            post.id,
+        )
+
+        self.assertIsNotNone(candidate)
+
+        self.assertNotEqual(
+            candidate.source,
+            "just_published",
+        )
+
+    def test_invalid_new_post_id_is_ignored_by_service(self):
+        post = self.create_community_post(
+            user=self.user,
+            content="Normal post",
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id="invalid",
+        )
+
+        candidate = self.get_post_candidate(
+            result["results"],
+            post.id,
+        )
+
+        self.assertIsNotNone(candidate)
+
+        self.assertNotEqual(
+            candidate.source,
+            "just_published",
+        )
+
+    def test_new_post_is_not_returned_twice(self):
+        post = self.create_community_post(
+            user=self.user,
+            content="Prioritized post",
+        )
+
+        result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id=post.id,
+        )
+
+        matching_ids = [
+            candidate.object_id
+            for candidate in result["results"]
+            if candidate.object_id == post.id
+        ]
+
+        self.assertEqual(
+            len(matching_ids),
+            1,
+        )
+
+    def test_new_post_priority_is_not_permanent(self):
+        new_post = self.create_community_post(
+            user=self.user,
+            content="New post",
+            created_at=timezone.now() - timedelta(days=2),
+        )
+
+        other_post = self.create_community_post(
+            user=self.other_user,
+            content="Recent post",
+        )
+
+        prioritized_result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+            new_post_id=new_post.id,
+        )
+
+        normal_result = self.service.get_feed(
+            user=self.user,
+            limit=20,
+        )
+
+        prioritized_candidate = self.get_post_candidate(
+            prioritized_result["results"],
+            new_post.id,
+        )
+
+        normal_candidate = self.get_post_candidate(
+            normal_result["results"],
+            new_post.id,
+        )
+
+        self.assertIsNotNone(prioritized_candidate)
+        self.assertIsNotNone(normal_candidate)
+
+        self.assertEqual(
+            prioritized_candidate.source,
+            "just_published",
+        )
+
+        self.assertNotEqual(
+            normal_candidate.source,
+            "just_published",
+        )
+
+        self.assertNotEqual(
+            normal_result["results"][0].object_id,
+            new_post.id,
+        )
+
+        self.assertIn(
+            other_post.id,
+            self.get_post_ids(normal_result["results"]),
+        )
+
+    # ============================================================
+    # CURSOR SNAPSHOTS
+    # ============================================================
+
+    def test_feed_returns_cursor_when_more_results_exist(self):
+        for index in range(3):
+            self.create_community_post(
+                content=f"Cursor post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
+                ),
+            )
+
+        result = self.service.get_feed(
+            user=None,
+            limit=1,
+        )
+
+        self.assertTrue(result["has_more"])
+        self.assertIsNotNone(result["next_cursor"])
+
+    def test_cursor_continues_original_snapshot_order(self):
+        older_post = self.create_community_post(
+            user=self.other_user,
+            content="Older post",
+            created_at=timezone.now() - timedelta(days=3),
+        )
+
+        middle_post = self.create_community_post(
+            user=self.third_user,
+            content="Middle post",
+            created_at=timezone.now() - timedelta(days=2),
+        )
+
+        new_post = self.create_community_post(
+            user=self.user,
+            content="Newly published post",
+        )
+
+        first_page = self.service.get_feed(
+            user=self.user,
+            limit=1,
+            new_post_id=new_post.id,
+        )
+
+        self.assertEqual(
+            first_page["results"][0].object_id,
+            new_post.id,
+        )
+
+        self.assertTrue(first_page["has_more"])
+
+        second_page = self.service.get_feed(
+            user=self.user,
+            limit=1,
+            cursor=first_page["next_cursor"],
+        )
+
+        self.assertEqual(
+            len(second_page["results"]),
+            1,
+        )
+
+        second_post_id = second_page["results"][0].object_id
+
+        self.assertNotEqual(
+            second_post_id,
+            new_post.id,
+        )
+
+        self.assertIn(
+            second_post_id,
+            {older_post.id, middle_post.id},
+        )
+
+    def test_cursor_pages_do_not_repeat_posts(self):
+        for index in range(5):
+            self.create_community_post(
+                content=f"Pagination post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
+                ),
+            )
+
+        first_page = self.service.get_feed(
+            user=None,
+            limit=2,
+        )
+
+        self.assertTrue(first_page["has_more"])
+
+        second_page = self.service.get_feed(
+            user=None,
+            limit=2,
+            cursor=first_page["next_cursor"],
+        )
+
+        first_ids = set(
+            self.get_post_ids(first_page["results"])
+        )
+
+        second_ids = set(
+            self.get_post_ids(second_page["results"])
+        )
+
+        self.assertFalse(
+            first_ids.intersection(second_ids)
+        )
+
+    def test_cursor_page_does_not_reapply_new_post_priority(self):
+        new_post = self.create_community_post(
+            user=self.user,
+            content="New post",
+        )
+
+        for index in range(3):
+            self.create_community_post(
+                content=f"Other post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
+                ),
+            )
+
+        first_page = self.service.get_feed(
+            user=self.user,
+            limit=1,
+            new_post_id=new_post.id,
+        )
+
+        self.assertEqual(
+            first_page["results"][0].object_id,
+            new_post.id,
+        )
+
+        self.assertTrue(first_page["has_more"])
+
+        second_page = self.service.get_feed(
+            user=self.user,
+            limit=1,
+            cursor=first_page["next_cursor"],
+            new_post_id=new_post.id,
+        )
+
+        if second_page["results"]:
+            self.assertNotEqual(
+                second_page["results"][0].object_id,
+                new_post.id,
+            )
+
+            self.assertNotEqual(
+                second_page["results"][0].source,
+                "just_published",
+            )
+
     # ============================================================
     # DEDUPLICATION
     # ============================================================
 
-    def test_same_object_is_not_returned_twice(self):
+    def test_same_community_post_is_not_returned_twice(self):
+        post = self.create_community_post(
+            user=self.other_user,
+            content="Duplicate candidate",
+            artist=self.artist,
+        )
+
         ArtistFollow.objects.create(
             user=self.user,
             artist=self.artist,
-        )
-
-        song = self.create_song(
-            title="Duplicate Candidate",
-            slug="duplicate-candidate",
-            artist=self.artist,
-        )
-
-        self.create_interaction(
-            user=self.user,
-            interaction_type="view_song",
-            song=song,
-            created_at=timezone.now(),
         )
 
         result = self.service.get_feed(
@@ -766,8 +1199,7 @@ class MusicFeedServiceTests(TestCase):
         matching = [
             candidate
             for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == song.id
+            if candidate.object_id == post.id
         ]
 
         self.assertEqual(
@@ -779,174 +1211,71 @@ class MusicFeedServiceTests(TestCase):
     # DIVERSITY
     # ============================================================
 
-    def test_feed_does_not_repeat_same_content_type_three_times_in_a_row(
-        self,
-    ):
-        artists = [
-            Artist.objects.create(
-                name=f"Diversity Artist {index}",
-                slug=f"diversity-artist-{index}",
-                is_active=True,
+    def test_feed_limits_repeated_authors_when_alternatives_exist(self):
+        author_a = self.other_user
+        author_b = self.third_user
+
+        for index in range(4):
+            self.create_community_post(
+                user=author_a,
+                content=f"Author A post {index}",
+                created_at=(
+                    timezone.now() - timedelta(minutes=index)
+                ),
             )
-            for index in range(6)
-        ]
 
-        songs = [
-            self.create_song(
-                title=f"Diversity Song {index}",
-                slug=f"diversity-song-{index}",
-                artist=artist,
+        for index in range(2):
+            self.create_community_post(
+                user=author_b,
+                content=f"Author B post {index}",
+                created_at=(
+                    timezone.now() - timedelta(minutes=10 + index)
+                ),
             )
-            for index, artist in enumerate(artists)
-        ]
 
-        candidates = [
-            FeedCandidate(
-                content_type="song",
-                source="discovery",
-                object=songs[0],
-                score=100.0,
-            ),
-            FeedCandidate(
-                content_type="song",
-                source="discovery",
-                object=songs[1],
-                score=99.0,
-            ),
-            FeedCandidate(
-                content_type="song",
-                source="discovery",
-                object=songs[2],
-                score=98.0,
-            ),
-            FeedCandidate(
-                content_type="song",
-                source="discovery",
-                object=songs[3],
-                score=97.0,
-            ),
-            FeedCandidate(
-                content_type="artist",
-                source="discovery",
-                object=artists[0],
-                score=96.0,
-            ),
-            FeedCandidate(
-                content_type="artist",
-                source="discovery",
-                object=artists[1],
-                score=95.0,
-            ),
-            FeedCandidate(
-                content_type="artist",
-                source="discovery",
-                object=artists[2],
-                score=94.0,
-            ),
-        ]
-
-        selected = self.service._select_diverse(
-            candidates=candidates,
+        result = self.service.get_feed(
+            user=None,
             limit=6,
         )
 
-        content_types = [
-            candidate.content_type
-            for candidate in selected
-        ]
+        returned_posts = result["results"]
 
         self.assertEqual(
-            len(selected),
+            len(returned_posts),
             6,
         )
 
-        for index in range(
+        author_ids = [
+            candidate.object.user_id
+            for candidate in returned_posts
+        ]
+
+        self.assertLessEqual(
+            author_ids[:3].count(author_a.id),
             2,
-            len(content_types),
-        ):
-            self.assertFalse(
-                (
-                    content_types[index]
-                    == content_types[index - 1]
-                    == content_types[index - 2]
-                ),
-                msg=(
-                    "Feed returned the same content type "
-                    "three times consecutively: "
-                    f"{content_types}"
+        )
+
+    def test_diversity_does_not_duplicate_posts(self):
+        for index in range(5):
+            self.create_community_post(
+                content=f"Diversity post {index}",
+                user=(
+                    self.other_user
+                    if index % 2 == 0
+                    else self.third_user
                 ),
             )
-
-    # ============================================================
-    # FEATURED CONTENT
-    # ============================================================
-
-    def test_featured_song_receives_featured_score(self):
-        featured_song = self.create_song(
-            title="Featured Song",
-            slug="featured-song",
-            is_featured=True,
-        )
-
-        normal_song = self.create_song(
-            title="Normal Song",
-            slug="normal-song",
-            is_featured=False,
-        )
 
         result = self.service.get_feed(
             user=None,
             limit=20,
         )
 
-        featured_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == featured_song.id
-        )
-
-        normal_candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == normal_song.id
-        )
-
-        self.assertGreater(
-            featured_candidate.score,
-            normal_candidate.score,
-        )
-
-    # ============================================================
-    # SOURCE METADATA
-    # ============================================================
-
-    def test_followed_artist_candidate_has_correct_source(self):
-        ArtistFollow.objects.create(
-            user=self.user,
-            artist=self.artist,
-        )
-
-        song = self.create_song(
-            title="Followed Artist Song",
-            slug="followed-artist-source",
-            artist=self.artist,
-        )
-
-        result = self.service.get_feed(
-            user=self.user,
-            limit=20,
-        )
-
-        candidate = next(
-            candidate
-            for candidate in result["results"]
-            if candidate.content_type == "song"
-            and candidate.object_id == song.id
+        post_ids = self.get_post_ids(
+            result["results"],
         )
 
         self.assertEqual(
-            candidate.source,
-            "followed_artist",
+            len(post_ids),
+            len(set(post_ids)),
         )

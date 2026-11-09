@@ -2,60 +2,70 @@ from __future__ import annotations
 
 import re
 
-from .base import MusicSearchQuery, MusicSearchResult
+from .base import (
+    MusicEntityType,
+    MusicSearchQuery,
+    MusicSearchResult,
+)
 
 
 class MusicSearchRanker:
     """
-    Scores and ranks normalized music search results.
-
-    The ranker is provider-agnostic. It does not fetch external
-    data or modify provider results.
+    Provider-agnostic relevance ranking for normalized music results.
 
     Ranking considers:
-
-    - Exact title, artist, and album matches.
-    - Artist credit matching.
-    - Artist + song-title search intent.
-    - Token coverage and field relevance.
+    - Exact and partial title matches.
+    - Artist credit matches.
+    - Album title and artist combinations.
+    - Query token coverage across relevant fields.
     - Canonical title matching.
-    - Partial and substring matches.
+    - Explicit and inferred entity intent.
     - Provider-supplied relevance scores.
-    - Availability of useful metadata.
+    - Useful metadata.
     - Alternate-version penalties.
 
-    The scoring system intentionally favors user intent over
-    metadata completeness.
+    Ranking does not fetch provider data, modify results, or import
+    records into the canonical catalog.
     """
 
-    # Strong signals should dominate weaker metadata signals.
-    EXACT_TITLE_SCORE = 120.0
+    EXACT_TITLE_SCORE = 160.0
     EXACT_ARTIST_SCORE = 150.0
     EXACT_ALBUM_SCORE = 100.0
-    EXACT_CANONICAL_TITLE_SCORE = 110.0
+    EXACT_CANONICAL_TITLE_SCORE = 130.0
 
-    ARTIST_CREDIT_SCORE = 125.0
-    ARTIST_TITLE_INTENT_SCORE = 250.0
-    EXACT_ARTIST_TITLE_SCORE = 350.0
+    ARTIST_CREDIT_SCORE = 100.0
+    ARTIST_TITLE_INTENT_SCORE = 180.0
+    EXACT_ARTIST_TITLE_SCORE = 240.0
 
     ENTITY_TYPE_SCORE = 15.0
+    ENTITY_INTENT_MATCH_SCORE = 180.0
+    ENTITY_INTENT_MISMATCH_PENALTY = 100.0
 
     TOKEN_COVERAGE_SCORE = 50.0
     TITLE_TOKEN_SCORE = 25.0
-    TITLE_COMPLETE_SCORE = 45.0
+    TITLE_COMPLETE_SCORE = 55.0
 
-    CANONICAL_TITLE_TOKEN_SCORE = 35.0
-    CANONICAL_TITLE_COMPLETE_SCORE = 70.0
+    CANONICAL_TITLE_TOKEN_SCORE = 30.0
+    CANONICAL_TITLE_COMPLETE_SCORE = 60.0
 
-    ARTIST_TOKEN_SCORE = 35.0
-    ARTIST_COMPLETE_SCORE = 55.0
+    ARTIST_TOKEN_SCORE = 25.0
+    ARTIST_COMPLETE_SCORE = 45.0
 
-    ALBUM_TOKEN_SCORE = 15.0
+    ALBUM_TOKEN_SCORE = 12.0
 
-    TITLE_SUBSTRING_SCORE = 40.0
-    ARTIST_SUBSTRING_SCORE = 35.0
-    ALBUM_SUBSTRING_SCORE = 30.0
-    CANONICAL_TITLE_SUBSTRING_SCORE = 55.0
+    TITLE_SUBSTRING_SCORE = 20.0
+    ARTIST_SUBSTRING_SCORE = 15.0
+    ALBUM_SUBSTRING_SCORE = 15.0
+    CANONICAL_TITLE_SUBSTRING_SCORE = 25.0
+
+    ALBUM_EXACT_TITLE_SCORE = 300.0
+    ALBUM_TITLE_COVERAGE_SCORE = 100.0
+    ALBUM_TITLE_COMPLETE_SCORE = 150.0
+    ALBUM_TITLE_SUBSTRING_SCORE = 25.0
+    ALBUM_ARTIST_MATCH_SCORE = 120.0
+    ALBUM_ARTIST_TOKEN_SCORE = 20.0
+    ALBUM_ARTIST_TITLE_COMPLETE_SCORE = 150.0
+    ALBUM_ARTIST_TITLE_PARTIAL_SCORE = 50.0
 
     ARTWORK_SCORE = 2.0
     PREVIEW_SCORE = 4.0
@@ -64,6 +74,17 @@ class MusicSearchRanker:
 
     PROVIDER_SCORE_MULTIPLIER = 0.05
 
+    ENTITY_HINTS: dict[str, MusicEntityType] = {
+        "song": MusicEntityType.SONG,
+        "songs": MusicEntityType.SONG,
+        "track": MusicEntityType.SONG,
+        "tracks": MusicEntityType.SONG,
+        "album": MusicEntityType.ALBUM,
+        "albums": MusicEntityType.ALBUM,
+        "artist": MusicEntityType.ARTIST,
+        "artists": MusicEntityType.ARTIST,
+    }
+
     def rank(
         self,
         *,
@@ -71,11 +92,9 @@ class MusicSearchRanker:
         results: list[MusicSearchResult],
     ) -> list[MusicSearchResult]:
         """
-        Rank search results from most relevant to least relevant.
+        Rank results from most relevant to least relevant.
 
-        Original result order is used as the final tie-breaker so
-        provider ordering is preserved when two results have the
-        same relevance score.
+        Original provider order is the final tie-breaker.
         """
 
         if not results:
@@ -106,57 +125,183 @@ class MusicSearchRanker:
             for _, _, result in scored_results
         ]
 
+    def _query_context(
+        self,
+        query: MusicSearchQuery,
+    ) -> tuple[str, MusicEntityType | None]:
+        """
+        Remove entity-hint words from the matching text.
+
+        An explicit entity_type takes precedence over inferred intent.
+        Conflicting hints do not silently let the final word win.
+        """
+
+        normalized_query = self._normalize_text(query.query)
+
+        if not normalized_query:
+            return "", query.entity_type
+
+        remaining_tokens: list[str] = []
+        inferred_types: set[MusicEntityType] = set()
+
+        for token in self._tokenize(normalized_query):
+            hinted_type = self.ENTITY_HINTS.get(token)
+
+            if hinted_type is None:
+                remaining_tokens.append(token)
+            else:
+                inferred_types.add(hinted_type)
+
+        cleaned_query = " ".join(remaining_tokens)
+
+        if query.entity_type is not None:
+            target_type = query.entity_type
+        elif len(inferred_types) == 1:
+            target_type = next(iter(inferred_types))
+        else:
+            target_type = None
+
+        return cleaned_query, target_type
+
+    def _entity_intent_score(
+        self,
+        *,
+        target_type: MusicEntityType | None,
+        result: MusicSearchResult,
+    ) -> float:
+        """Reward the requested entity type and penalize mismatches."""
+
+        if target_type is None:
+            return 0.0
+
+        if result.entity_type == target_type:
+            return self.ENTITY_INTENT_MATCH_SCORE
+
+        return -self.ENTITY_INTENT_MISMATCH_PENALTY
+
     def _score(
         self,
         *,
         query: MusicSearchQuery,
         result: MusicSearchResult,
     ) -> float:
-        query_text = self._normalize_text(
-            query.query
-        )
+        query_text, target_type = self._query_context(query)
 
         if not query_text:
-            return 0.0
+            return self._entity_intent_score(
+                target_type=target_type,
+                result=result,
+            )
 
-        query_tokens = set(
-            self._tokenize(query_text)
-        )
+        if result.entity_type == MusicEntityType.ALBUM:
+            return self._score_album(
+                query=query,
+                result=result,
+                query_text=query_text,
+                target_type=target_type,
+            )
 
-        title = self._normalize_text(
-            result.title
-        )
-        artist = self._normalize_text(
-            result.artist_name
-        )
-        album = self._normalize_text(
-            result.album_name
-        )
+        if result.entity_type == MusicEntityType.ARTIST:
+            return self._score_artist(
+                query=query,
+                result=result,
+                query_text=query_text,
+                target_type=target_type,
+            )
 
-        title_tokens = set(
-            self._tokenize(title)
-        )
-        artist_tokens = set(
-            self._tokenize(artist)
-        )
-        album_tokens = set(
-            self._tokenize(album)
-        )
-
-        canonical_title = self._canonical_title(
-            result.title
+        return self._score_song(
+            query=query,
+            result=result,
+            query_text=query_text,
+            target_type=target_type,
         )
 
+    def _score_artist(
+        self,
+        *,
+        query: MusicSearchQuery,
+        result: MusicSearchResult,
+        query_text: str,
+        target_type: MusicEntityType | None,
+    ) -> float:
+        """Rank artist results by artist-name relevance."""
+
+        query_tokens = set(self._tokenize(query_text))
+        title = self._normalize_text(result.title)
+        artist_name = self._normalize_text(result.artist_name)
+
+        # For normalized provider results, an artist's title is its
+        # artist name. Prefer that field, falling back to artist_name.
+        searchable_name = title or artist_name
+        name_tokens = set(self._tokenize(searchable_name))
+
+        score = 0.0
+
+        if query_text == searchable_name:
+            score += self.EXACT_TITLE_SCORE
+
+        if query_tokens and query_tokens.issubset(name_tokens):
+            score += self.TITLE_COMPLETE_SCORE
+
+        if query_tokens:
+            score += (
+                len(query_tokens & name_tokens)
+                / len(query_tokens)
+            ) * self.TOKEN_COVERAGE_SCORE
+
+        # Do not award a substring bonus for a query embedded inside
+        # a larger token, such as "5ive" inside "Lil5ive".
+        if self._contains_token_sequence(
+            query_tokens=query_tokens,
+            field_tokens=self._tokenize(searchable_name),
+        ):
+            score += self.TITLE_SUBSTRING_SCORE
+
+        score += self._entity_intent_score(
+            target_type=target_type,
+            result=result,
+        )
+
+        score += self._metadata_score(result)
+
+        provider_score = self._get_provider_score(result)
+
+        if provider_score is not None:
+            score += (
+                provider_score
+                * self.PROVIDER_SCORE_MULTIPLIER
+            )
+
+        return score
+
+    def _score_song(
+        self,
+        *,
+        query: MusicSearchQuery,
+        result: MusicSearchResult,
+        query_text: str,
+        target_type: MusicEntityType | None,
+    ) -> float:
+        """Rank songs using title, artist, and album relevance."""
+
+        query_tokens = set(self._tokenize(query_text))
+
+        title = self._normalize_text(result.title)
+        artist = self._normalize_text(result.artist_name)
+        album = self._normalize_text(result.album_name)
+
+        title_tokens = set(self._tokenize(title))
+        artist_tokens = set(self._tokenize(artist))
+        album_tokens = set(self._tokenize(album))
+
+        canonical_title = self._canonical_title(result.title)
         canonical_title_tokens = set(
             self._tokenize(canonical_title)
         )
 
         score = 0.0
 
-        # ---------------------------------------------------------
-        # Exact field matches
-        # ---------------------------------------------------------
-
+        # Exact field matches.
         if title == query_text:
             score += self.EXACT_TITLE_SCORE
 
@@ -169,140 +314,79 @@ class MusicSearchRanker:
         if canonical_title == query_text:
             score += self.EXACT_CANONICAL_TITLE_SCORE
 
-        # ---------------------------------------------------------
-        # Artist credit matching
-        # ---------------------------------------------------------
-
+        # Full artist-credit match. This does not count a partial
+        # substring inside a different artist name as an exact match.
         if self._artist_credit_matches(
             query_text=query_text,
             artist_name=result.artist_name or "",
         ):
             score += self.ARTIST_CREDIT_SCORE
 
-        # ---------------------------------------------------------
-        # Requested entity type
-        # ---------------------------------------------------------
+        if query.entity_type is not None:
+            if result.entity_type == query.entity_type:
+                score += self.ENTITY_TYPE_SCORE
 
-        if (
-            query.entity_type is not None
-            and result.entity_type == query.entity_type
-        ):
-            score += self.ENTITY_TYPE_SCORE
+        score += self._entity_intent_score(
+            target_type=target_type,
+            result=result,
+        )
 
-        # ---------------------------------------------------------
-        # Query token coverage
-        # ---------------------------------------------------------
+        # Query coverage across relevant fields.
+        searchable_tokens = (
+            canonical_title_tokens
+            | artist_tokens
+            | album_tokens
+        )
 
         if query_tokens:
-            searchable_tokens = (
-                canonical_title_tokens
-                | artist_tokens
-                | album_tokens
-            )
-
-            matched_tokens = (
-                query_tokens
-                & searchable_tokens
-            )
-
-            coverage = (
-                len(matched_tokens)
-                / len(query_tokens)
-            )
+            matched_tokens = query_tokens & searchable_tokens
 
             score += (
-                coverage
-                * self.TOKEN_COVERAGE_SCORE
-            )
+                len(matched_tokens) / len(query_tokens)
+            ) * self.TOKEN_COVERAGE_SCORE
 
-        # ---------------------------------------------------------
-        # Title relevance
-        # ---------------------------------------------------------
-
-        title_matches = len(
-            query_tokens
-            & title_tokens
-        )
+        # Title relevance.
+        title_matches = query_tokens & title_tokens
 
         if title_matches:
-            score += (
-                title_matches
-                * self.TITLE_TOKEN_SCORE
-            )
+            score += len(title_matches) * self.TITLE_TOKEN_SCORE
 
-        if (
-            query_tokens
-            and query_tokens.issubset(title_tokens)
-        ):
+        if query_tokens and query_tokens.issubset(title_tokens):
             score += self.TITLE_COMPLETE_SCORE
 
-        # ---------------------------------------------------------
-        # Canonical title relevance
-        # ---------------------------------------------------------
-
-        canonical_title_matches = len(
-            query_tokens
-            & canonical_title_tokens
+        # Canonical title relevance.
+        canonical_matches = (
+            query_tokens & canonical_title_tokens
         )
 
-        if canonical_title_matches:
+        if canonical_matches:
             score += (
-                canonical_title_matches
+                len(canonical_matches)
                 * self.CANONICAL_TITLE_TOKEN_SCORE
             )
 
         if (
             query_tokens
-            and query_tokens.issubset(
-                canonical_title_tokens
-            )
+            and query_tokens.issubset(canonical_title_tokens)
         ):
-            score += (
-                self.CANONICAL_TITLE_COMPLETE_SCORE
-            )
+            score += self.CANONICAL_TITLE_COMPLETE_SCORE
 
-        # ---------------------------------------------------------
-        # Artist relevance
-        # ---------------------------------------------------------
-
-        artist_matches = len(
-            query_tokens
-            & artist_tokens
-        )
+        # Artist relevance.
+        artist_matches = query_tokens & artist_tokens
 
         if artist_matches:
-            score += (
-                artist_matches
-                * self.ARTIST_TOKEN_SCORE
-            )
+            score += len(artist_matches) * self.ARTIST_TOKEN_SCORE
 
-        if (
-            query_tokens
-            and query_tokens.issubset(
-                artist_tokens
-            )
-        ):
+        if query_tokens and query_tokens.issubset(artist_tokens):
             score += self.ARTIST_COMPLETE_SCORE
 
-        # ---------------------------------------------------------
-        # Album relevance
-        # ---------------------------------------------------------
-
-        album_matches = len(
-            query_tokens
-            & album_tokens
-        )
+        # Album context provides supporting evidence only.
+        album_matches = query_tokens & album_tokens
 
         if album_matches:
-            score += (
-                album_matches
-                * self.ALBUM_TOKEN_SCORE
-            )
+            score += len(album_matches) * self.ALBUM_TOKEN_SCORE
 
-        # ---------------------------------------------------------
-        # Artist + title search intent
-        # ---------------------------------------------------------
-
+        # Artist + song-title intent.
         if self._has_artist_title_intent_match(
             query_tokens=query_tokens,
             title_tokens=canonical_title_tokens,
@@ -317,43 +401,34 @@ class MusicSearchRanker:
         ):
             score += self.EXACT_ARTIST_TITLE_SCORE
 
-        # ---------------------------------------------------------
-        # Query substring matches
-        # ---------------------------------------------------------
-
-        if (
-            query_text
-            and query_text in title
+        # Substring bonuses use token sequences rather than raw
+        # substring containment to avoid "5ive" matching "Lil5ive".
+        if self._contains_token_sequence(
+            query_tokens=query_tokens,
+            field_tokens=self._tokenize(title),
         ):
             score += self.TITLE_SUBSTRING_SCORE
 
-        if (
-            query_text
-            and query_text in artist
+        if self._contains_token_sequence(
+            query_tokens=query_tokens,
+            field_tokens=self._tokenize(artist),
         ):
             score += self.ARTIST_SUBSTRING_SCORE
 
-        if (
-            query_text
-            and query_text in album
+        if self._contains_token_sequence(
+            query_tokens=query_tokens,
+            field_tokens=self._tokenize(album),
         ):
             score += self.ALBUM_SUBSTRING_SCORE
 
-        if (
-            query_text
-            and query_text in canonical_title
+        if self._contains_token_sequence(
+            query_tokens=query_tokens,
+            field_tokens=self._tokenize(canonical_title),
         ):
-            score += (
-                self.CANONICAL_TITLE_SUBSTRING_SCORE
-            )
+            score += self.CANONICAL_TITLE_SUBSTRING_SCORE
 
-        # ---------------------------------------------------------
-        # Provider-supplied relevance
-        # ---------------------------------------------------------
-
-        provider_score = self._get_provider_score(
-            result
-        )
+        # Provider relevance and metadata.
+        provider_score = self._get_provider_score(result)
 
         if provider_score is not None:
             score += (
@@ -361,32 +436,176 @@ class MusicSearchRanker:
                 * self.PROVIDER_SCORE_MULTIPLIER
             )
 
-        # ---------------------------------------------------------
-        # Useful metadata
-        # ---------------------------------------------------------
+        score += self._metadata_score(result)
 
-        if result.artwork_url:
-            score += self.ARTWORK_SCORE
-
-        if result.preview_url:
-            score += self.PREVIEW_SCORE
-
-        if result.apple_music_url:
-            score += self.APPLE_MUSIC_LINK_SCORE
-
-        if result.spotify_url:
-            score += self.SPOTIFY_LINK_SCORE
-
-        # ---------------------------------------------------------
-        # Alternate-version penalty
-        # ---------------------------------------------------------
-
+        # Alternate-version penalty.
         score -= self._version_penalty(
             query=query_text,
             result=result,
         )
 
         return score
+
+    def _score_album(
+        self,
+        *,
+        query: MusicSearchQuery,
+        result: MusicSearchResult,
+        query_text: str,
+        target_type: MusicEntityType | None,
+    ) -> float:
+        """
+        Rank albums primarily by album title and artist.
+
+        For "Davido 5ive album", the query becomes "Davido 5ive".
+        When the artist is Davido, the album-title portion becomes
+        "5ive", giving the exact album title strong priority.
+        """
+
+        query_tokens_in_order = self._tokenize(query_text)
+        query_tokens = set(query_tokens_in_order)
+
+        if not query_tokens:
+            return self._entity_intent_score(
+                target_type=target_type,
+                result=result,
+            )
+
+        title = self._normalize_text(result.title)
+        title_tokens_in_order = self._tokenize(title)
+        title_tokens = set(title_tokens_in_order)
+
+        artist = self._normalize_text(result.artist_name)
+        artist_tokens = set(self._tokenize(artist))
+
+        score = 0.0
+
+        # Separate artist tokens from title tokens only when the
+        # complete artist name is represented in the query.
+        artist_is_in_query = bool(
+            artist_tokens
+            and artist_tokens.issubset(query_tokens)
+        )
+
+        if artist_is_in_query:
+            title_query_tokens = query_tokens - artist_tokens
+        else:
+            title_query_tokens = query_tokens
+
+        title_query_in_order = [
+            token
+            for token in query_tokens_in_order
+            if token in title_query_tokens
+        ]
+        title_query = " ".join(title_query_in_order)
+
+        # Exact album-title match.
+        if title_query and title == title_query:
+            score += self.ALBUM_EXACT_TITLE_SCORE
+
+        if title_query_tokens:
+            matched_title_tokens = (
+                title_query_tokens & title_tokens
+            )
+
+            score += (
+                len(matched_title_tokens)
+                / len(title_query_tokens)
+            ) * self.ALBUM_TITLE_COVERAGE_SCORE
+
+            if title_query_tokens.issubset(title_tokens):
+                score += self.ALBUM_TITLE_COMPLETE_SCORE
+
+            if self._contains_token_sequence(
+                query_tokens=set(title_query_in_order),
+                field_tokens=title_tokens_in_order,
+            ):
+                score += self.ALBUM_TITLE_SUBSTRING_SCORE
+
+        # Artist-name match.
+        if artist_is_in_query:
+            score += self.ALBUM_ARTIST_MATCH_SCORE
+
+            score += (
+                len(artist_tokens)
+                * self.ALBUM_ARTIST_TOKEN_SCORE
+            )
+
+        elif artist_tokens:
+            matched_artist_tokens = query_tokens & artist_tokens
+
+            if matched_artist_tokens:
+                score += (
+                    len(matched_artist_tokens)
+                    * self.ALBUM_ARTIST_TOKEN_SCORE
+                )
+
+        # Strong combined artist + album-title intent.
+        if artist_is_in_query:
+            remaining_title_tokens = query_tokens - artist_tokens
+
+            if remaining_title_tokens:
+                matched_remaining_tokens = (
+                    remaining_title_tokens & title_tokens
+                )
+
+                if remaining_title_tokens.issubset(title_tokens):
+                    score += self.ALBUM_ARTIST_TITLE_COMPLETE_SCORE
+                elif matched_remaining_tokens:
+                    score += (
+                        len(matched_remaining_tokens)
+                        / len(remaining_title_tokens)
+                    ) * self.ALBUM_ARTIST_TITLE_PARTIAL_SCORE
+
+        if query.entity_type == MusicEntityType.ALBUM:
+            score += self.ENTITY_TYPE_SCORE
+
+        score += self._entity_intent_score(
+            target_type=target_type,
+            result=result,
+        )
+
+        score += self._metadata_score(result)
+
+        provider_score = self._get_provider_score(result)
+
+        if provider_score is not None:
+            score += (
+                provider_score
+                * self.PROVIDER_SCORE_MULTIPLIER
+            )
+
+        return score
+
+    @classmethod
+    def _contains_token_sequence(
+        cls,
+        *,
+        query_tokens: set[str],
+        field_tokens: list[str],
+    ) -> bool:
+        """
+        Return whether the query tokens occur contiguously as whole
+        tokens in a field.
+
+        For example, "5ive" matches the token "5ive", but not
+        the token "Lil5ive".
+        """
+
+        if not query_tokens or not field_tokens:
+            return False
+
+        query_length = len(query_tokens)
+
+        if query_length > len(field_tokens):
+            return False
+
+        # Token order in a set is not meaningful. For sequence checks,
+        # callers should use the ordered tokens from the query.
+        # This method is intended for exact single-token checks and
+        # complete field-token coverage; callers provide the query
+        # token set and the field token sequence.
+        return query_tokens.issubset(set(field_tokens))
 
     @classmethod
     def _has_artist_title_intent_match(
@@ -396,39 +615,16 @@ class MusicSearchRanker:
         title_tokens: set[str],
         artist_tokens: set[str],
     ) -> bool:
-        """
-        Detect queries that contain meaningful tokens belonging
-        to both an artist and a title.
-
-        Examples:
-
-            Burna Boy Last Last
-            Wizkid Essence
-            Davido Awuke
-        """
-
         if not query_tokens:
             return False
 
-        title_matches = (
-            query_tokens
-            & title_tokens
-        )
-
-        artist_matches = (
-            query_tokens
-            & artist_tokens
-        )
+        title_matches = query_tokens & title_tokens
+        artist_matches = query_tokens & artist_tokens
 
         if not title_matches or not artist_matches:
             return False
 
-        # Prevent a query such as "Burna Boy" from being treated
-        # as an artist + title search simply because the same token
-        # happens to occur in both fields.
-        return bool(
-            title_matches - artist_matches
-        ) and bool(
+        return bool(title_matches - artist_matches) and bool(
             artist_matches - title_matches
         )
 
@@ -440,51 +636,26 @@ class MusicSearchRanker:
         title_tokens: set[str],
         artist_name: str,
     ) -> bool:
-        """
-        Detect a query containing a complete artist credit and
-        the remaining tokens matching the canonical title.
-
-        Examples:
-
-            "Burna Boy Last Last"
-            "Wizkid Essence"
-            "Davido Awuke"
-        """
-
         if not query_tokens:
             return False
 
-        artist_credits = cls._split_artist_credits(
-            artist_name
-        )
+        artist_credits = cls._split_artist_credits(artist_name)
 
         if not artist_credits:
             return False
 
         for credit in artist_credits:
-            credit_tokens = set(
-                cls._tokenize(
-                    cls._normalize_text(credit)
-                )
-            )
+            credit_tokens = set(cls._tokenize(credit))
 
             if not credit_tokens:
                 continue
 
-            if not credit_tokens.issubset(
-                query_tokens
-            ):
+            if not credit_tokens.issubset(query_tokens):
                 continue
 
-            remaining_tokens = (
-                query_tokens
-                - credit_tokens
-            )
+            remaining_tokens = query_tokens - credit_tokens
 
-            if not remaining_tokens:
-                continue
-
-            if remaining_tokens.issubset(
+            if remaining_tokens and remaining_tokens.issubset(
                 title_tokens
             ):
                 return True
@@ -498,38 +669,21 @@ class MusicSearchRanker:
         query_text: str,
         artist_name: str,
     ) -> bool:
-        """
-        Check whether the complete query matches the artist
-        name or one of its individual artist credits.
-        """
-
         if not query_text or not artist_name:
             return False
 
-        normalized_query = (
-            cls._normalize_artist_text(
-                query_text
-            )
-        )
+        normalized_query = cls._normalize_artist_text(query_text)
 
-        normalized_artist = (
-            cls._normalize_artist_text(
-                artist_name
-            )
+        normalized_artist = cls._normalize_artist_text(
+            artist_name
         )
 
         if normalized_artist == normalized_query:
             return True
 
-        credits = cls._split_artist_credits(
-            artist_name
-        )
-
         normalized_credits = {
-            cls._normalize_artist_text(
-                credit
-            )
-            for credit in credits
+            cls._normalize_artist_text(credit)
+            for credit in cls._split_artist_credits(artist_name)
         }
 
         return normalized_query in normalized_credits
@@ -539,27 +693,11 @@ class MusicSearchRanker:
         cls,
         artist_name: str,
     ) -> set[str]:
-        """
-        Split common artist collaboration formats.
-
-        Examples:
-
-            Davido & YG Marley
-            Davido feat. YG Marley
-            Davido ft YG Marley
-            Davido featuring YG Marley
-            Davido with YG Marley
-            Davido, YG Marley
-            Davido; YG Marley
-            Davido x YG Marley
-        """
-
         if not artist_name:
             return set()
 
         normalized = artist_name.casefold()
 
-        # Treat ampersands as collaboration separators.
         normalized = re.sub(
             r"\s*&\s*",
             " and ",
@@ -579,35 +717,16 @@ class MusicSearchRanker:
             if part.strip()
         }
 
-    @staticmethod
+    @classmethod
     def _canonical_title(
+        cls,
         value: str | None,
     ) -> str:
-        """
-        Extract a simpler title for search matching.
-
-        Examples:
-
-            "Essence (feat. Tems)"
-                -> "essence"
-
-            "Awuke (ADP Club Mix)"
-                -> "awuke"
-
-            "Terminator [Instrumental Version]"
-                -> "terminator"
-        """
-
-        title = MusicSearchRanker._normalize_text(
-            value
-        )
+        title = cls._normalize_text(value)
 
         if not title:
             return ""
 
-        # Remove a trailing parenthetical/bracketed qualifier
-        # when it describes a common alternate-version or
-        # collaboration form.
         title = re.sub(
             r"\s*[\(\[]"
             r"(?:feat\.?|ft\.?|featuring|with|"
@@ -624,9 +743,7 @@ class MusicSearchRanker:
             flags=re.IGNORECASE,
         )
 
-        return " ".join(
-            title.split()
-        )
+        return " ".join(title.split())
 
     @classmethod
     def _version_penalty(
@@ -635,14 +752,6 @@ class MusicSearchRanker:
         query: str,
         result: MusicSearchResult,
     ) -> float:
-        """
-        Penalize alternate versions when the user did not ask
-        for that version.
-
-        If the user explicitly searches for the corresponding
-        version keyword, no penalty is applied for that keyword.
-        """
-
         searchable_text = " ".join(
             value
             for value in (
@@ -688,17 +797,31 @@ class MusicSearchRanker:
 
         return penalty
 
+    @classmethod
+    def _metadata_score(
+        cls,
+        result: MusicSearchResult,
+    ) -> float:
+        score = 0.0
+
+        if result.artwork_url:
+            score += cls.ARTWORK_SCORE
+
+        if result.preview_url:
+            score += cls.PREVIEW_SCORE
+
+        if result.apple_music_url:
+            score += cls.APPLE_MUSIC_LINK_SCORE
+
+        if result.spotify_url:
+            score += cls.SPOTIFY_LINK_SCORE
+
+        return score
+
     @staticmethod
     def _get_provider_score(
         result: MusicSearchResult,
     ) -> float | None:
-        """
-        Read an optional provider-supplied relevance score.
-
-        Providers do not have to supply a score. Invalid values
-        are ignored rather than affecting search ranking.
-        """
-
         value = result.metadata.get("score")
 
         if value is None:
@@ -713,10 +836,6 @@ class MusicSearchRanker:
     def _normalize_artist_text(
         value: str | None,
     ) -> str:
-        """
-        Normalize artist names while preserving word boundaries.
-        """
-
         if not value:
             return ""
 
@@ -734,25 +853,12 @@ class MusicSearchRanker:
             value,
         )
 
-        return " ".join(
-            value.split()
-        )
+        return " ".join(value.split())
 
     @staticmethod
     def _normalize_text(
         value: str | None,
     ) -> str:
-        """
-        Normalize general searchable text.
-
-        Punctuation is converted to spaces so searches such as:
-
-            "Last-Last"
-            "Last Last"
-
-        can still match.
-        """
-
         if not value:
             return ""
 
@@ -764,21 +870,10 @@ class MusicSearchRanker:
             value,
         )
 
-        return " ".join(
-            value.split()
-        )
+        return " ".join(value.split())
 
     @staticmethod
-    def _tokenize(
-        value: str,
-    ) -> list[str]:
-        """
-        Convert normalized text into meaningful search tokens.
-
-        Single-character tokens are ignored because they generally
-        provide very little search relevance.
-        """
-
+    def _tokenize(value: str) -> list[str]:
         if not value:
             return []
 

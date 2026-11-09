@@ -1,13 +1,14 @@
+
 from __future__ import annotations
 
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ...serializers.provider_search import (
+from music.providers.base import MusicEntityType
+from music.serializers.provider_search import (
     MusicProviderSearchResultSerializer,
 )
-from music.providers.base import MusicEntityType
 from music.services.provider_search import (
     MusicProviderSearchService,
 )
@@ -18,64 +19,54 @@ class MusicProviderSearchView(APIView):
     Search external music providers.
 
     Query parameters:
-
-    q:
-        Search query.
-
-    type:
-        Optional entity type:
-        song, album, or artist.
-
-    country:
-        Optional two-letter country code.
-        Defaults to NG.
-
-    limit:
-        Optional result limit.
-        Defaults to 10 and is capped by the service.
+        q: Required query, up to 200 characters.
+        type: Optional song, album, or artist.
+        country: Optional two-letter country code; defaults to NG.
+        limit: Optional result limit from 1 to 20; defaults to 10.
     """
+
+    MAX_QUERY_LENGTH = 200
+    DEFAULT_LIMIT = 10
+    MIN_LIMIT = 1
+    MAX_LIMIT = 20
 
     search_service = MusicProviderSearchService()
 
     def get(self, request):
-        query = request.query_params.get(
-            "q",
-            "",
-        ).strip()
+        query = request.query_params.get("q", "").strip()
 
         if not query:
             return Response(
+                {"detail": "A search query is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(query) > self.MAX_QUERY_LENGTH:
+            return Response(
                 {
                     "detail": (
-                        "A search query is required."
+                        f"Search query must not exceed "
+                        f"{self.MAX_QUERY_LENGTH} characters."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        entity_type = self._parse_entity_type(
-            request.query_params.get("type")
-        )
+        raw_entity_type = request.query_params.get("type")
+        entity_type = self._parse_entity_type(raw_entity_type)
 
-        if (
-            request.query_params.get("type")
-            and entity_type is None
-        ):
+        if raw_entity_type and entity_type is None:
             return Response(
                 {
                     "detail": (
-                        "Invalid type. "
-                        "Use song, album, or artist."
+                        "Invalid type. Use song, album, or artist."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         country = self._parse_country(
-            request.query_params.get(
-                "country",
-                "NG",
-            )
+            request.query_params.get("country", "NG")
         )
 
         if country is None:
@@ -97,7 +88,8 @@ class MusicProviderSearchView(APIView):
             return Response(
                 {
                     "detail": (
-                        "Limit must be a valid integer."
+                        "Limit must be an integer between "
+                        f"{self.MIN_LIMIT} and {self.MAX_LIMIT}."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -112,9 +104,7 @@ class MusicProviderSearchView(APIView):
             )
         except ValueError as exc:
             return Response(
-                {
-                    "detail": str(exc),
-                },
+                {"detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -124,9 +114,7 @@ class MusicProviderSearchView(APIView):
         )
 
         return Response(
-            {
-                "results": serializer.data,
-            },
+            {"results": serializer.data},
             status=status.HTTP_200_OK,
         )
 
@@ -138,9 +126,7 @@ class MusicProviderSearchView(APIView):
             return None
 
         try:
-            return MusicEntityType(
-                value.strip().lower()
-            )
+            return MusicEntityType(value.strip().lower())
         except ValueError:
             return None
 
@@ -161,14 +147,23 @@ class MusicProviderSearchView(APIView):
 
         return normalized
 
-    @staticmethod
+    @classmethod
     def _parse_limit(
+        cls,
         value: str | None,
     ) -> int | None:
-        if value is None or not value.strip():
-            return 10
+        if value is None:
+            return cls.DEFAULT_LIMIT
+
+        if not value.strip():
+            return None
 
         try:
-            return int(value)
+            limit = int(value)
         except (TypeError, ValueError):
             return None
+
+        if not cls.MIN_LIMIT <= limit <= cls.MAX_LIMIT:
+            return None
+
+        return limit

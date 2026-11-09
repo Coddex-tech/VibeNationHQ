@@ -39,7 +39,6 @@ from news.models import News
 from music.models import (
     Album,
     AlbumFavorite,
-    AlbumRating,
     AlbumTrack,
     Artist,
     ArtistFollow,
@@ -59,7 +58,6 @@ from music.models import (
     Genre,
     Song,
     SongFavorite,
-    SongRating,
     UserFollow,
 )
 
@@ -68,7 +66,6 @@ from music.models import (
 from music.admin import (
     AlbumAdmin,
     AlbumFavoriteAdmin,
-    AlbumRatingAdmin,
     AlbumTrackAdmin,
     ArtistAdmin,
     ArtistFollowAdmin,
@@ -87,7 +84,6 @@ from music.admin import (
     GenreAdmin,
     SongAdmin,
     SongFavoriteAdmin,
-    SongRatingAdmin,
     UserFollowAdmin,
 )
 
@@ -1039,13 +1035,6 @@ music_admins = [
     (Album, AlbumAdmin),
     (AlbumTrack, AlbumTrackAdmin),
     (Song, SongAdmin),
-
-    # --------------------------------------------------------
-    # RATINGS
-    # --------------------------------------------------------
-
-    (SongRating, SongRatingAdmin),
-    (AlbumRating, AlbumRatingAdmin),
 
     # --------------------------------------------------------
     # EDITORIAL

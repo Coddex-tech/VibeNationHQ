@@ -1,3 +1,4 @@
+
 import 'server-only';
 
 import { cookies } from 'next/headers';
@@ -10,7 +11,9 @@ import type {
   MusicFeedResponse,
 } from './MusicFeed';
 
-export async function getInitialMusicFeed(): Promise<MusicFeedResponse> {
+export async function getInitialMusicFeed(
+  newPostId?: string,
+): Promise<MusicFeedResponse> {
   const cookieStore = await cookies();
 
   const cookieHeader =
@@ -22,8 +25,24 @@ export async function getInitialMusicFeed(): Promise<MusicFeedResponse> {
       )
       .join('; ');
 
+  const feedUrl =
+    new URL(
+      `${API_URL}/api/v1/music/feed/`,
+    );
+
+  if (
+    newPostId &&
+    /^\d+$/.test(newPostId) &&
+    Number(newPostId) > 0
+  ) {
+    feedUrl.searchParams.set(
+      'new_post_id',
+      newPostId,
+    );
+  }
+
   const response = await fetch(
-    `${API_URL}/api/v1/music/feed/`,
+    feedUrl.toString(),
     {
       method: 'GET',
       headers: {

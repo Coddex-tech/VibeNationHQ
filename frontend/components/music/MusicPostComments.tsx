@@ -6,22 +6,26 @@ import {
   useId,
   useRef,
   useState,
-  type FormEvent,
-  type ReactNode,
 } from 'react';
-import Link from 'next/link';
 import {
-  ArrowDown,
-  CornerUpLeft,
   MessageCircle,
-  Send,
-  X,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/auth/AuthProvider';
 import ConfirmationModal from '@/components/ui/ConfirmationModal';
 import ReportContentModal from '@/components/ui/ReportContentModal';
-import MusicPostCommentItem from '@/components/music/MusicPostCommentItem';
+
+import CommentComposer from '@/components/comments/CommentComposer';
+import CommentThread from '@/components/comments/CommentThread';
+
+import type {
+  SharedComment,
+  SharedCommentLikeResponse,
+} from '@/components/comments/CommentItem';
+
+import type {
+  CommentThreadState,
+} from '@/components/comments/CommentThread';
 
 import {
   createCommunityComment,
@@ -47,12 +51,16 @@ type MusicPostCommentsProps = {
 type ReplyState = {
   // Only direct children of this parent are stored here.
   comments: CommunityComment[];
-  // Pagination belongs to the root conversation, not each nested reply.
+
+  // Pagination belongs to the root conversation.
   next: string | null;
-  // For a root, this is the total number of descendants in its thread.
+
+  // Total descendants in the root conversation.
   count: number;
-  // Number of unique descendants loaded for the root conversation.
+
+  // Unique descendants loaded for this root conversation.
   loadedCount: number;
+
   loading: boolean;
   loaded: boolean;
   error: string | null;
@@ -66,8 +74,6 @@ type ComposerMode =
 const PAGE_SIZE = 20;
 const REPLY_PAGE_SIZE = 5;
 const MAX_COMMENT_LENGTH = 10000;
-const MAX_COMPOSER_LINES = 3;
-const INITIAL_COMPOSER_HEIGHT = 140;
 const COMMENT_HIGHLIGHT_DURATION_MS = 2000;
 
 const EMPTY_REPLY_STATE: ReplyState = {
@@ -128,6 +134,30 @@ function mergeComments(
   return Array.from(merged.values());
 }
 
+/**
+ * Adapt the community API's snake_case fields to the shared
+ * presentation component's camelCase contract.
+ *
+ * The actual comment IDs and parent IDs are never changed.
+ */
+function toSharedComment(comment: CommunityComment): SharedComment {
+  return {
+    id: comment.id,
+    user: {
+      id: comment.user.id,
+      username: comment.user.username,
+    },
+    parent: comment.parent,
+    content: comment.content,
+    createdAt: comment.created_at,
+    likesCount: comment.likes_count,
+    isLiked: Boolean(comment.is_liked),
+    repliesCount: comment.replies_count,
+    isEdited: Boolean(comment.is_edited),
+    status: comment.status,
+  };
+}
+
 function collectLoadedSubtreeIds(
   targetId: number,
   comments: CommunityComment[],
@@ -174,15 +204,11 @@ export default function MusicPostComments({
 
   const sectionId = useId();
 
-  const composerRef = useRef<HTMLFormElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const composerContainerRef = useRef<HTMLDivElement>(null);
-
+  const sectionRef = useRef<HTMLElement>(null);
   const requestVersionRef = useRef(0);
   const postGenerationRef = useRef(0);
   const replyRequestVersionsRef = useRef<Record<number, number>>({});
   const likeRequestsRef = useRef<Set<number>>(new Set());
-
   const highlightTimeoutRef = useRef<number | null>(null);
 
   const [comments, setComments] = useState<CommunityComment[]>([]);
@@ -192,8 +218,8 @@ export default function MusicPostComments({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [commentsError, setCommentsError] = useState<string | null>(null);
 
-  // Replies are stored under their exact parent comment ID.
-  // Only a root comment owns thread pagination and exposes thread controls.
+  // Every bucket contains only direct children of its key.
+  // The shared CommentThread flattens the display without changing parents.
   const [repliesByComment, setRepliesByComment] = useState<
     Record<number, ReplyState>
   >({});
@@ -201,7 +227,6 @@ export default function MusicPostComments({
   const [highlightedCommentId, setHighlightedCommentId] =
     useState<number | null>(null);
 
-  // Kept pending until React has rendered the target element into the DOM.
   const [pendingNavigationId, setPendingNavigationId] =
     useState<number | null>(null);
 
@@ -209,6 +234,9 @@ export default function MusicPostComments({
   const [composerMode, setComposerMode] = useState<ComposerMode>({
     type: 'comment',
   });
+
+  // Increment this whenever Reply or Edit should focus the composer.
+  const [focusRequestKey, setFocusRequestKey] = useState(0);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -221,85 +249,8 @@ export default function MusicPostComments({
     useState<CommunityComment | null>(null);
 
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const [composerHeight, setComposerHeight] = useState(
-    INITIAL_COMPOSER_HEIGHT,
-  );
 
   const authenticated = isAuthenticated === true;
-
-  const resizeComposer = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-
-    textarea.style.height = 'auto';
-
-    const styles = window.getComputedStyle(textarea);
-    const computedLineHeight = Number.parseFloat(styles.lineHeight);
-
-    const lineHeight = Number.isFinite(computedLineHeight)
-      ? computedLineHeight
-      : 20;
-
-    const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
-    const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
-    const borderTop = Number.parseFloat(styles.borderTopWidth) || 0;
-    const borderBottom = Number.parseFloat(styles.borderBottomWidth) || 0;
-
-    const maximumHeight =
-      lineHeight * MAX_COMPOSER_LINES +
-      paddingTop +
-      paddingBottom +
-      borderTop +
-      borderBottom;
-
-    const nextHeight = Math.min(textarea.scrollHeight, maximumHeight);
-
-    textarea.style.height = `${nextHeight}px`;
-    textarea.style.overflowY =
-      textarea.scrollHeight > maximumHeight ? 'auto' : 'hidden';
-  }, []);
-
-  useEffect(() => {
-    resizeComposer();
-  }, [draft, composerMode.type, resizeComposer]);
-
-  useEffect(() => {
-    const container = composerContainerRef.current;
-    if (!container) return;
-
-    const updateHeight = () => {
-      const height = container.getBoundingClientRect().height;
-
-      if (height > 0) {
-        setComposerHeight((current) =>
-          Math.abs(current - height) > 1 ? height : current,
-        );
-      }
-    };
-
-    updateHeight();
-
-    let observer: ResizeObserver | null = null;
-
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(updateHeight);
-      observer.observe(container);
-    }
-
-    window.addEventListener('resize', updateHeight);
-
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener('resize', updateHeight);
-    };
-  }, [
-    authenticated,
-    composerMode.type,
-    isAuthLoading,
-    isAuthenticated,
-    submitError,
-    keyboardOffset,
-  ]);
 
   const getCurrentUrl = useCallback(() => {
     if (typeof window === 'undefined') {
@@ -328,9 +279,12 @@ export default function MusicPostComments({
     );
   }, []);
 
+  // Retained for validation errors that should return focus to the composer.
   const focusComposer = useCallback(() => {
     window.setTimeout(() => {
-      textareaRef.current?.focus({ preventScroll: true });
+      sectionRef.current
+        ?.querySelector<HTMLTextAreaElement>('textarea')
+        ?.focus({ preventScroll: true });
     }, 50);
   }, []);
 
@@ -410,6 +364,7 @@ export default function MusicPostComments({
     setCommentToReport(null);
     setHighlightedCommentId(null);
     setPendingNavigationId(null);
+    setFocusRequestKey(0);
 
     replyRequestVersionsRef.current = {};
     likeRequestsRef.current.clear();
@@ -471,7 +426,7 @@ export default function MusicPostComments({
     [comments, repliesByComment],
   );
 
-  // Follow actual parent IDs until the top-level comment is reached.
+  // Follow real parent IDs until the top-level comment is reached.
   const findRootCommentId = useCallback(
     (commentId: number): number => {
       let current = findLoadedComment(commentId);
@@ -576,7 +531,7 @@ export default function MusicPostComments({
               ...comment,
               thread_replies_count: Math.max(
                 0,
-                comment.thread_replies_count + difference,
+                (comment.thread_replies_count ?? 0) + difference,
               ),
             }
           : comment;
@@ -610,11 +565,8 @@ export default function MusicPostComments({
   );
 
   /**
-   * Load exactly one page from the root conversation's thread endpoint.
-   *
-   * The API returns descendants at every nesting level. Each result is
-   * inserted into the bucket identified by its real parent ID, so replies
-   * to replies retain their correct visual nesting.
+   * Load one page of descendants from the root conversation's thread endpoint.
+   * Each descendant is stored under its actual parent ID.
    */
   const loadReplyThreadPage = useCallback(
     async (rootCommentId: number, page = 1) => {
@@ -654,7 +606,6 @@ export default function MusicPostComments({
 
         setRepliesByComment((current) => {
           const next = { ...current };
-
           const existingIds = new Set<number>();
 
           for (const state of Object.values(current)) {
@@ -671,12 +622,8 @@ export default function MusicPostComments({
               newUniqueCount += 1;
             }
 
-            // A thread endpoint should only return descendants.
-            // Skip malformed entries without a parent instead of rendering
-            // a root comment as a reply.
-            if (comment.parent === null) {
-              continue;
-            }
+            // A thread endpoint should return descendants, not root comments.
+            if (comment.parent === null) continue;
 
             const parentId = comment.parent;
             const previousParentState =
@@ -742,9 +689,7 @@ export default function MusicPostComments({
 
   /**
    * Navigate to a comment or reply and briefly highlight it.
-   *
-   * The pending ID is resolved by an effect after React has rendered any
-   * newly loaded reply thread. This avoids querying the DOM too early.
+   * The pending ID is resolved after React renders the target.
    */
   const navigateToComment = useCallback(
     (commentId: number) => {
@@ -759,9 +704,6 @@ export default function MusicPostComments({
       const rootId = findRootCommentId(commentId);
       const rootState = repliesByComment[rootId];
 
-      // If the target is known but its root thread is not rendered yet,
-      // load the first thread page. The pending-navigation effect will
-      // scroll once the target is present in the DOM.
       if (!rootState?.loaded && !rootState?.loading) {
         void loadReplyThreadPage(rootId, 1);
       }
@@ -814,7 +756,10 @@ export default function MusicPostComments({
   }, []);
 
   const startReply = useCallback(
-    (comment: CommunityComment) => {
+    (sharedComment: SharedComment) => {
+      const comment = findLoadedComment(sharedComment.id);
+      if (!comment) return;
+
       if (isAuthLoading || isAuthenticated === null) {
         setSubmitError('Please wait while we check your sign-in status.');
         return;
@@ -828,11 +773,13 @@ export default function MusicPostComments({
       setComposerMode({ type: 'reply', comment });
       setDraft('');
       setSubmitError(null);
-      focusComposer();
+
+      // Ask CommentComposer to focus its textarea after the mode updates.
+      setFocusRequestKey((current) => current + 1);
     },
     [
       authenticated,
-      focusComposer,
+      findLoadedComment,
       isAuthLoading,
       isAuthenticated,
       requireAuth,
@@ -840,7 +787,10 @@ export default function MusicPostComments({
   );
 
   const startEdit = useCallback(
-    (comment: CommunityComment) => {
+    (sharedComment: SharedComment) => {
+      const comment = findLoadedComment(sharedComment.id);
+      if (!comment) return;
+
       if (isAuthLoading || isAuthenticated === null) {
         setSubmitError('Please wait while we check your sign-in status.');
         return;
@@ -854,20 +804,20 @@ export default function MusicPostComments({
       setComposerMode({ type: 'edit', comment });
       setDraft(comment.content);
       setSubmitError(null);
-      focusComposer();
+
+      // Ask CommentComposer to focus its textarea after the mode updates.
+      setFocusRequestKey((current) => current + 1);
     },
     [
       authenticated,
-      focusComposer,
+      findLoadedComment,
       isAuthLoading,
       isAuthenticated,
       requireAuth,
     ],
   );
 
-  const submitComment = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
+  const submitComment = async () => {
     if (isSubmitting) return;
 
     if (isAuthLoading || isAuthenticated === null) {
@@ -921,7 +871,7 @@ export default function MusicPostComments({
         return;
       }
 
-      // Keep the selected comment as the direct parent, even for nested replies.
+      // Nested replies keep their selected comment as the actual parent.
       const parentId =
         submittedMode.type === 'reply'
           ? submittedMode.comment.id
@@ -1007,8 +957,14 @@ export default function MusicPostComments({
 
   const handleLike = useCallback(
     async (
-      comment: CommunityComment,
-    ): Promise<CommunityCommentLikeResponse> => {
+      sharedComment: SharedComment,
+    ): Promise<SharedCommentLikeResponse> => {
+      const comment = findLoadedComment(sharedComment.id);
+
+      if (!comment) {
+        throw new Error('This comment is no longer available.');
+      }
+
       if (isAuthLoading || isAuthenticated === null) {
         throw new Error('Please wait while we check your sign-in status.');
       }
@@ -1033,7 +989,7 @@ export default function MusicPostComments({
       likeRequestsRef.current.add(comment.id);
 
       try {
-        const response = comment.is_liked
+        const response: CommunityCommentLikeResponse = comment.is_liked
           ? await unlikeCommunityComment(comment.id)
           : await likeCommunityComment(comment.id);
 
@@ -1081,7 +1037,13 @@ export default function MusicPostComments({
         likeRequestsRef.current.delete(comment.id);
       }
     },
-    [authenticated, isAuthLoading, isAuthenticated, requireAuth],
+    [
+      authenticated,
+      findLoadedComment,
+      isAuthLoading,
+      isAuthenticated,
+      requireAuth,
+    ],
   );
 
   const confirmDelete = async () => {
@@ -1343,200 +1305,82 @@ export default function MusicPostComments({
     }
   };
 
-  // Render a reply and its loaded descendants. Thread pagination controls
-  // are rendered only by the root comment, after the complete reply tree.
-  const renderReply = (reply: CommunityComment): ReactNode => {
-    const replyState = repliesByComment[reply.id];
+  // Normalize root comments for the shared thread component.
+  const sharedComments = comments.map(toSharedComment);
 
-    const replyTo =
-      reply.parent === null ? null : findLoadedComment(reply.parent);
+  // Normalize each direct-parent bucket while retaining real parent IDs.
+  const sharedRepliesByComment: Record<string, SharedComment[]> = {};
 
-    return (
-      <div key={reply.id} className="min-w-0">
-        <MusicPostCommentItem
-          comment={reply}
-          replyTo={replyTo}
-          currentUserId={
-            user?.id && Number.isFinite(Number(user.id))
-              ? Number(user.id)
-              : null
-          }
-          isAuthenticated={authenticated}
-          onReply={startReply}
-          onEdit={startEdit}
-          onDelete={setCommentToDelete}
-          onReport={setCommentToReport}
-          onLike={handleLike}
-          onRequireAuth={requireAuth}
-          onNavigateToComment={navigateToComment}
-          isHighlighted={highlightedCommentId === reply.id}
-          depth={1}
-        />
+  for (const [parentId, state] of Object.entries(repliesByComment)) {
+    sharedRepliesByComment[parentId] = state.comments.map(toSharedComment);
+  }
 
-        {replyState?.error && (
-          <p
-            role="alert"
-            className="ml-3 mt-1 text-xs text-red-600 dark:text-red-300"
-          >
-            We could not load some replies in this thread. Try loading the
-            conversation again from the original comment.
-          </p>
-        )}
+  // Thread pagination/loading state is owned by each root conversation.
+  const threadStates: Record<string, CommentThreadState> = {};
 
-        {replyState?.comments.length ? (
-          <div className="mt-4 space-y-4">
-            {replyState.comments.map((childReply) =>
-              renderReply(childReply),
-            )}
-          </div>
-        ) : null}
-      </div>
-    );
+  for (const [rootId, state] of Object.entries(repliesByComment)) {
+    threadStates[rootId] = {
+      loadedCount: state.loadedCount,
+      count: state.count,
+      hasMore: Boolean(state.next),
+      isLoading: state.loading,
+      error: state.error,
+    };
+  }
+
+  const handleSharedDelete = (comment: SharedComment) => {
+    const original = findLoadedComment(comment.id);
+    if (original) setCommentToDelete(original);
   };
 
-  const renderRootComment = (comment: CommunityComment): ReactNode => {
-    const replyState = repliesByComment[comment.id];
-
-    const totalThreadReplies = Math.max(
-      comment.thread_replies_count ?? 0,
-      replyState?.count ?? 0,
-    );
-
-    const nextThreadPage = getNextPage(replyState?.next ?? null);
-
-    return (
-      <div key={comment.id} className="min-w-0">
-        <MusicPostCommentItem
-          comment={comment}
-          currentUserId={
-            user?.id && Number.isFinite(Number(user.id))
-              ? Number(user.id)
-              : null
-          }
-          isAuthenticated={authenticated}
-          onReply={startReply}
-          onEdit={startEdit}
-          onDelete={setCommentToDelete}
-          onReport={setCommentToReport}
-          onLike={handleLike}
-          onRequireAuth={requireAuth}
-          onNavigateToComment={navigateToComment}
-          isHighlighted={highlightedCommentId === comment.id}
-          depth={0}
-        />
-
-        {totalThreadReplies > 0 && (
-          <div className="mt-3 pl-2">
-            {/*
-              Render the entire loaded tree first. Since renderReply is
-              recursive, this includes every currently loaded nested reply.
-              The root's pagination and retry controls are placed afterward.
-            */}
-            {replyState?.loaded && replyState.comments.length > 0 && (
-              <div className="space-y-5 border-l border-light-border pl-3 dark:border-dark-border sm:pl-4">
-                {replyState.comments.map((reply) => renderReply(reply))}
-              </div>
-            )}
-
-            {!replyState?.loaded && !replyState?.error && (
-              <button
-                type="button"
-                onClick={() =>
-                  void loadReplyThreadPage(comment.id, 1)
-                }
-                disabled={replyState?.loading}
-                className="mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-              >
-                {replyState?.loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
-                ) : (
-                  <ArrowDown size={15} />
-                )}
-
-                {replyState?.loading
-                  ? 'Loading replies…'
-                  : `View ${totalThreadReplies} ${
-                      totalThreadReplies === 1 ? 'reply' : 'replies'
-                    }`}
-              </button>
-            )}
-
-            {replyState?.loaded &&
-              replyState.next &&
-              !replyState.error && (
-                <div className="mt-3">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      void loadReplyThreadPage(
-                        comment.id,
-                        nextThreadPage,
-                      )
-                    }
-                    disabled={replyState.loading}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-                  >
-                    {replyState.loading ? (
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
-                    ) : (
-                      <ArrowDown size={15} />
-                    )}
-
-                    {replyState.loading
-                      ? 'Loading replies…'
-                      : 'Load more replies'}
-                  </button>
-                </div>
-              )}
-
-            {replyState?.error && (
-              <div className="mt-3">
-                <p
-                  role="alert"
-                  className="text-sm text-red-600 dark:text-red-300"
-                >
-                  {replyState.error}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    void loadReplyThreadPage(
-                      comment.id,
-                      replyState.loaded
-                        ? nextThreadPage
-                        : 1,
-                    )
-                  }
-                  disabled={replyState.loading}
-                  className="mt-1 inline-flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-brand-teal transition-colors hover:bg-brand-teal/10 disabled:opacity-60"
-                >
-                  {replyState.loading ? (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
-                  ) : (
-                    <ArrowDown size={15} />
-                  )}
-
-                  {replyState.loading
-                    ? 'Retrying…'
-                    : replyState.loaded
-                      ? 'Retry loading more replies'
-                      : 'Try again'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
+  const handleSharedReport = (comment: SharedComment) => {
+    const original = findLoadedComment(comment.id);
+    if (original) setCommentToReport(original);
   };
+
+  const handleLoadReplies = (rootCommentId: number) => {
+    const state = repliesByComment[rootCommentId];
+
+    if (state?.loading) return;
+
+    const page = state?.loaded ? getNextPage(state.next) : 1;
+
+    void loadReplyThreadPage(rootCommentId, page);
+  };
+
+  const handleCreatorComment = (comment: SharedComment): boolean => {
+    const original = findLoadedComment(comment.id);
+
+    if (!original || original.post_creator_id == null) {
+      return false;
+    }
+
+    return String(original.post_creator_id) === String(original.user.id);
+  };
+
+  const currentUserId =
+    user?.id != null && Number.isFinite(Number(user.id))
+      ? Number(user.id)
+      : null;
+
+  const replyingTo =
+    composerMode.type === 'reply'
+      ? toSharedComment(composerMode.comment)
+      : null;
+
+  const editingComment =
+    composerMode.type === 'edit'
+      ? toSharedComment(composerMode.comment)
+      : null;
 
   return (
     <section
+      ref={sectionRef}
       aria-labelledby={`${sectionId}-heading`}
       className="relative"
       style={{
-        paddingBottom: `calc(${composerHeight}px + ${keyboardOffset}px + env(safe-area-inset-bottom, 0px) + 1rem)`,
+        // Reserve room for the fixed shared composer and mobile safe area.
+        paddingBottom: `calc(240px + ${keyboardOffset}px + env(safe-area-inset-bottom, 0px))`,
       }}
     >
       <div className="mb-6 flex items-center justify-between gap-3">
@@ -1557,7 +1401,7 @@ export default function MusicPostComments({
       {commentsError && (
         <div
           role="alert"
-          className="mb-5 rounded-xl border border-red-500/25 bg-red-500/5 p-4"
+          className="mb-5 rounded-xl bg-red-500/5 p-4"
         >
           <p className="text-sm leading-6 text-light-text dark:text-dark-text">
             {commentsError}
@@ -1573,10 +1417,22 @@ export default function MusicPostComments({
         </div>
       )}
 
+      {submitError && (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg bg-red-500/5 px-3 py-2 text-sm text-red-600 dark:text-red-300"
+        >
+          {submitError}
+        </p>
+      )}
+
       {isLoadingComments ? (
         <div className="space-y-6" aria-label="Loading comments">
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="flex animate-pulse gap-3 sm:gap-4">
+            <div
+              key={index}
+              className="flex animate-pulse gap-3 sm:gap-4"
+            >
               <div className="h-10 w-10 shrink-0 rounded-full bg-light-surface-muted dark:bg-dark-surface-muted" />
 
               <div className="flex-1 space-y-3">
@@ -1587,7 +1443,7 @@ export default function MusicPostComments({
           ))}
         </div>
       ) : comments.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-light-border px-5 py-10 text-center dark:border-dark-border sm:px-8 sm:py-12">
+        <div className="rounded-2xl bg-light-surface-soft px-5 py-10 text-center dark:bg-dark-surface-soft sm:px-8 sm:py-12">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-teal/10 text-brand-teal">
             <MessageCircle size={23} />
           </div>
@@ -1602,7 +1458,25 @@ export default function MusicPostComments({
         </div>
       ) : (
         <div className="space-y-6 sm:space-y-7">
-          {comments.map((comment) => renderRootComment(comment))}
+          <CommentThread
+            comments={sharedComments}
+            repliesByComment={sharedRepliesByComment}
+            threadStates={threadStates}
+            currentUserId={currentUserId}
+            isAuthenticated={authenticated}
+            onReply={startReply}
+            onEdit={startEdit}
+            onDelete={handleSharedDelete}
+            onReport={handleSharedReport}
+            onLike={handleLike}
+            onRequireAuth={requireAuth}
+            onNavigateToComment={navigateToComment}
+            onLoadReplies={handleLoadReplies}
+            highlightedCommentId={highlightedCommentId ?? undefined}
+            isCreatorComment={handleCreatorComment}
+            commentIdPrefix="community-comment"
+            emptyMessage="No comments yet. Start the conversation."
+          />
 
           {nextPage && (
             <div className="pt-3 text-center">
@@ -1610,7 +1484,7 @@ export default function MusicPostComments({
                 type="button"
                 onClick={() => void loadMoreComments()}
                 disabled={isLoadingMore}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-light-border px-5 py-2.5 text-sm font-semibold text-light-text transition-colors hover:bg-light-surface-soft disabled:opacity-60 dark:border-dark-border dark:text-dark-text dark:hover:bg-dark-surface-soft"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-light-surface-soft px-5 py-2.5 text-sm font-semibold text-light-text transition-colors hover:bg-light-surface-muted disabled:cursor-not-allowed disabled:opacity-60 dark:bg-dark-surface-soft dark:text-dark-text dark:hover:bg-dark-surface-muted"
               >
                 {isLoadingMore && (
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
@@ -1623,153 +1497,47 @@ export default function MusicPostComments({
         </div>
       )}
 
-      <div
-        className="pointer-events-none fixed inset-x-0 z-40"
-        style={{
-          bottom: `calc(${keyboardOffset}px + env(safe-area-inset-bottom, 0px))`,
-        }}
-      >
+      {isAuthLoading || isAuthenticated === null ? (
         <div
-          ref={composerContainerRef}
-          className="pointer-events-auto mx-auto w-full max-w-3xl px-3 py-3 sm:px-6 sm:py-4"
+          className="fixed inset-x-0 z-40"
+          style={{
+            bottom: `calc(${keyboardOffset}px + env(safe-area-inset-bottom, 0px))`,
+          }}
         >
-          {isAuthLoading || isAuthenticated === null ? (
-            <div className="flex min-h-11 items-center gap-3">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
+          <div className="mx-auto flex min-h-20 w-full max-w-3xl items-center gap-3 px-3 py-3 sm:px-6 sm:py-4">
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-brand-teal/30 border-t-brand-teal" />
 
-              <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
-                Checking your sign-in status…
-              </p>
-            </div>
-          ) : !authenticated ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-light-text dark:text-dark-text">
-                  Join the conversation
-                </p>
-
-                <p className="mt-0.5 text-xs text-light-text-muted dark:text-dark-text-muted">
-                  Sign in to comment, reply, and like.
-                </p>
-              </div>
-
-              <Link
-                href={loginUrl}
-                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl bg-brand-teal px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2"
-              >
-                Log in
-              </Link>
-            </div>
-          ) : (
-            <>
-              {composerMode.type !== 'comment' && (
-                <div className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-brand-teal/15 bg-light-surface px-3 py-2.5 dark:bg-dark-surface">
-                  <div className="flex min-w-0 items-center gap-2 text-sm text-light-text dark:text-dark-text">
-                    <CornerUpLeft
-                      size={16}
-                      className="shrink-0 text-brand-teal"
-                    />
-
-                    <span className="truncate">
-                      {composerMode.type === 'reply'
-                        ? `Replying to @${composerMode.comment.user.username}`
-                        : 'Editing your comment'}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={cancelComposerMode}
-                    disabled={isSubmitting}
-                    aria-label="Cancel reply or editing"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-light-text-muted transition-colors hover:bg-brand-teal/10 hover:text-light-text disabled:opacity-50 dark:text-dark-text-muted dark:hover:text-dark-text"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              )}
-
-              <form
-                ref={composerRef}
-                onSubmit={submitComment}
-                className="flex items-end gap-2.5"
-              >
-                <label
-                  className="sr-only"
-                  htmlFor={`${sectionId}-composer`}
-                >
-                  {composerMode.type === 'edit'
-                    ? 'Edit comment'
-                    : composerMode.type === 'reply'
-                      ? 'Write a reply'
-                      : 'Write a comment'}
-                </label>
-
-                <textarea
-                  ref={textareaRef}
-                  id={`${sectionId}-composer`}
-                  value={draft}
-                  onChange={(event) => {
-                    setDraft(
-                      event.target.value.slice(0, MAX_COMMENT_LENGTH),
-                    );
-                    setSubmitError(null);
-                  }}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === 'Enter' &&
-                      !event.shiftKey &&
-                      !event.nativeEvent.isComposing
-                    ) {
-                      event.preventDefault();
-                      composerRef.current?.requestSubmit();
-                    }
-                  }}
-                  rows={1}
-                  maxLength={MAX_COMMENT_LENGTH}
-                  placeholder={
-                    composerMode.type === 'edit'
-                      ? 'Edit your comment…'
-                      : composerMode.type === 'reply'
-                        ? 'Write a reply…'
-                        : 'Write a comment…'
-                  }
-                  disabled={isSubmitting}
-                  className="min-h-11 min-w-0 flex-1 resize-none overflow-y-hidden rounded-2xl border border-light-border bg-light-bg px-4 py-3 text-base leading-5 text-light-text outline-none transition-colors placeholder:text-light-text-soft focus:border-brand-teal focus:ring-2 focus:ring-brand-teal/15 disabled:cursor-not-allowed disabled:opacity-60 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text dark:placeholder:text-dark-text-soft sm:text-sm"
-                />
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !draft.trim()}
-                  aria-label={
-                    composerMode.type === 'edit'
-                      ? 'Save edited comment'
-                      : composerMode.type === 'reply'
-                        ? 'Send reply'
-                        : 'Send comment'
-                  }
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-teal text-white transition-colors hover:bg-brand-teal-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                  ) : (
-                    <Send size={18} />
-                  )}
-                </button>
-              </form>
-
-              {submitError && (
-                <p
-                  role="alert"
-                  className="mt-2 text-xs text-red-600 dark:text-red-300"
-                >
-                  {submitError}
-                </p>
-              )}
-            </>
-          )}
+            <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+              Checking your sign-in status…
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <CommentComposer
+          value={draft}
+          onChange={(value) => {
+            setDraft(value.slice(0, MAX_COMMENT_LENGTH));
+            setSubmitError(null);
+          }}
+          onSubmit={submitComment}
+          isAuthenticated={authenticated}
+          isSubmitting={isSubmitting}
+          replyingTo={replyingTo}
+          editingComment={editingComment}
+          onCancelContext={cancelComposerMode}
+          maxLength={MAX_COMMENT_LENGTH}
+          placeholder={
+            composerMode.type === 'edit'
+              ? 'Edit your comment…'
+              : composerMode.type === 'reply'
+                ? 'Write a reply…'
+                : 'Write a comment…'
+          }
+          loginHref={loginUrl}
+          focusRequestKey={focusRequestKey}
+          className="z-40"
+        />
+      )}
 
       <ConfirmationModal
         open={commentToDelete !== null}

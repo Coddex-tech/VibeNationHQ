@@ -23,12 +23,14 @@ class SongFavoriteAPITests(APITestCase):
             username="song_favoriter",
             email="song_favoriter@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="another_song_favoriter",
             email="another_song_favoriter@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.song = Song.objects.create(
@@ -577,12 +579,14 @@ class AlbumFavoriteAPITests(APITestCase):
             username="album_favoriter",
             email="album_favoriter@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="another_album_favoriter",
             email="another_album_favoriter@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.album = Album.objects.create(
@@ -1123,3 +1127,179 @@ class AlbumFavoriteAPITests(APITestCase):
             self.album.favorites_count,
             1,
         )
+
+
+# ============================================================
+# FAVORITE ACCOUNT PERMISSIONS
+# ============================================================
+
+class FavoriteAccountPermissionAPITests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="favorite_permission_user",
+            email="favoritepermission@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.incomplete_user = User.objects.create_user(
+            username="favorite_incomplete_user",
+            email="favoriteincomplete@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=False,
+        )
+
+        self.staff_user = User.objects.create_superuser(
+            username="favorite_staff_user",
+            email="favoritestaff@example.com",
+            password="testpass123",
+        )
+        self.staff_user.is_superuser = False
+        self.staff_user.save(update_fields=["is_superuser"])
+
+        self.superuser = User.objects.create_superuser(
+            username="favorite_superuser",
+            email="favoritesuperuser@example.com",
+            password="testpass123",
+        )
+
+        self.song = Song.objects.create(
+            title="Permission Test Song",
+            slug="permission-test-song",
+            status=Song.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        self.album = Album.objects.create(
+            title="Permission Test Album",
+            slug="permission-test-album",
+            status=Album.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        self.favorite_urls = [
+            (
+                "song",
+                reverse(
+                    "music_api:song-favorite",
+                    kwargs={"pk": self.song.id},
+                ),
+            ),
+            (
+                "album",
+                reverse(
+                    "music_api:album-favorite",
+                    kwargs={"pk": self.album.id},
+                ),
+            ),
+        ]
+
+    def test_incomplete_user_cannot_favorite(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.post(url, {}, format="json")
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_incomplete_user_cannot_unfavorite(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_favorite(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.post(url, {}, format="json")
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_unfavorite(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_favorite(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.post(url, {}, format="json")
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_unfavorite(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_onboarded_user_can_favorite_song_and_album(self):
+        self.client.force_authenticate(user=self.user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                response = self.client.post(url, {}, format="json")
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+    def test_onboarded_user_can_unfavorite_song_and_album(self):
+        self.client.force_authenticate(user=self.user)
+
+        for favorite_type, url in self.favorite_urls:
+            with self.subTest(favorite_type=favorite_type):
+                favorite_response = self.client.post(
+                    url,
+                    {},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    favorite_response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+                unfavorite_response = self.client.delete(url)
+
+                self.assertEqual(
+                    unfavorite_response.status_code,
+                    status.HTTP_200_OK,
+                )

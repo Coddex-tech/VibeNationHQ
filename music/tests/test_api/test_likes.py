@@ -29,12 +29,14 @@ class EditorialArticleLikeAPITest(APITestCase):
             username="article_like_user",
             email="article_like_user@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="article_like_other",
             email="article_like_other@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.article = EditorialArticle.objects.create(
@@ -376,23 +378,27 @@ class CommunityPostLikeAPITest(APITestCase):
             username="post_like_user",
             email="post_like_user@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="post_like_other",
             email="post_like_other@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.post = CommunityPost.objects.create(
             user=self.user,
             content="This is a published community post.",
+            slug="community-post-like-test",
             status=CommunityPost.Status.PUBLISHED,
         )
 
         self.hidden_post = CommunityPost.objects.create(
             user=self.user,
             content="This is a hidden community post.",
+            slug="hidden-community-post-like-test",
             status=CommunityPost.Status.HIDDEN,
         )
 
@@ -718,12 +724,14 @@ class EditorialCommentLikeAPITest(APITestCase):
             username="editorial_comment_user",
             email="editorial_comment_user@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="editorial_comment_other",
             email="editorial_comment_other@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.article = EditorialArticle.objects.create(
@@ -1060,17 +1068,20 @@ class CommunityPostCommentLikeAPITest(APITestCase):
             username="community_comment_user",
             email="community_comment_user@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.other_user = User.objects.create_user(
             username="community_comment_other",
             email="community_comment_other@example.com",
             password="testpass123",
+            onboarding_completed=True,
         )
 
         self.post = CommunityPost.objects.create(
             user=self.user,
             content="Community post used for comment tests.",
+            slug="community-post-used-for-comment-tests",
             status=CommunityPost.Status.PUBLISHED,
         )
 
@@ -1386,3 +1397,199 @@ class CommunityPostCommentLikeAPITest(APITestCase):
                 user=self.user,
             ).exists()
         )
+
+
+
+# ============================================================
+# LIKE PERMISSIONS
+# ============================================================
+
+class LikeAccountPermissionAPITests(APITestCase):
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="like_permission_user",
+            email="likepermission@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.incomplete_user = User.objects.create_user(
+            username="like_incomplete_user",
+            email="likeincomplete@example.com",
+            password="testpass123",
+            is_active=True,
+            onboarding_completed=False,
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="like_staff_user",
+            email="likestaff@example.com",
+            password="testpass123",
+            is_active=True,
+        )
+        self.staff_user.is_staff = True
+        self.staff_user.save(update_fields=["is_staff"])
+
+        self.superuser = User.objects.create_superuser(
+            username="like_superuser",
+            email="likesuperuser@example.com",
+            password="testpass123",
+        )
+
+        self.article = EditorialArticle.objects.create(
+            title="Like Permission Article",
+            slug="like-permission-article",
+            content="Article used for like permission tests.",
+            author=self.user,
+            status=EditorialArticle.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+        self.post = CommunityPost.objects.create(
+            user=self.user,
+            content="Post used for like permission tests.",
+            slug="post-used-for-like-permission-tests",
+            status=CommunityPost.Status.PUBLISHED,
+        )
+
+        self.editorial_comment = EditorialComment.objects.create(
+            user=self.user,
+            article=self.article,
+            content="Editorial comment used for like permission tests.",
+            status=EditorialComment.Status.PUBLISHED,
+        )
+
+        self.community_comment = CommunityPostComment.objects.create(
+            user=self.user,
+            post=self.post,
+            content="Community comment used for like permission tests.",
+            status=CommunityPostComment.Status.PUBLISHED,
+        )
+
+        self.like_urls = [
+            (
+                "editorial article",
+                f"/api/v1/music/editorial/{self.article.pk}/like/",
+            ),
+            (
+                "community post",
+                f"/api/v1/music/community/posts/{self.post.pk}/like/",
+            ),
+            (
+                "editorial comment",
+                f"/api/v1/music/editorial/comments/{self.editorial_comment.pk}/like/",
+            ),
+            (
+                "community comment",
+                f"/api/v1/music/community/comments/{self.community_comment.pk}/like/",
+            ),
+        ]
+
+    def test_incomplete_user_cannot_like_any_content(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.post(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_incomplete_user_cannot_unlike_any_content(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_like_any_content(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.post(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_staff_user_cannot_unlike_any_content(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_like_any_content(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.post(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_superuser_cannot_unlike_any_content(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.delete(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_onboarded_user_can_like_all_content_types(self):
+        self.client.force_authenticate(user=self.user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                response = self.client.post(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+    def test_onboarded_user_can_unlike_all_content_types(self):
+        self.client.force_authenticate(user=self.user)
+
+        for content_type, url in self.like_urls:
+            with self.subTest(content_type=content_type):
+                like_response = self.client.post(url)
+
+                self.assertEqual(
+                    like_response.status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+                unlike_response = self.client.delete(url)
+
+                self.assertEqual(
+                    unlike_response.status_code,
+                    status.HTTP_200_OK,
+                )
+
+                self.assertFalse(
+                    unlike_response.data["liked"],
+                )

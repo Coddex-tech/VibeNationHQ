@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import MusicCreateForm from '@/components/music/MusicCreateForm';
+import PostCreateForm from '@/components/music/PostCreateForm';
 
 export const metadata: Metadata = {
   title: 'Create a Music Post',
@@ -36,7 +36,7 @@ export default function MusicCreatePage() {
           lg:py-14
         "
       >
-        <MusicCreateForm />
+        <PostCreateForm />
       </main>
     </div>
   );

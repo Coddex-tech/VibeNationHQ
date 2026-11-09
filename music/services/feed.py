@@ -14,19 +14,18 @@ from django.db.models import (
 from django.utils import timezone
 
 from music.models import (
-    Album,
-    Artist,
+    ArtistFollow,
     CommunityPost,
+    CommunityPostComment,
+    CommunityPostCommentLike,
     CommunityPostFavorite,
     CommunityPostLike,
     EditorialArticle,
+    EditorialArticleFavorite,
     EditorialArticleLike,
     MusicFeedInteraction,
-    Song,
     UserFollow,
 )
-
-from music.models import ArtistFollow
 
 from music.services.feed_cursor import (
     FeedCursorError,
@@ -54,23 +53,38 @@ class FeedUserContext:
     mutual_user_ids: frozenset[int]
     followed_artist_ids: frozenset[int]
     preferred_genre_ids: frozenset[int]
+
     interacted_song_ids: frozenset[int]
     interacted_album_ids: frozenset[int]
     interacted_artist_ids: frozenset[int]
+
     liked_community_post_ids: frozenset[int]
-    liked_editorial_ids: frozenset[int]
+    favorited_community_post_ids: frozenset[int]
+    commented_community_post_ids: frozenset[int]
+    comment_liked_post_ids: frozenset[int]
+
+    interacted_community_post_ids: frozenset[int]
+    engaged_creator_ids: frozenset[int]
 
 
 class MusicFeedService:
     """
-    Deterministic music feed engine for VibeNationHQ.
+    Personalized VibeNationHQ feed containing:
 
-    The service is deliberately independent from the API layer so that
-    ranking logic can evolve later without changing the public API.
+    - Community posts
+    - Published editorial articles
 
-    The current implementation uses bounded candidate generation,
-    deterministic scoring, diversity rules, and cursor-based feed
-    snapshots. It does not require ML.
+    Community posts retain their existing recommendation,
+    personalization, ranking, and diversity behavior.
+
+    Editorial articles use separate editorial ordering signals.
+    Editorial engagement never affects community-post ranking.
+
+    Music attached to a community post enriches personalization.
+    Songs, albums, and artists are never independent feed items.
+
+    Feed snapshots preserve the original mixed ordering across
+    cursor pages.
     """
 
     DEFAULT_LIMIT = 20
@@ -82,15 +96,16 @@ class MusicFeedService:
     INTERACTION_LOOKBACK_DAYS = 90
     INTERACTION_LIMIT = 500
 
+    COMMUNITY_POSTS_PER_EDITORIAL = 10
+
     SOURCE_PRIORITY = {
+        "just_published": 110,
         "mutual": 100,
         "following": 90,
         "followed_artist": 80,
         "history": 70,
-        "featured": 60,
-        "editorial": 50,
-        "discovery": 40,
         "recent": 30,
+        "editorial": 10,
     }
 
     def get_feed(
@@ -99,14 +114,18 @@ class MusicFeedService:
         user=None,
         limit: int = DEFAULT_LIMIT,
         cursor: str | None = None,
+        new_post_id: int | str | None = None,
     ) -> dict[str, Any]:
         """
-        Return one page of the feed.
+        Return one page of the mixed community and editorial feed.
 
-        A request without a cursor creates a new feed snapshot.
+        A request without a cursor creates a new snapshot.
 
-        Requests with a cursor continue through the existing snapshot
-        without recalculating ranking or personalization.
+        If new_post_id belongs to the authenticated requesting user
+        and is published, that post is placed first in the new
+        snapshot. It receives no permanent ranking boost.
+
+        Cursor requests always continue their existing snapshot.
         """
         limit = self._normalize_limit(limit)
 
@@ -122,24 +141,88 @@ class MusicFeedService:
             self.MAX_CANDIDATES,
         )
 
-        candidates = self._generate_candidates(
+        # Community candidates are generated and ranked independently.
+        community_candidates = self._generate_candidates(
             user=user,
             candidate_limit=candidate_limit,
         )
 
-        context = self._build_user_context(
+        pinned_candidate = self._get_newly_published_candidate(
             user=user,
-            candidates=candidates,
+            new_post_id=new_post_id,
         )
 
-        ranked_candidates = self._rank_candidates(
-            candidates=candidates,
+        if pinned_candidate is not None:
+            community_candidates.insert(
+                0,
+                pinned_candidate,
+            )
+
+        community_candidates = self._deduplicate_candidates(
+            candidates=community_candidates,
+            limit=candidate_limit,
+        )
+
+        # Only community candidates enter the recommendation context.
+        context = self._build_user_context(
+            user=user,
+            candidates=community_candidates,
+        )
+
+        ranked_community_candidates = self._rank_candidates(
+            candidates=community_candidates,
             context=context,
         )
 
-        ordered_candidates = self._select_diverse(
-            candidates=ranked_candidates,
-            limit=len(ranked_candidates),
+        # Preserve the newly published post at absolute position one.
+        if pinned_candidate is not None:
+            pinned_key = (
+                "community_post",
+                pinned_candidate.object_id,
+            )
+
+            pinned_ranked_candidate = next(
+                (
+                    candidate
+                    for candidate in ranked_community_candidates
+                    if (
+                        candidate.content_type,
+                        candidate.object_id,
+                    ) == pinned_key
+                ),
+                None,
+            )
+
+            ranked_community_candidates = [
+                candidate
+                for candidate in ranked_community_candidates
+                if (
+                    candidate.content_type,
+                    candidate.object_id,
+                ) != pinned_key
+            ]
+
+            if pinned_ranked_candidate is not None:
+                ranked_community_candidates.insert(
+                    0,
+                    pinned_ranked_candidate,
+                )
+
+        # Diversity is applied to community posts only.
+        diverse_community_candidates = self._select_diverse(
+            candidates=ranked_community_candidates,
+            limit=len(ranked_community_candidates),
+        )
+
+        # Editorial articles have their own ordering system.
+        editorial_candidates = self._generate_editorial_candidates(
+            limit=candidate_limit,
+        )
+
+        # Combine the two independently prepared pools.
+        ordered_candidates = self._mix_feed_candidates(
+            community_candidates=diverse_community_candidates,
+            editorial_candidates=editorial_candidates,
         )
 
         snapshot_items = [
@@ -163,6 +246,60 @@ class MusicFeedService:
             limit=limit,
             user=user,
         )
+
+    # ------------------------------------------------------------------
+    # Newly published community post
+    # ------------------------------------------------------------------
+
+    def _get_newly_published_candidate(
+        self,
+        *,
+        user,
+        new_post_id: int | str | None,
+    ) -> FeedCandidate | None:
+        """
+        Resolve a post to temporarily prioritize after creation.
+
+        The post must belong to the requesting user and must already
+        be published. Invalid IDs are ignored.
+        """
+        if (
+            user is None
+            or not user.is_authenticated
+            or new_post_id is None
+        ):
+            return None
+
+        try:
+            post_id = int(new_post_id)
+        except (TypeError, ValueError):
+            return None
+
+        if post_id <= 0:
+            return None
+
+        post = (
+            self._community_post_queryset()
+            .filter(
+                id=post_id,
+                user_id=user.id,
+                status=CommunityPost.Status.PUBLISHED,
+            )
+            .first()
+        )
+
+        if post is None:
+            return None
+
+        return FeedCandidate(
+            content_type="community_post",
+            source="just_published",
+            object=post,
+        )
+
+    # ------------------------------------------------------------------
+    # Snapshot pagination
+    # ------------------------------------------------------------------
 
     def _get_snapshot_page(
         self,
@@ -234,7 +371,68 @@ class MusicFeedService:
             "next_cursor": next_cursor,
         }
 
-    
+    # ------------------------------------------------------------------
+    # Query helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _community_post_queryset():
+        """
+        Shared queryset for published community posts.
+        """
+        return (
+            CommunityPost.objects
+            .filter(
+                status=CommunityPost.Status.PUBLISHED,
+            )
+            .select_related(
+                "user",
+                "target",
+                "target__song",
+                "target__album",
+                "target__artist",
+            )
+            .prefetch_related(
+                "target__song__artists",
+                "target__song__featured_artists",
+                "target__song__genres",
+                "target__song__provider_identities",
+                "target__album__artists",
+            )
+        )
+
+    @staticmethod
+    def _editorial_article_queryset():
+        """
+        Shared queryset for published editorial articles.
+
+        Articles do not need a song, artist, album, or genre
+        relationship to qualify for the feed.
+        """
+        return (
+            EditorialArticle.objects
+            .filter(
+                status=EditorialArticle.Status.PUBLISHED,
+            )
+            .select_related(
+                "author",
+                "song",
+                "artist",
+                "album",
+            )
+            .prefetch_related(
+                "song__artists",
+                "song__featured_artists",
+                "song__genres",
+                "song__provider_identities",
+                "album__artists",
+            )
+        )
+
+    # ------------------------------------------------------------------
+    # Snapshot item resolution
+    # ------------------------------------------------------------------
+
     def _resolve_snapshot_items(
         self,
         items: list[FeedSnapshotItem],
@@ -242,54 +440,36 @@ class MusicFeedService:
         user=None,
     ) -> list[FeedCandidate]:
         """
-        Resolve lightweight snapshot references back into model objects.
+        Resolve both community and editorial snapshot references.
 
-        Community posts are annotated with the current user's like,
-        favorite, and author-following states.
+        Viewer-specific like and favorite states are recalculated
+        for each page. Snapshot ordering remains unchanged.
 
-        Community posts also receive their current total favorite count.
-
-        Provider identities are prefetched for canonical song targets
-        so CommunityPostTargetSerializer can resolve provider preview
-        URLs without causing an additional query per post.
+        Deleted or unpublished objects are skipped.
         """
         if not items:
             return []
 
-        ids_by_type: dict[str, set[int]] = {}
+        post_ids = {
+            item.object_id
+            for item in items
+            if item.content_type == "community_post"
+        }
 
-        for item in items:
-            ids_by_type.setdefault(
-                item.content_type,
-                set(),
-            ).add(item.object_id)
+        article_ids = {
+            item.object_id
+            for item in items
+            if item.content_type == "editorial"
+        }
 
-        objects_by_key: dict[
-            tuple[str, int],
-            Any,
-        ] = {}
+        posts_by_id = {}
+        articles_by_id = {}
 
-        if ids_by_type.get("community_post"):
+        # Resolve community posts.
+        if post_ids:
             posts = (
-                CommunityPost.objects
-                .filter(
-                    id__in=ids_by_type["community_post"],
-                    status=CommunityPost.Status.PUBLISHED,
-                )
-                .select_related(
-                    "user",
-                    "target",
-                    "target__song",
-                    "target__album",
-                    "target__artist",
-                )
-                .prefetch_related(
-                    "target__song__artists",
-                    "target__song__featured_artists",
-                    "target__song__genres",
-                    "target__song__provider_identities",
-                    "target__album__artists",
-                )
+                self._community_post_queryset()
+                .filter(id__in=post_ids)
                 .annotate(
                     favorites_count=Count(
                         "favorites",
@@ -307,11 +487,9 @@ class MusicFeedService:
                     post_id=OuterRef("pk"),
                 )
 
-                favorited_posts = (
-                    CommunityPostFavorite.objects.filter(
-                        user_id=user.id,
-                        post_id=OuterRef("pk"),
-                    )
+                favorited_posts = CommunityPostFavorite.objects.filter(
+                    user_id=user.id,
+                    post_id=OuterRef("pk"),
                 )
 
                 followed_author = UserFollow.objects.filter(
@@ -320,15 +498,9 @@ class MusicFeedService:
                 )
 
                 posts = posts.annotate(
-                    is_liked=Exists(
-                        liked_posts,
-                    ),
-                    is_favorited=Exists(
-                        favorited_posts,
-                    ),
-                    author_is_following=Exists(
-                        followed_author,
-                    ),
+                    is_liked=Exists(liked_posts),
+                    is_favorited=Exists(favorited_posts),
+                    author_is_following=Exists(followed_author),
                 )
             else:
                 posts = posts.annotate(
@@ -347,140 +519,89 @@ class MusicFeedService:
                 )
 
             for post in posts:
-                # CommunityUserSerializer reads this attribute
-                # to serialize the current viewer's follow state.
                 post.user.is_following = bool(
                     post.author_is_following
                 )
 
-                objects_by_key[
-                    ("community_post", post.id)
-                ] = post
+                posts_by_id[post.id] = post
 
-        if ids_by_type.get("editorial"):
-            articles = (
-                EditorialArticle.objects
-                .filter(
-                    id__in=ids_by_type["editorial"],
-                    status=EditorialArticle.Status.PUBLISHED,
-                )
-                .select_related(
-                    "author",
-                    "song",
-                    "artist",
-                    "album",
-                )
-                .prefetch_related(
-                    "genres",
-                    "song__artists",
-                    "song__featured_artists",
-                    "song__genres",
-                    "album__artists",
-                )
-            )
-
-            for article in articles:
-                objects_by_key[
-                    ("editorial", article.id)
-                ] = article
-
-        if ids_by_type.get("song"):
-            songs = (
-                Song.objects
-                .filter(
-                    id__in=ids_by_type["song"],
-                    status=Song.Status.PUBLISHED,
-                )
-                .prefetch_related(
-                    "artists",
-                    "featured_artists",
-                    "genres",
-                )
-            )
-
-            for song in songs:
-                objects_by_key[
-                    ("song", song.id)
-                ] = song
-
-        if ids_by_type.get("album"):
-            albums = (
-                Album.objects
-                .filter(
-                    id__in=ids_by_type["album"],
-                    status=Album.Status.PUBLISHED,
-                )
-                .prefetch_related(
-                    "artists",
-                )
-            )
-
-            for album in albums:
-                objects_by_key[
-                    ("album", album.id)
-                ] = album
-
-        if ids_by_type.get("artist"):
-            artists = Artist.objects.filter(
-                id__in=ids_by_type["artist"],
-                is_active=True,
+        # Resolve editorial articles independently.
+        if article_ids:
+            articles = self._editorial_article_queryset().filter(
+                id__in=article_ids,
             )
 
             if (
                 user is not None
                 and user.is_authenticated
             ):
-                followed_artist = ArtistFollow.objects.filter(
+                liked_articles = EditorialArticleLike.objects.filter(
                     user_id=user.id,
-                    artist_id=OuterRef("pk"),
+                    article_id=OuterRef("pk"),
                 )
 
-                artists = artists.annotate(
-                    is_following=Exists(
-                        followed_artist,
-                    ),
+                favorited_articles = EditorialArticleFavorite.objects.filter(
+                    user_id=user.id,
+                    article_id=OuterRef("pk"),
+                )
+
+                articles = articles.annotate(
+                    user_has_liked=Exists(liked_articles),
+                    user_has_favorited=Exists(favorited_articles),
                 )
             else:
-                artists = artists.annotate(
-                    is_following=Value(
+                articles = articles.annotate(
+                    user_has_liked=Value(
+                        False,
+                        output_field=BooleanField(),
+                    ),
+                    user_has_favorited=Value(
                         False,
                         output_field=BooleanField(),
                     ),
                 )
 
-            for artist in artists:
-                objects_by_key[
-                    ("artist", artist.id)
-                ] = artist
+            for article in articles:
+                articles_by_id[article.id] = article
 
-
-        candidates: list[FeedCandidate] = []
+        # Reconstruct the original snapshot order.
+        candidates = []
 
         for item in items:
-            obj = objects_by_key.get(
-                (
-                    item.content_type,
-                    item.object_id,
-                )
-            )
+            if item.content_type == "community_post":
+                post = posts_by_id.get(item.object_id)
 
-            if obj is None:
-                continue
+                if post is None:
+                    continue
 
-            candidates.append(
-                FeedCandidate(
-                    content_type=item.content_type,
-                    source=item.source,
-                    object=obj,
-                    score=item.score,
+                candidates.append(
+                    FeedCandidate(
+                        content_type="community_post",
+                        source=item.source,
+                        object=post,
+                        score=item.score,
+                    )
                 )
-            )
+
+            elif item.content_type == "editorial":
+                article = articles_by_id.get(item.object_id)
+
+                if article is None:
+                    continue
+
+                candidates.append(
+                    FeedCandidate(
+                        content_type="editorial",
+                        source=item.source,
+                        object=article,
+                        score=item.score,
+                    )
+                )
 
         return candidates
 
-
     # ------------------------------------------------------------------
-    # Candidate generation
+    # Community candidate generation
     # ------------------------------------------------------------------
 
     def _generate_candidates(
@@ -505,30 +626,6 @@ class MusicFeedService:
             )
         )
 
-        candidates.extend(
-            self._editorial_candidates(
-                limit=candidate_limit,
-            )
-        )
-
-        candidates.extend(
-            self._song_candidates(
-                limit=candidate_limit,
-            )
-        )
-
-        candidates.extend(
-            self._album_candidates(
-                limit=candidate_limit,
-            )
-        )
-
-        candidates.extend(
-            self._artist_candidates(
-                limit=candidate_limit,
-            )
-        )
-
         return self._deduplicate_candidates(
             candidates=candidates,
             limit=candidate_limit,
@@ -539,26 +636,9 @@ class MusicFeedService:
         *,
         limit: int,
     ) -> list[FeedCandidate]:
-        queryset = (
-            CommunityPost.objects
-            .filter(
-                status=CommunityPost.Status.PUBLISHED,
-            )
-            .select_related(
-                "user",
-                "target",
-                "target__song",
-                "target__album",
-                "target__artist",
-            )
-            .prefetch_related(
-                "target__song__artists",
-                "target__song__featured_artists",
-                "target__song__genres",
-                "target__song__provider_identities",
-                "target__album__artists",
-            )
-            .order_by("-created_at")
+        posts = (
+            self._community_post_queryset()
+            .order_by("-created_at")[:limit]
         )
 
         return [
@@ -567,139 +647,7 @@ class MusicFeedService:
                 source="recent",
                 object=post,
             )
-            for post in queryset[:limit]
-        ]
-
-    def _editorial_candidates(
-        self,
-        *,
-        limit: int,
-    ) -> list[FeedCandidate]:
-        queryset = (
-            EditorialArticle.objects
-            .filter(
-                status=EditorialArticle.Status.PUBLISHED,
-            )
-            .select_related(
-                "author",
-                "song",
-                "artist",
-                "album",
-            )
-            .prefetch_related(
-                "genres",
-                "song__artists",
-                "song__featured_artists",
-                "song__genres",
-                "album__artists",
-            )
-            .order_by(
-                "-is_featured",
-                "-published_at",
-            )
-        )
-
-        return [
-            FeedCandidate(
-                content_type="editorial",
-                source=(
-                    "featured"
-                    if article.is_featured
-                    else "editorial"
-                ),
-                object=article,
-            )
-            for article in queryset[:limit]
-        ]
-
-    def _song_candidates(
-        self,
-        *,
-        limit: int,
-    ) -> list[FeedCandidate]:
-        queryset = (
-            Song.objects
-            .filter(
-                status=Song.Status.PUBLISHED,
-            )
-            .prefetch_related(
-                "artists",
-                "featured_artists",
-                "genres",
-            )
-            .order_by(
-                "-is_featured",
-                "-published_at",
-                "-favorites_count",
-            )
-        )
-
-        return [
-            FeedCandidate(
-                content_type="song",
-                source=(
-                    "featured"
-                    if song.is_featured
-                    else "discovery"
-                ),
-                object=song,
-            )
-            for song in queryset[:limit]
-        ]
-
-    def _album_candidates(
-        self,
-        *,
-        limit: int,
-    ) -> list[FeedCandidate]:
-        queryset = (
-            Album.objects
-            .filter(
-                status=Album.Status.PUBLISHED,
-            )
-            .prefetch_related(
-                "artists",
-            )
-            .order_by(
-                "-is_featured",
-                "-published_at",
-                "-favorites_count",
-            )
-        )
-
-        return [
-            FeedCandidate(
-                content_type="album",
-                source=(
-                    "featured"
-                    if album.is_featured
-                    else "discovery"
-                ),
-                object=album,
-            )
-            for album in queryset[:limit]
-        ]
-
-    def _artist_candidates(
-        self,
-        *,
-        limit: int,
-    ) -> list[FeedCandidate]:
-        queryset = Artist.objects.filter(
-            is_active=True,
-        ).order_by(
-            "-is_verified",
-            "-followers_count",
-            "name",
-        )
-
-        return [
-            FeedCandidate(
-                content_type="artist",
-                source="discovery",
-                object=artist,
-            )
-            for artist in queryset[:limit]
+            for post in posts
         ]
 
     def _relationship_candidates(
@@ -726,30 +674,13 @@ class MusicFeedService:
             following_ids=following_ids,
         )
 
-        relationship_user_ids = (
-            following_ids | mutual_ids
-        )
+        relationship_user_ids = following_ids | mutual_ids
 
         if relationship_user_ids:
             posts = (
-                CommunityPost.objects
+                self._community_post_queryset()
                 .filter(
-                    status=CommunityPost.Status.PUBLISHED,
                     user_id__in=relationship_user_ids,
-                )
-                .select_related(
-                    "user",
-                    "target",
-                    "target__song",
-                    "target__album",
-                    "target__artist",
-                )
-                .prefetch_related(
-                    "target__song__artists",
-                    "target__song__featured_artists",
-                    "target__song__genres",
-                    "target__song__provider_identities",
-                    "target__album__artists",
                 )
                 .order_by("-created_at")[:limit]
             )
@@ -770,141 +701,223 @@ class MusicFeedService:
                 )
 
         followed_artist_ids = set(
-            user.artist_follows.values_list(
+            ArtistFollow.objects
+            .filter(
+                user_id=user.id,
+            )
+            .values_list(
                 "artist_id",
                 flat=True,
             )
         )
 
         if followed_artist_ids:
-            songs = (
-                Song.objects
+            artist_posts = (
+                self._community_post_queryset()
                 .filter(
-                    status=Song.Status.PUBLISHED,
-                    artists__id__in=followed_artist_ids,
+                    target__artist_id__in=followed_artist_ids,
                 )
-                .prefetch_related(
-                    "artists",
-                    "featured_artists",
-                    "genres",
-                )
-                .distinct()
-                .order_by(
-                    "-published_at",
-                    "-favorites_count",
-                )[:limit]
+                .order_by("-created_at")[:limit]
             )
 
-            candidates.extend(
-                FeedCandidate(
-                    content_type="song",
-                    source="followed_artist",
-                    object=song,
-                )
-                for song in songs
-            )
-
-            albums = (
-                Album.objects
+            song_posts = (
+                self._community_post_queryset()
                 .filter(
-                    status=Album.Status.PUBLISHED,
-                    artists__id__in=followed_artist_ids,
+                    target__song__artists__id__in=followed_artist_ids,
                 )
-                .prefetch_related(
-                    "artists",
-                )
-                .distinct()
-                .order_by(
-                    "-published_at",
-                    "-favorites_count",
-                )[:limit]
+                .order_by("-created_at")[:limit]
             )
 
-            candidates.extend(
-                FeedCandidate(
-                    content_type="album",
-                    source="followed_artist",
-                    object=album,
+            album_posts = (
+                self._community_post_queryset()
+                .filter(
+                    target__album__artists__id__in=followed_artist_ids,
                 )
-                for album in albums
+                .order_by("-created_at")[:limit]
             )
+
+            for post in artist_posts:
+                candidates.append(
+                    FeedCandidate(
+                        content_type="community_post",
+                        source="followed_artist",
+                        object=post,
+                    )
+                )
+
+            for post in song_posts:
+                candidates.append(
+                    FeedCandidate(
+                        content_type="community_post",
+                        source="followed_artist",
+                        object=post,
+                    )
+                )
+
+            for post in album_posts:
+                candidates.append(
+                    FeedCandidate(
+                        content_type="community_post",
+                        source="followed_artist",
+                        object=post,
+                    )
+                )
 
         interaction_since = timezone.now() - timedelta(
             days=self.INTERACTION_LOOKBACK_DAYS,
         )
 
-        interactions = list(
+        interacted_post_ids = set(
             MusicFeedInteraction.objects
             .filter(
                 user=user,
                 created_at__gte=interaction_since,
+                community_post__isnull=False,
+                interaction_type__in=[
+                    MusicFeedInteraction.InteractionType.VIEW_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.LIKE_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.COMMENT_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.FAVORITE_COMMUNITY_POST,
+                ],
             )
             .order_by("-created_at")
-            .values(
-                "interaction_type",
-                "song_id",
-                "album_id",
-                "artist_id",
+            .values_list(
+                "community_post_id",
+                flat=True,
             )[: self.INTERACTION_LIMIT]
         )
 
-        interacted_song_ids = {
-            item["song_id"]
-            for item in interactions
-            if item["song_id"] is not None
-        }
-
-        interacted_album_ids = {
-            item["album_id"]
-            for item in interactions
-            if item["album_id"] is not None
-        }
-
-        if interacted_song_ids:
-            songs = (
-                Song.objects
+        if interacted_post_ids:
+            history_posts = (
+                self._community_post_queryset()
                 .filter(
-                    id__in=interacted_song_ids,
-                    status=Song.Status.PUBLISHED,
-                )
-                .prefetch_related(
-                    "artists",
-                    "featured_artists",
-                    "genres",
+                    id__in=interacted_post_ids,
                 )
             )
 
             candidates.extend(
                 FeedCandidate(
-                    content_type="song",
+                    content_type="community_post",
                     source="history",
-                    object=song,
+                    object=post,
                 )
-                for song in songs
-            )
-
-        if interacted_album_ids:
-            albums = (
-                Album.objects
-                .filter(
-                    id__in=interacted_album_ids,
-                    status=Album.Status.PUBLISHED,
-                )
-                .prefetch_related(
-                    "artists",
-                )
-            )
-
-            candidates.extend(
-                FeedCandidate(
-                    content_type="album",
-                    source="history",
-                    object=album,
-                )
-                for album in albums
+                for post in history_posts
             )
 
         return candidates
+
+    # ------------------------------------------------------------------
+    # Editorial candidate generation and ordering
+    # ------------------------------------------------------------------
+
+    def _generate_editorial_candidates(
+        self,
+        *,
+        limit: int,
+    ) -> list[FeedCandidate]:
+        """
+        Generate published editorial articles.
+
+        Editorial ordering is independent of community engagement
+        and personalization.
+
+        Featured articles are placed before non-featured articles.
+        Within each group, newer publication dates come first.
+
+        No music relationship is required.
+        """
+        articles = (
+            self._editorial_article_queryset()
+            .order_by(
+                "-is_featured",
+                "-published_at",
+                "-created_at",
+                "-id",
+            )[:limit]
+        )
+
+        candidates = []
+
+        for article in articles:
+            candidates.append(
+                FeedCandidate(
+                    content_type="editorial",
+                    source="editorial",
+                    object=article,
+                )
+            )
+
+        return candidates
+
+    # ------------------------------------------------------------------
+    # Feed mixing
+    # ------------------------------------------------------------------
+
+    def _mix_feed_candidates(
+        self,
+        *,
+        community_candidates: list[FeedCandidate],
+        editorial_candidates: list[FeedCandidate],
+    ) -> list[FeedCandidate]:
+        """
+        Mix community posts and editorial articles.
+
+        The normal pattern is:
+
+            10 community posts
+            1 editorial article
+
+        Consecutive editorial articles are prevented while
+        community posts remain available.
+
+        If the community pool is exhausted, remaining editorial
+        articles fill the feed.
+
+        If the editorial pool is exhausted, remaining community
+        posts fill the feed.
+        """
+        mixed: list[FeedCandidate] = []
+
+        community_index = 0
+        editorial_index = 0
+
+        while (
+            community_index < len(community_candidates)
+            or editorial_index < len(editorial_candidates)
+        ):
+            # Add up to ten community posts.
+            community_batch_end = min(
+                community_index + self.COMMUNITY_POSTS_PER_EDITORIAL,
+                len(community_candidates),
+            )
+
+            while community_index < community_batch_end:
+                mixed.append(
+                    community_candidates[community_index]
+                )
+                community_index += 1
+
+            # Add one editorial article after the community batch.
+            if editorial_index < len(editorial_candidates):
+                mixed.append(
+                    editorial_candidates[editorial_index]
+                )
+                editorial_index += 1
+
+            # If there are no more community posts, the next loop
+            # will continue adding editorial articles in batches
+            # of one. This is intentional: the remaining editorial
+            # pool fills the available feed positions.
+            if (
+                community_index >= len(community_candidates)
+                and editorial_index < len(editorial_candidates)
+            ):
+                mixed.extend(
+                    editorial_candidates[editorial_index:]
+                )
+                break
+
+        return mixed
 
     # ------------------------------------------------------------------
     # User context
@@ -917,18 +930,14 @@ class MusicFeedService:
         candidates: list[FeedCandidate],
     ) -> FeedUserContext:
         if user is None or not user.is_authenticated:
-            return FeedUserContext(
-                following_user_ids=frozenset(),
-                follower_user_ids=frozenset(),
-                mutual_user_ids=frozenset(),
-                followed_artist_ids=frozenset(),
-                preferred_genre_ids=frozenset(),
-                interacted_song_ids=frozenset(),
-                interacted_album_ids=frozenset(),
-                interacted_artist_ids=frozenset(),
-                liked_community_post_ids=frozenset(),
-                liked_editorial_ids=frozenset(),
-            )
+            return self._empty_user_context()
+
+        # Only community posts are considered here.
+        community_candidates = [
+            candidate
+            for candidate in candidates
+            if candidate.content_type == "community_post"
+        ]
 
         following_user_ids = frozenset(
             UserFollow.objects
@@ -957,7 +966,11 @@ class MusicFeedService:
         )
 
         followed_artist_ids = frozenset(
-            user.artist_follows.values_list(
+            ArtistFollow.objects
+            .filter(
+                user_id=user.id,
+            )
+            .values_list(
                 "artist_id",
                 flat=True,
             )
@@ -974,7 +987,7 @@ class MusicFeedService:
             days=self.INTERACTION_LOOKBACK_DAYS,
         )
 
-        interactions = (
+        interactions = list(
             MusicFeedInteraction.objects
             .filter(
                 user=user,
@@ -986,6 +999,7 @@ class MusicFeedService:
                 "song_id",
                 "album_id",
                 "artist_id",
+                "community_post_id",
             )[: self.INTERACTION_LIMIT]
         )
 
@@ -1007,21 +1021,26 @@ class MusicFeedService:
             if item["artist_id"] is not None
         )
 
+        interacted_community_post_ids = frozenset(
+            item["community_post_id"]
+            for item in interactions
+            if (
+                item["community_post_id"] is not None
+                and item["interaction_type"] in {
+                    MusicFeedInteraction.InteractionType.VIEW_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.LIKE_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.COMMENT_COMMUNITY_POST,
+                    MusicFeedInteraction.InteractionType.FAVORITE_COMMUNITY_POST,
+                }
+            )
+        )
+
         community_post_ids = {
             candidate.object_id
-            for candidate in candidates
-            if candidate.content_type
-            == "community_post"
+            for candidate in community_candidates
         }
 
-        editorial_ids = {
-            candidate.object_id
-            for candidate in candidates
-            if candidate.content_type
-            == "editorial"
-        }
-
-        liked_community_post_ids = frozenset(
+        liked_post_ids = frozenset(
             CommunityPostLike.objects
             .filter(
                 user_id=user.id,
@@ -1033,14 +1052,86 @@ class MusicFeedService:
             )
         )
 
-        liked_editorial_ids = frozenset(
-            EditorialArticleLike.objects
+        favorited_post_ids = frozenset(
+            CommunityPostFavorite.objects
             .filter(
                 user_id=user.id,
-                article_id__in=editorial_ids,
+                post_id__in=community_post_ids,
             )
             .values_list(
-                "article_id",
+                "post_id",
+                flat=True,
+            )
+        )
+
+        commented_post_ids = frozenset(
+            CommunityPostComment.objects
+            .filter(
+                user_id=user.id,
+                post_id__in=community_post_ids,
+                status=CommunityPostComment.Status.PUBLISHED,
+            )
+            .values_list(
+                "post_id",
+                flat=True,
+            )
+            .distinct()
+        )
+
+        comment_liked_post_ids = frozenset(
+            CommunityPostCommentLike.objects
+            .filter(
+                user_id=user.id,
+                comment__post_id__in=community_post_ids,
+                comment__status=CommunityPostComment.Status.PUBLISHED,
+            )
+            .values_list(
+                "comment__post_id",
+                flat=True,
+            )
+            .distinct()
+        )
+
+        # Creator affinity is based exclusively on community-post
+        # engagement.
+        engaged_creator_ids = set(
+            CommunityPostLike.objects
+            .filter(user_id=user.id)
+            .values_list(
+                "post__user_id",
+                flat=True,
+            )
+        )
+
+        engaged_creator_ids.update(
+            CommunityPostFavorite.objects
+            .filter(user_id=user.id)
+            .values_list(
+                "post__user_id",
+                flat=True,
+            )
+        )
+
+        engaged_creator_ids.update(
+            CommunityPostComment.objects
+            .filter(
+                user_id=user.id,
+                status=CommunityPostComment.Status.PUBLISHED,
+            )
+            .values_list(
+                "post__user_id",
+                flat=True,
+            )
+        )
+
+        engaged_creator_ids.update(
+            CommunityPostCommentLike.objects
+            .filter(
+                user_id=user.id,
+                comment__status=CommunityPostComment.Status.PUBLISHED,
+            )
+            .values_list(
+                "comment__post__user_id",
                 flat=True,
             )
         )
@@ -1054,8 +1145,33 @@ class MusicFeedService:
             interacted_song_ids=interacted_song_ids,
             interacted_album_ids=interacted_album_ids,
             interacted_artist_ids=interacted_artist_ids,
-            liked_community_post_ids=liked_community_post_ids,
-            liked_editorial_ids=liked_editorial_ids,
+            liked_community_post_ids=liked_post_ids,
+            favorited_community_post_ids=favorited_post_ids,
+            commented_community_post_ids=commented_post_ids,
+            comment_liked_post_ids=comment_liked_post_ids,
+            interacted_community_post_ids=interacted_community_post_ids,
+            engaged_creator_ids=frozenset(engaged_creator_ids),
+        )
+
+    @staticmethod
+    def _empty_user_context() -> FeedUserContext:
+        empty = frozenset()
+
+        return FeedUserContext(
+            following_user_ids=empty,
+            follower_user_ids=empty,
+            mutual_user_ids=empty,
+            followed_artist_ids=empty,
+            preferred_genre_ids=empty,
+            interacted_song_ids=empty,
+            interacted_album_ids=empty,
+            interacted_artist_ids=empty,
+            liked_community_post_ids=empty,
+            favorited_community_post_ids=empty,
+            commented_community_post_ids=empty,
+            comment_liked_post_ids=empty,
+            interacted_community_post_ids=empty,
+            engaged_creator_ids=empty,
         )
 
     @staticmethod
@@ -1080,7 +1196,7 @@ class MusicFeedService:
         )
 
     # ------------------------------------------------------------------
-    # Ranking
+    # Community ranking
     # ------------------------------------------------------------------
 
     def _rank_candidates(
@@ -1089,9 +1205,12 @@ class MusicFeedService:
         candidates: list[FeedCandidate],
         context: FeedUserContext,
     ) -> list[FeedCandidate]:
-        ranked: list[FeedCandidate] = []
+        ranked = []
 
         for candidate in candidates:
+            if candidate.content_type != "community_post":
+                continue
+
             score = self._base_score(candidate)
 
             score += self._personalization_score(
@@ -1111,29 +1230,27 @@ class MusicFeedService:
         ranked.sort(
             key=lambda candidate: (
                 candidate.score,
-                self._candidate_timestamp(candidate)
-                is not None,
+                self._candidate_timestamp(candidate) is not None,
                 (
                     self._candidate_timestamp(candidate).timestamp()
-                    if self._candidate_timestamp(candidate)
-                    is not None
+                    if self._candidate_timestamp(candidate) is not None
                     else float("-inf")
                 ),
                 candidate.object_id,
             ),
             reverse=True,
         )
+
         return ranked
 
     def _base_score(
         self,
         candidate: FeedCandidate,
     ) -> float:
+        post = candidate.object
         score = 0.0
 
-        timestamp = self._candidate_timestamp(
-            candidate,
-        )
+        timestamp = self._candidate_timestamp(candidate)
 
         if timestamp is not None:
             now = timezone.now()
@@ -1146,9 +1263,7 @@ class MusicFeedService:
 
             age_hours = max(
                 0.0,
-                (
-                    now - timestamp
-                ).total_seconds() / 3600,
+                (now - timestamp).total_seconds() / 3600,
             )
 
             score += max(
@@ -1156,161 +1271,20 @@ class MusicFeedService:
                 40.0 - age_hours * 0.35,
             )
 
-        obj = candidate.object
+        score += min(
+            float(post.likes_count) * 1.5,
+            20.0,
+        )
 
-        if candidate.content_type == "community_post":
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "likes_count",
-                        0,
-                    )
-                ) * 1.5,
-                20.0,
-            )
+        score += min(
+            float(post.comments_count) * 2.0,
+            20.0,
+        )
 
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "comments_count",
-                        0,
-                    )
-                ) * 2.0,
-                20.0,
-            )
-
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "views_count",
-                        0,
-                    )
-                ) * 0.05,
-                10.0,
-            )
-
-        elif candidate.content_type == "editorial":
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "likes_count",
-                        0,
-                    )
-                ) * 1.2,
-                15.0,
-            )
-
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "comments_count",
-                        0,
-                    )
-                ) * 1.5,
-                15.0,
-            )
-
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "views_count",
-                        0,
-                    )
-                ) * 0.03,
-                10.0,
-            )
-
-            if getattr(
-                obj,
-                "is_featured",
-                False,
-            ):
-                score += 12.0
-
-        elif candidate.content_type == "song":
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "favorites_count",
-                        0,
-                    )
-                ) * 1.5,
-                20.0,
-            )
-
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "ratings_count",
-                        0,
-                    )
-                ) * 0.5,
-                10.0,
-            )
-
-            if getattr(
-                obj,
-                "is_featured",
-                False,
-            ):
-                score += 12.0
-
-        elif candidate.content_type == "album":
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "favorites_count",
-                        0,
-                    )
-                ) * 1.5,
-                20.0,
-            )
-
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "ratings_count",
-                        0,
-                    )
-                ) * 0.5,
-                10.0,
-            )
-
-            if getattr(
-                obj,
-                "is_featured",
-                False,
-            ):
-                score += 12.0
-
-        elif candidate.content_type == "artist":
-            score += min(
-                float(
-                    getattr(
-                        obj,
-                        "followers_count",
-                        0,
-                    )
-                ) * 0.5,
-                20.0,
-            )
-
-            if getattr(
-                obj,
-                "is_verified",
-                False,
-            ):
-                score += 8.0
+        score += min(
+            float(post.views_count) * 0.05,
+            10.0,
+        )
 
         return score
 
@@ -1320,106 +1294,44 @@ class MusicFeedService:
         candidate: FeedCandidate,
         context: FeedUserContext,
     ) -> float:
+        post = candidate.object
         score = 0.0
 
-        if candidate.content_type == "community_post":
-            post = candidate.object
+        if post.user_id in context.following_user_ids:
+            score += 35.0
 
-            if post.user_id in context.following_user_ids:
-                score += 35.0
+        if post.user_id in context.mutual_user_ids:
+            score += 20.0
 
-            if post.user_id in context.mutual_user_ids:
-                score += 20.0
+        if post.user_id in context.engaged_creator_ids:
+            score += 12.0
 
-            if post.id in context.liked_community_post_ids:
-                score -= 20.0
+        if post.id in context.liked_community_post_ids:
+            score -= 25.0
 
-            target = getattr(
-                post,
-                "target",
-                None,
-            )
+        if post.id in context.favorited_community_post_ids:
+            score -= 30.0
 
-            if target is not None:
-                score += self._target_personalization_score(
-                    target=target,
-                    context=context,
-                )
+        if post.id in context.commented_community_post_ids:
+            score -= 20.0
 
-        elif candidate.content_type == "editorial":
-            article = candidate.object
+        if post.id in context.comment_liked_post_ids:
+            score -= 8.0
 
-            if article.id in context.liked_editorial_ids:
-                score -= 20.0
+        if post.id in context.interacted_community_post_ids:
+            score -= 5.0
 
-            if (
-                article.artist_id
-                and article.artist_id
-                in context.followed_artist_ids
-            ):
-                score += 28.0
+        target = getattr(
+            post,
+            "target",
+            None,
+        )
 
-            if (
-                article.song_id
-                and article.song_id
-                in context.interacted_song_ids
-            ):
-                score += 18.0
-
-            if (
-                article.album_id
-                and article.album_id
-                in context.interacted_album_ids
-            ):
-                score += 20.0
-
-            if (
-                article.artist_id
-                and article.artist_id
-                in context.interacted_artist_ids
-            ):
-                score += 20.0
-
-            score += self._genre_personalization_score(
-                genres=article.genres.all(),
+        if target is not None:
+            score += self._target_personalization_score(
+                target=target,
                 context=context,
             )
-
-        elif candidate.content_type == "song":
-            song = candidate.object
-
-            if song.id in context.interacted_song_ids:
-                score += 18.0
-
-            score += self._artist_personalization_score(
-                artists=song.artists.all(),
-                context=context,
-            )
-
-            score += self._genre_personalization_score(
-                genres=song.genres.all(),
-                context=context,
-            )
-
-        elif candidate.content_type == "album":
-            album = candidate.object
-
-            if album.id in context.interacted_album_ids:
-                score += 20.0
-
-            score += self._artist_personalization_score(
-                artists=album.artists.all(),
-                context=context,
-            )
-
-        elif candidate.content_type == "artist":
-            artist = candidate.object
-
-            if artist.id in context.followed_artist_ids:
-                score -= 8.0
-
-            if artist.id in context.interacted_artist_ids:
-                score += 20.0
 
         return score
 
@@ -1442,25 +1354,31 @@ class MusicFeedService:
             )
 
             if song is not None:
-                score += (
-                    MusicFeedService
-                    ._artist_personalization_score(
-                        artists=song.artists.all(),
-                        context=context,
-                    )
+                score += MusicFeedService._artist_personalization_score(
+                    artists=song.artists.all(),
+                    context=context,
                 )
 
-                score += (
-                    MusicFeedService
-                    ._genre_personalization_score(
-                        genres=song.genres.all(),
-                        context=context,
-                    )
+                score += MusicFeedService._genre_personalization_score(
+                    genres=song.genres.all(),
+                    context=context,
                 )
 
         if target.album_id:
             if target.album_id in context.interacted_album_ids:
                 score += 20.0
+
+            album = getattr(
+                target,
+                "album",
+                None,
+            )
+
+            if album is not None:
+                score += MusicFeedService._artist_personalization_score(
+                    artists=album.artists.all(),
+                    context=context,
+                )
 
         if target.artist_id:
             if target.artist_id in context.followed_artist_ids:
@@ -1503,7 +1421,7 @@ class MusicFeedService:
         return score
 
     # ------------------------------------------------------------------
-    # Diversity
+    # Community diversity
     # ------------------------------------------------------------------
 
     def _select_diverse(
@@ -1512,29 +1430,27 @@ class MusicFeedService:
         candidates: list[FeedCandidate],
         limit: int,
     ) -> list[FeedCandidate]:
+        """
+        Prevent one creator or artist from dominating community posts.
+
+        Editorial articles are not passed through this method.
+        """
         selected: list[FeedCandidate] = []
 
-        seen_keys: set[tuple[str, int]] = set()
+        seen_post_ids: set[int] = set()
         recent_author_ids: list[int] = []
         recent_artist_ids: list[int] = []
-        recent_content_types: list[str] = []
 
         def violates_diversity(
             candidate: FeedCandidate,
             *,
             check_people: bool = True,
         ) -> bool:
-            author_id = self._candidate_author_id(
-                candidate,
-            )
-
-            artist_ids = self._candidate_artist_ids(
-                candidate,
-            )
+            author_id = candidate.object.user_id
+            artist_ids = self._candidate_artist_ids(candidate)
 
             if (
                 check_people
-                and author_id is not None
                 and recent_author_ids.count(author_id) >= 2
             ):
                 return True
@@ -1548,58 +1464,27 @@ class MusicFeedService:
             ):
                 return True
 
-            if (
-                len(recent_content_types) >= 2
-                and recent_content_types[-1]
-                == candidate.content_type
-                and recent_content_types[-2]
-                == candidate.content_type
-            ):
-                return True
-
             return False
 
         def add_candidate(
             candidate: FeedCandidate,
         ) -> None:
             selected.append(candidate)
+            seen_post_ids.add(candidate.object_id)
 
-            seen_keys.add(
-                (
-                    candidate.content_type,
-                    candidate.object_id,
-                )
+            recent_author_ids.append(
+                candidate.object.user_id
             )
-
-            author_id = self._candidate_author_id(
-                candidate,
-            )
-
-            if author_id is not None:
-                recent_author_ids.append(
-                    author_id,
-                )
 
             recent_artist_ids.extend(
-                self._candidate_artist_ids(
-                    candidate,
-                )
-            )
-
-            recent_content_types.append(
-                candidate.content_type,
+                self._candidate_artist_ids(candidate)
             )
 
         for candidate in candidates:
             if len(selected) >= limit:
                 break
 
-            key = (
-                candidate.content_type,
-                candidate.object_id,
-            )
-
-            if key in seen_keys:
+            if candidate.object_id in seen_post_ids:
                 continue
 
             if violates_diversity(candidate):
@@ -1612,12 +1497,7 @@ class MusicFeedService:
                 if len(selected) >= limit:
                     break
 
-                key = (
-                    candidate.content_type,
-                    candidate.object_id,
-                )
-
-                if key in seen_keys:
+                if candidate.object_id in seen_post_ids:
                     continue
 
                 if violates_diversity(
@@ -1642,25 +1522,13 @@ class MusicFeedService:
         limit: int,
     ) -> list[FeedCandidate]:
         """
-        Deduplicate candidates while preserving the strongest source.
+        Keep one candidate per content type and object ID.
 
-        A single object can be discovered through several paths:
-
-        - recent
-        - discovery
-        - history
-        - followed_artist
-        - following
-        - mutual
-
-        The strongest relationship source should win because the source
-        is part of the feed's semantic metadata.
+        For community posts, the strongest relationship source wins.
+        Editorial articles are also deduplicated independently.
         """
         deduplicated: list[FeedCandidate] = []
-        index_by_key: dict[
-            tuple[str, int],
-            int,
-        ] = {}
+        index_by_key: dict[tuple[str, int], int] = {}
 
         for candidate in candidates:
             key = (
@@ -1671,15 +1539,11 @@ class MusicFeedService:
             existing_index = index_by_key.get(key)
 
             if existing_index is None:
-                index_by_key[key] = len(
-                    deduplicated,
-                )
+                index_by_key[key] = len(deduplicated)
                 deduplicated.append(candidate)
                 continue
 
-            existing = deduplicated[
-                existing_index
-            ]
+            existing = deduplicated[existing_index]
 
             current_priority = cls.SOURCE_PRIORITY.get(
                 candidate.source,
@@ -1692,9 +1556,7 @@ class MusicFeedService:
             )
 
             if current_priority > existing_priority:
-                deduplicated[
-                    existing_index
-                ] = candidate
+                deduplicated[existing_index] = candidate
 
         return deduplicated[:limit]
 
@@ -1716,136 +1578,60 @@ class MusicFeedService:
         )
 
     @staticmethod
-    def _candidate_author_id(
-        candidate: FeedCandidate,
-    ) -> int | None:
-        if candidate.content_type == "community_post":
-            return candidate.object.user_id
-
-        if candidate.content_type == "editorial":
-            return candidate.object.author_id
-
-        return None
-
-    @staticmethod
     def _candidate_artist_ids(
         candidate: FeedCandidate,
     ) -> set[int]:
-        if candidate.content_type == "song":
-            return {
+        if candidate.content_type != "community_post":
+            return set()
+
+        target = getattr(
+            candidate.object,
+            "target",
+            None,
+        )
+
+        if target is None:
+            return set()
+
+        artist_ids: set[int] = set()
+
+        if target.artist_id:
+            artist_ids.add(target.artist_id)
+
+        song = getattr(
+            target,
+            "song",
+            None,
+        )
+
+        if song is not None:
+            artist_ids.update(
                 artist.id
-                for artist in candidate.object.artists.all()
-            }
+                for artist in song.artists.all()
+            )
 
-        if candidate.content_type == "album":
-            return {
+        album = getattr(
+            target,
+            "album",
+            None,
+        )
+
+        if album is not None:
+            artist_ids.update(
                 artist.id
-                for artist in candidate.object.artists.all()
-            }
-
-        if candidate.content_type == "artist":
-            return {
-                candidate.object.id,
-            }
-
-        if candidate.content_type == "editorial":
-            artist_ids: set[int] = set()
-
-            if candidate.object.artist_id:
-                artist_ids.add(
-                    candidate.object.artist_id,
-                )
-
-            song = getattr(
-                candidate.object,
-                "song",
-                None,
+                for artist in album.artists.all()
             )
 
-            if song is not None:
-                artist_ids.update(
-                    artist.id
-                    for artist in song.artists.all()
-                )
-
-            album = getattr(
-                candidate.object,
-                "album",
-                None,
-            )
-
-            if album is not None:
-                artist_ids.update(
-                    artist.id
-                    for artist in album.artists.all()
-                )
-
-            return artist_ids
-
-        if candidate.content_type == "community_post":
-            target = getattr(
-                candidate.object,
-                "target",
-                None,
-            )
-
-            if target is None:
-                return set()
-
-            artist_ids: set[int] = set()
-
-            if target.artist_id:
-                artist_ids.add(
-                    target.artist_id,
-                )
-
-            song = getattr(
-                target,
-                "song",
-                None,
-            )
-
-            if song is not None:
-                artist_ids.update(
-                    artist.id
-                    for artist in song.artists.all()
-                )
-
-            album = getattr(
-                target,
-                "album",
-                None,
-            )
-
-            if album is not None:
-                artist_ids.update(
-                    artist.id
-                    for artist in album.artists.all()
-                )
-
-            return artist_ids
-
-        return set()
+        return artist_ids
 
     @staticmethod
     def _candidate_timestamp(
         candidate: FeedCandidate,
     ) -> datetime | None:
-        obj = candidate.object
-
         if candidate.content_type == "community_post":
-            return obj.created_at
+            return candidate.object.created_at
 
         if candidate.content_type == "editorial":
-            return (
-                obj.published_at
-                or obj.created_at
-            )
-
-        if candidate.content_type == "song":
-            return obj.published_at
-
-        if candidate.content_type == "album":
-            return obj.published_at
+            return candidate.object.published_at
 
         return None

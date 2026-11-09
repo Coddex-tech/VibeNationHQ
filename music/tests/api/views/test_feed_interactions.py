@@ -7,7 +7,9 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
+
 from rest_framework.test import APIClient
+from rest_framework import status
 
 from music.models import (
     Album,
@@ -29,12 +31,14 @@ class MusicFeedInteractionAPITests(TestCase):
             email="feed@example.com",
             username="feeduser",
             password="StrongPassword123!",
+            onboarding_completed=True,
         )
 
         cls.other_user = User.objects.create_user(
             email="other@example.com",
             username="otheruser",
             password="StrongPassword123!",
+            onboarding_completed=True,
         )
 
         published_at = (
@@ -45,6 +49,7 @@ class MusicFeedInteractionAPITests(TestCase):
         cls.artist = Artist.objects.create(
             name="Test Artist",
             slug="test-artist",
+            is_active=True,
         )
 
         cls.album = Album.objects.create(
@@ -81,9 +86,7 @@ class MusicFeedInteractionAPITests(TestCase):
                 excerpt="Test editorial excerpt.",
                 content="Test editorial content.",
                 author=cls.user,
-                status=(
-                    EditorialArticle.Status.PUBLISHED
-                ),
+                status=EditorialArticle.Status.PUBLISHED,
                 published_at=published_at,
             )
         )
@@ -95,22 +98,47 @@ class MusicFeedInteractionAPITests(TestCase):
             "music_api:music-feed-interaction",
         )
 
-    def authenticate(self):
+    def authenticate(self, user=None):
         self.client.force_authenticate(
-            user=self.user,
+            user=user or self.user,
         )
+
+    def post_interaction(
+        self,
+        *,
+        interaction_type,
+        target_type,
+        target_id,
+        idempotency_key=None,
+    ):
+        payload = {
+            "interaction_type": interaction_type,
+            "target_type": target_type,
+            "target_id": target_id,
+        }
+
+        if idempotency_key is not None:
+            payload["idempotency_key"] = str(
+                idempotency_key,
+            )
+
+        return self.client.post(
+            self.url,
+            payload,
+            format="json",
+        )
+
+    # ========================================================
+    # Authentication and permissions
+    # ========================================================
 
     def test_unauthenticated_user_cannot_record_interaction(
         self,
     ):
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_song",
-                "target_type": "song",
-                "target_id": self.song.id,
-            },
-            format="json",
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
         )
 
         self.assertEqual(
@@ -123,330 +151,220 @@ class MusicFeedInteractionAPITests(TestCase):
             0,
         )
 
-    def test_authenticated_user_can_view_song(self):
-        self.authenticate()
+    def test_incomplete_onboarding_user_cannot_record_interaction(
+        self,
+    ):
+        incomplete_user = User.objects.create_user(
+            email="incomplete@example.com",
+            username="incompleteuser",
+            password="StrongPassword123!",
+            onboarding_completed=False,
+        )
+
+        self.authenticate(incomplete_user)
+
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            403,
+        )
+
+        self.assertEqual(
+            MusicFeedInteraction.objects.count(),
+            0,
+        )
+
+    def test_staff_user_cannot_record_interaction(self):
+        staff_user = User.objects.create_superuser(
+            email="staff@example.com",
+            password="TestPassword123!",
+        )
+
+        self.client.force_authenticate(user=staff_user)
 
         response = self.client.post(
             self.url,
             {
-                "interaction_type": "view_song",
-                "target_type": "song",
-                "target_id": self.song.id,
+                "interaction_type": "view_community_post",
+                "target_type": "community_post",
+                "target_id": self.community_post.id,
             },
             format="json",
         )
 
         self.assertEqual(
             response.status_code,
-            201,
+            403,
         )
 
-        self.assertEqual(
-            response.data["interaction_type"],
-            "view_song",
+        self.assertFalse(
+            MusicFeedInteraction.objects.filter(
+                user=staff_user,
+            ).exists()
         )
 
-        self.assertEqual(
-            response.data["target_type"],
-            "song",
-        )
+    # ========================================================
+    # Accepted passive interactions
+    # ========================================================
 
-        self.assertEqual(
-            response.data["target_id"],
-            self.song.id,
-        )
-
-        self.assertEqual(
-            MusicFeedInteraction.objects.count(),
-            1,
-        )
-
-    def test_authenticated_user_can_play_song_preview(
+    def test_authenticated_user_can_record_all_passive_interactions(
         self,
     ):
         self.authenticate()
 
-        response = self.client.post(
-            self.url,
+        interactions = [
+            {
+                "interaction_type": "view_song",
+                "target_type": "song",
+                "target_id": self.song.id,
+            },
             {
                 "interaction_type": "play_preview",
                 "target_type": "song",
                 "target_id": self.song.id,
             },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-        self.assertEqual(
-            response.data["interaction_type"],
-            "play_preview",
-        )
-
-    def test_authenticated_user_can_favorite_song(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "favorite_song",
-                "target_type": "song",
-                "target_id": self.song.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-        self.assertTrue(
-            MusicFeedInteraction.objects.filter(
-                user=self.user,
-                interaction_type="favorite_song",
-                song=self.song,
-            ).exists(),
-        )
-
-    def test_authenticated_user_can_rate_song(self):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "rate_song",
-                "target_type": "song",
-                "target_id": self.song.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_view_album(self):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
             {
                 "interaction_type": "view_album",
                 "target_type": "album",
                 "target_id": self.album.id,
             },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_favorite_album(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "favorite_album",
-                "target_type": "album",
-                "target_id": self.album.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_rate_album(self):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "rate_album",
-                "target_type": "album",
-                "target_id": self.album.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_view_artist(self):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
             {
                 "interaction_type": "view_artist",
                 "target_type": "artist",
                 "target_id": self.artist.id,
             },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_follow_artist(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
             {
-                "interaction_type": "follow_artist",
-                "target_type": "artist",
-                "target_id": self.artist.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_view_community_post(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": (
-                    "view_community_post"
-                ),
+                "interaction_type": "view_community_post",
                 "target_type": "community_post",
                 "target_id": self.community_post.id,
             },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_like_community_post(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": (
-                    "like_community_post"
-                ),
-                "target_type": "community_post",
-                "target_id": self.community_post.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_comment_on_community_post(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": (
-                    "comment_community_post"
-                ),
-                "target_type": "community_post",
-                "target_id": self.community_post.id,
-            },
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
-            201,
-        )
-
-    def test_authenticated_user_can_view_editorial(
-        self,
-    ):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
             {
                 "interaction_type": "view_editorial",
                 "target_type": "editorial",
-                "target_id": (
-                    self.editorial_article.id
-                ),
+                "target_id": self.editorial_article.id,
             },
-            format="json",
-        )
+        ]
+
+        for interaction in interactions:
+            with self.subTest(
+                interaction_type=interaction[
+                    "interaction_type"
+                ],
+            ):
+                response = self.client.post(
+                    self.url,
+                    interaction,
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    201,
+                    response.data,
+                )
+
+                self.assertEqual(
+                    response.data["interaction_type"],
+                    interaction["interaction_type"],
+                )
+
+                self.assertEqual(
+                    response.data["target_type"],
+                    interaction["target_type"],
+                )
+
+                self.assertEqual(
+                    response.data["target_id"],
+                    interaction["target_id"],
+                )
 
         self.assertEqual(
-            response.status_code,
-            201,
+            MusicFeedInteraction.objects.filter(
+                user=self.user,
+            ).count(),
+            6,
         )
 
-    def test_authenticated_user_can_like_editorial(
+    # ========================================================
+    # Rejected engagement interactions
+    # ========================================================
+
+    def test_engagement_interactions_are_rejected(
         self,
     ):
         self.authenticate()
 
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "like_editorial",
-                "target_type": "editorial",
-                "target_id": (
-                    self.editorial_article.id
-                ),
-            },
-            format="json",
-        )
+        rejected_interactions = [
+            ("favorite_song", "song", self.song.id),
+            ("rate_song", "song", self.song.id),
+            ("favorite_album", "album", self.album.id),
+            ("rate_album", "album", self.album.id),
+            ("follow_artist", "artist", self.artist.id),
+            (
+                "like_community_post",
+                "community_post",
+                self.community_post.id,
+            ),
+            (
+                "comment_community_post",
+                "community_post",
+                self.community_post.id,
+            ),
+            (
+                "favorite_community_post",
+                "community_post",
+                self.community_post.id,
+            ),
+            (
+                "like_editorial",
+                "editorial",
+                self.editorial_article.id,
+            ),
+            (
+                "favorite_editorial",
+                "editorial",
+                self.editorial_article.id,
+            ),
+        ]
+
+        for interaction_type, target_type, target_id in (
+            rejected_interactions
+        ):
+            with self.subTest(
+                interaction_type=interaction_type,
+            ):
+                response = self.post_interaction(
+                    interaction_type=interaction_type,
+                    target_type=target_type,
+                    target_id=target_id,
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    400,
+                )
 
         self.assertEqual(
-            response.status_code,
-            201,
+            MusicFeedInteraction.objects.count(),
+            0,
         )
+
+    # ========================================================
+    # Target type and ID validation
+    # ========================================================
 
     def test_invalid_target_type_returns_400(self):
         self.authenticate()
 
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_song",
-                "target_type": "album",
-                "target_id": self.album.id,
-            },
-            format="json",
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="album",
+            target_id=self.album.id,
         )
 
         self.assertEqual(
@@ -489,14 +407,10 @@ class MusicFeedInteractionAPITests(TestCase):
     def test_invalid_target_id_returns_400(self):
         self.authenticate()
 
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_song",
-                "target_type": "song",
-                "target_id": 0,
-            },
-            format="json",
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=0,
         )
 
         self.assertEqual(
@@ -512,14 +426,10 @@ class MusicFeedInteractionAPITests(TestCase):
     def test_missing_target_returns_404(self):
         self.authenticate()
 
-        response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_song",
-                "target_type": "song",
-                "target_id": 999999,
-            },
-            format="json",
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=999999,
         )
 
         self.assertEqual(
@@ -531,6 +441,235 @@ class MusicFeedInteractionAPITests(TestCase):
             MusicFeedInteraction.objects.count(),
             0,
         )
+
+    def test_empty_payload_returns_400(self):
+        self.authenticate()
+
+        response = self.client.post(
+            self.url,
+            {},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+        self.assertIn(
+            "interaction_type",
+            response.data,
+        )
+
+        self.assertIn(
+            "target_type",
+            response.data,
+        )
+
+        self.assertIn(
+            "target_id",
+            response.data,
+        )
+
+    # ========================================================
+    # Target publication and visibility
+    # ========================================================
+
+    def test_draft_song_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.song.status = Song.Status.DRAFT
+        self.song.save(update_fields=["status"])
+
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+        self.assertEqual(
+            MusicFeedInteraction.objects.count(),
+            0,
+        )
+
+    def test_archived_song_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.song.status = Song.Status.ARCHIVED
+        self.song.save(update_fields=["status"])
+
+        response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_draft_album_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.album.status = Album.Status.DRAFT
+        self.album.save(update_fields=["status"])
+
+        response = self.post_interaction(
+            interaction_type="view_album",
+            target_type="album",
+            target_id=self.album.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_archived_album_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.album.status = Album.Status.ARCHIVED
+        self.album.save(update_fields=["status"])
+
+        response = self.post_interaction(
+            interaction_type="view_album",
+            target_type="album",
+            target_id=self.album.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_inactive_artist_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.artist.is_active = False
+        self.artist.save(update_fields=["is_active"])
+
+        response = self.post_interaction(
+            interaction_type="view_artist",
+            target_type="artist",
+            target_id=self.artist.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_hidden_community_post_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.community_post.status = (
+            CommunityPost.Status.HIDDEN
+        )
+        self.community_post.save(
+            update_fields=["status"],
+        )
+
+        response = self.post_interaction(
+            interaction_type="view_community_post",
+            target_type="community_post",
+            target_id=self.community_post.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_removed_community_post_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.community_post.status = (
+            CommunityPost.Status.REMOVED
+        )
+        self.community_post.save(
+            update_fields=["status"],
+        )
+
+        response = self.post_interaction(
+            interaction_type="view_community_post",
+            target_type="community_post",
+            target_id=self.community_post.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_draft_editorial_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.editorial_article.status = (
+            EditorialArticle.Status.DRAFT
+        )
+        self.editorial_article.save(
+            update_fields=["status"],
+        )
+
+        response = self.post_interaction(
+            interaction_type="view_editorial",
+            target_type="editorial",
+            target_id=self.editorial_article.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    def test_archived_editorial_cannot_receive_view_interaction(
+        self,
+    ):
+        self.authenticate()
+
+        self.editorial_article.status = (
+            EditorialArticle.Status.ARCHIVED
+        )
+        self.editorial_article.save(
+            update_fields=["status"],
+        )
+
+        response = self.post_interaction(
+            interaction_type="view_editorial",
+            target_type="editorial",
+            target_id=self.editorial_article.id,
+        )
+
+        self.assertEqual(
+            response.status_code,
+            404,
+        )
+
+    # ========================================================
+    # Idempotency
+    # ========================================================
 
     def test_idempotency_key_returns_same_interaction(
         self,
@@ -580,33 +719,25 @@ class MusicFeedInteractionAPITests(TestCase):
             1,
         )
 
-    def test_idempotency_key_is_scoped_to_existing_event(
+    def test_idempotency_key_cannot_be_reused_for_another_event(
         self,
     ):
         self.authenticate()
 
         key = uuid4()
 
-        first_response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_song",
-                "target_type": "song",
-                "target_id": self.song.id,
-                "idempotency_key": str(key),
-            },
-            format="json",
+        first_response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+            idempotency_key=key,
         )
 
-        second_response = self.client.post(
-            self.url,
-            {
-                "interaction_type": "view_album",
-                "target_type": "album",
-                "target_id": self.album.id,
-                "idempotency_key": str(key),
-            },
-            format="json",
+        second_response = self.post_interaction(
+            interaction_type="view_album",
+            target_type="album",
+            target_id=self.album.id,
+            idempotency_key=key,
         )
 
         self.assertEqual(
@@ -616,44 +747,103 @@ class MusicFeedInteractionAPITests(TestCase):
 
         self.assertEqual(
             second_response.status_code,
-            201,
-        )
-
-        self.assertEqual(
-            first_response.data["id"],
-            second_response.data["id"],
-        )
-
-        self.assertEqual(
-            MusicFeedInteraction.objects.count(),
-            1,
-        )
-
-    def test_empty_payload_returns_400(self):
-        self.authenticate()
-
-        response = self.client.post(
-            self.url,
-            {},
-            format="json",
-        )
-
-        self.assertEqual(
-            response.status_code,
             400,
         )
 
         self.assertIn(
-            "interaction_type",
-            response.data,
+            "idempotency_key",
+            second_response.data,
+        )
+
+        self.assertEqual(
+            MusicFeedInteraction.objects.filter(
+                idempotency_key=key,
+            ).count(),
+            1,
+        )
+
+    def test_idempotency_key_cannot_be_reused_by_another_user(
+        self,
+    ):
+        self.authenticate()
+
+        key = uuid4()
+
+        first_response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+            idempotency_key=key,
+        )
+
+        self.authenticate(self.other_user)
+
+        second_response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+            idempotency_key=key,
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            400,
         )
 
         self.assertIn(
-            "target_type",
-            response.data,
+            "idempotency_key",
+            second_response.data,
         )
 
-        self.assertIn(
-            "target_id",
-            response.data,
+        self.assertEqual(
+            MusicFeedInteraction.objects.filter(
+                idempotency_key=key,
+            ).count(),
+            1,
+        )
+
+    def test_retry_after_target_is_unpublished_returns_404(
+        self,
+    ):
+        self.authenticate()
+
+        key = uuid4()
+
+        first_response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+            idempotency_key=key,
+        )
+
+        self.song.status = Song.Status.ARCHIVED
+        self.song.save(update_fields=["status"])
+
+        second_response = self.post_interaction(
+            interaction_type="view_song",
+            target_type="song",
+            target_id=self.song.id,
+            idempotency_key=key,
+        )
+
+        self.assertEqual(
+            first_response.status_code,
+            201,
+        )
+
+        self.assertEqual(
+            second_response.status_code,
+            404,
+        )
+
+        self.assertEqual(
+            MusicFeedInteraction.objects.filter(
+                idempotency_key=key,
+            ).count(),
+            1,
         )

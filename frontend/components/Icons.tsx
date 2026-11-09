@@ -627,3 +627,55 @@ export function ChevronRightIcon({
     </svg>
   );
 }
+
+
+type VerificationBadgeProps = {
+  type: 'verified' | 'identity';
+  size?: number;
+  className?: string;
+};
+
+export default function VerificationBadge({
+  type,
+  size = 18,
+  className = '',
+}: VerificationBadgeProps) {
+  const color =
+    type === 'identity' ? '#008080' : '#3B82F6';
+
+  const label =
+    type === 'identity'
+      ? 'Identity verified'
+      : 'Verified account';
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`inline-block shrink-0 ${className}`}
+      role="img"
+      aria-label={label}
+      focusable="false"
+    >
+      {/* Solid circular badge */}
+      <circle
+        cx="12"
+        cy="12"
+        r="11"
+        fill={color}
+      />
+
+      {/* Precisely centred verification tick */}
+      <path
+        d="M7.5 12.2L10.4 15.1L16.7 8.9"
+        stroke="#FFFFFF"
+        strokeWidth="2.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

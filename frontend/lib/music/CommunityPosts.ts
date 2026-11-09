@@ -1,4 +1,3 @@
-
 import { apiRequest } from '@/lib/api';
 
 export type CommunityTargetType =
@@ -10,7 +9,12 @@ export type CommunityTargetType =
 export type CommunityUser = {
   id: number;
   username: string;
+  display_name: string | null;
+  profile_image: string | null;
+  is_verified: boolean;
+  is_identity_verified: boolean;
   is_following: boolean;
+  is_following_you: boolean;
 };
 
 export type CommunityArtist = {
@@ -180,11 +184,17 @@ export type CommunityCommentReportPayload = {
 export type GetCommunityPostsParams = {
   page?: number;
   pageSize?: number;
+  targetType?: Exclude<CommunityTargetType, 'external'>;
+  targetId?: number;
+  ordering?: 'latest' | 'relevant';
 };
 
 export async function getCommunityPosts({
   page,
   pageSize,
+  targetType,
+  targetId,
+  ordering,
 }: GetCommunityPostsParams = {}): Promise<CommunityPostsResponse> {
   const params = new URLSearchParams();
 
@@ -194,6 +204,18 @@ export async function getCommunityPosts({
 
   if (pageSize !== undefined) {
     params.set('page_size', String(pageSize));
+  }
+
+  if (targetType !== undefined) {
+    params.set('target_type', targetType);
+  }
+
+  if (targetId !== undefined) {
+    params.set('target_id', String(targetId));
+  }
+
+  if (ordering !== undefined) {
+    params.set('ordering', ordering);
   }
 
   const queryString = params.toString();

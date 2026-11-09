@@ -311,6 +311,134 @@ export default function SettingsPage() {
             </section>
           </FadeIn>
 
+          {/* Profile */}
+          <FadeIn>
+            <section
+              className="
+                overflow-hidden
+                rounded-2xl
+                border border-light-border
+                bg-light-surface
+                shadow-sm shadow-black/[0.03]
+                dark:border-dark-border
+                dark:bg-dark-surface
+                dark:shadow-black/10
+              "
+            >
+              <div
+                className="
+                  border-b
+                  border-light-border-soft
+                  px-5 py-5
+                  sm:px-6
+                "
+              >
+                <h2
+                  className="
+                    text-base font-bold
+                    text-light-text
+                    dark:text-dark-text
+                  "
+                >
+                  Profile
+                </h2>
+
+                <p
+                  className="
+                    mt-1 text-sm leading-5
+                    text-light-text-muted
+                    dark:text-dark-text-muted
+                  "
+                >
+                  Manage how other people see you
+                  across VibeNationHQ.
+                </p>
+              </div>
+
+              <div
+                className="
+                  divide-y
+                  divide-light-border-soft
+                  dark:divide-dark-border-soft
+                "
+              >
+                <Link
+                  href="/settings/profile"
+                  className="
+                    group flex items-center gap-4
+                    px-5 py-5
+                    transition-colors duration-200
+                    hover:bg-light-surface-soft
+                    dark:hover:bg-dark-surface-soft
+                    sm:px-6
+                  "
+                >
+                  <div
+                    className="
+                      flex h-11 w-11 shrink-0
+                      items-center justify-center
+                      rounded-xl
+                      bg-brand-teal/10
+                      text-brand-teal
+                      dark:bg-brand-teal/15
+                    "
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M5 21a7 7 0 0 1 14 0" />
+                    </svg>
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <h3
+                      className="
+                        text-sm font-bold
+                        text-light-text
+                        dark:text-dark-text
+                      "
+                    >
+                      Profile information
+                    </h3>
+
+                    <p
+                      className="
+                        mt-1 text-sm leading-5
+                        text-light-text-muted
+                        dark:text-dark-text-muted
+                      "
+                    >
+                      Update your profile picture,
+                      display name, username, and bio.
+                    </p>
+                  </div>
+
+                  <span
+                    className="
+                      hidden shrink-0
+                      text-xs font-bold
+                      text-brand-teal-dark
+                      group-hover:text-brand-teal
+                      dark:text-brand-teal-light
+                      sm:block
+                    "
+                  >
+                    Open
+                  </span>
+                </Link>
+              </div>
+            </section>
+          </FadeIn>
+
           {/* Account */}
           <FadeIn>
             <section

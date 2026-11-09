@@ -3,6 +3,7 @@ from rest_framework import serializers
 from music.models import (
     SongFavorite,
     AlbumFavorite,
+    EditorialArticleFavorite,
 )
 
 from .base import BaseModelSerializer
@@ -85,4 +86,40 @@ class AlbumFavoriteCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = AlbumFavorite
+        fields = []
+
+
+# ============================================================
+# EDITORIAL ARTICLE FAVORITE
+# ============================================================
+
+class EditorialArticleFavoriteSerializer(BaseModelSerializer):
+    """
+    Read-only representation of a user's favorite editorial article.
+    """
+
+    class Meta:
+        model = EditorialArticleFavorite
+        fields = [
+            "id",
+            "user",
+            "article",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields
+
+
+class EditorialArticleFavoriteCreateSerializer(
+    serializers.ModelSerializer
+):
+    """
+    Create a favorite relationship for an editorial article.
+
+    The authenticated user and article are assigned server-side.
+    The article comes from the URL, not the request body.
+    """
+
+    class Meta:
+        model = EditorialArticleFavorite
         fields = []

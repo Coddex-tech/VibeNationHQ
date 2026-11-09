@@ -7,12 +7,13 @@ import type {
   CommunitySong,
 } from './CommunityPosts';
 
+/**
+ * They can still appear as attachments inside community posts
+ * and editorial articles.
+ */
 export type MusicFeedContentType =
   | 'community_post'
-  | 'editorial'
-  | 'song'
-  | 'album'
-  | 'artist';
+  | 'editorial';
 
 export type MusicFeedSource =
   | 'mutual'
@@ -41,6 +42,9 @@ export type MusicFeedEditorialArticle = {
   is_featured: boolean;
   views_count: number;
   likes_count: number;
+  liked: boolean;
+  favorites_count: number;
+  favorited: boolean;
   comments_count: number;
 };
 
@@ -52,18 +56,6 @@ export type MusicFeedContent =
   | {
       content_type: 'editorial';
       content: MusicFeedEditorialArticle;
-    }
-  | {
-      content_type: 'song';
-      content: CommunitySong;
-    }
-  | {
-      content_type: 'album';
-      content: CommunityAlbum;
-    }
-  | {
-      content_type: 'artist';
-      content: CommunityArtist;
     };
 
 export type MusicFeedItem =
@@ -83,10 +75,17 @@ export type GetMusicFeedParams = {
 };
 
 /**
- * Fetch the personalized VibeNationHQ music feed.
+ * Fetch the personalized VibeNationHQ mixed music feed.
  *
- * The backend owns candidate generation, personalization,
- * ranking, diversity, and cursor-based pagination.
+ * The backend owns:
+ * - Candidate generation
+ * - Personalization
+ * - Ranking
+ * - Community/editorial mixing
+ * - Cursor-based pagination
+ *
+ * The frontend must never independently combine
+ * community posts and editorial articles.
  */
 export async function getMusicFeed({
   limit,

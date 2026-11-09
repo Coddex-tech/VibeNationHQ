@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from rest_framework import status
@@ -11,12 +12,12 @@ from music.services.feed_cursor import FeedCursorError
 
 class MusicFeedAPIView(APIView):
     """
-    Return the personalized VibeNationHQ music feed.
+    Return the personalized VibeNationHQ community feed.
 
     The feed service owns candidate generation, personalization,
     ranking, diversity, and cursor-based snapshots.
 
-    This API view is intentionally thin and only handles:
+    This API view handles:
     - request parameters
     - authentication context
     - service invocation
@@ -45,6 +46,26 @@ class MusicFeedAPIView(APIView):
 
         cursor = request.query_params.get("cursor")
 
+        new_post_id = request.query_params.get("new_post_id")
+
+        if new_post_id is not None:
+            try:
+                new_post_id = int(new_post_id)
+
+                if new_post_id <= 0:
+                    raise ValueError
+
+            except (TypeError, ValueError):
+                return Response(
+                    {
+                        "detail": (
+                            "The 'new_post_id' parameter must "
+                            "be a valid positive integer."
+                        )
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         user = (
             request.user
             if request.user.is_authenticated
@@ -56,7 +77,9 @@ class MusicFeedAPIView(APIView):
                 user=user,
                 limit=limit,
                 cursor=cursor,
+                new_post_id=new_post_id,
             )
+
         except FeedCursorError as exc:
             return Response(
                 {
@@ -64,6 +87,7 @@ class MusicFeedAPIView(APIView):
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
         except ValueError as exc:
             return Response(
                 {

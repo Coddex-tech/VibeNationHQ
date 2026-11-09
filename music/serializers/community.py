@@ -33,18 +33,40 @@ User = get_user_model()
 # ============================================================
 
 
-
 class CommunityUserSerializer(serializers.ModelSerializer):
     is_following = serializers.SerializerMethodField()
+    is_following_you = serializers.BooleanField(
+        read_only=True,
+        default=False,
+    )
+    profile_image = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             "id",
             "username",
+            "display_name",
+            "profile_image",
+            "is_verified",
+            "is_identity_verified",
             "is_following",
+            "is_following_you",
         ]
         read_only_fields = fields
+
+    def get_profile_image(self, obj):
+        request = self.context.get("request")
+
+        if not obj.profile_image:
+            return None
+
+        image_url = obj.profile_image.url
+
+        if request is not None:
+            return request.build_absolute_uri(image_url)
+
+        return image_url
 
     def get_is_following(self, obj):
         """
@@ -477,8 +499,6 @@ class CommunityPostSerializer(BaseModelSerializer):
 # ============================================================
 # COMMUNITY POST — CREATE INPUT
 # ============================================================
-
-
 class CommunityPostCreateSerializer(
     serializers.ModelSerializer,
 ):

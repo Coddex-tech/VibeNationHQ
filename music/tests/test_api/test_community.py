@@ -2906,3 +2906,304 @@ class CommunityPostCommentReportAPITests(APITestCase):
         self.assertIn("reason", response.data)
         self.assertIn("details", response.data)
         self.assertIn("created_at", response.data)
+
+
+
+
+class CommunityAccountPermissionTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="community_user",
+            password="testpass123",
+            email="communityuser@example.com",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.other_user = User.objects.create_user(
+            username="community_other",
+            password="testpass123",
+            email="communityother@example.com",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.incomplete_user = User.objects.create_user(
+            username="incomplete_user",
+            password="testpass123",
+            email="incomplete@example.com",
+            is_active=True,
+            onboarding_completed=False,
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="community_staff",
+            password="testpass123",
+            email="communitystaff@example.com",
+            is_active=True,
+        )
+        self.staff_user.is_staff = True
+        self.staff_user.save(update_fields=["is_staff"])
+
+        self.superuser = User.objects.create_superuser(
+            username="community_superuser",
+            password="testpass123",
+            email="communitysuperuser@example.com",
+        )
+
+        self.post = CommunityPost.objects.create(
+            user=self.user,
+            content="A published community post.",
+            status=CommunityPost.Status.PUBLISHED,
+        )
+
+        self.post_list_url = reverse(
+            "music_api:community-post-list",
+        )
+
+        self.post_detail_url = reverse(
+            "music_api:community-post-detail",
+            kwargs={"pk": self.post.id},
+        )
+
+    def test_anonymous_user_can_browse_published_posts(self):
+        response = self.client.get(self.post_list_url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_anonymous_user_cannot_create_post(self):
+        response = self.client.post(
+            self.post_list_url,
+            {"content": "An anonymous post."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self.assertFalse(
+            CommunityPost.objects.filter(
+                content="An anonymous post.",
+            ).exists()
+        )
+
+    def test_onboarded_user_can_create_post(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.post(
+            self.post_list_url,
+            {"content": "A post from an onboarded user."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+        )
+
+        self.assertTrue(
+            CommunityPost.objects.filter(
+                user=self.user,
+                content="A post from an onboarded user.",
+            ).exists()
+        )
+
+    def test_incomplete_user_cannot_create_post(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        response = self.client.post(
+            self.post_list_url,
+            {"content": "An incomplete user's post."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.assertFalse(
+            CommunityPost.objects.filter(
+                content="An incomplete user's post.",
+            ).exists()
+        )
+
+    def test_staff_user_cannot_create_post(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.post(
+            self.post_list_url,
+            {"content": "A staff post."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_superuser_cannot_create_post(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(
+            self.post_list_url,
+            {"content": "A superuser post."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_incomplete_user_can_still_browse_posts(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        response = self.client.get(self.post_list_url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_staff_user_can_still_browse_posts(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.get(self.post_list_url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_anonymous_user_can_view_published_post_detail(self):
+        response = self.client.get(self.post_detail_url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+    def test_incomplete_user_cannot_edit_post(self):
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        response = self.client.patch(
+            self.post_detail_url,
+            {"content": "Edited by an incomplete user."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_staff_user_cannot_edit_post(self):
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.patch(
+            self.post_detail_url,
+            {"content": "Edited by staff."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_superuser_cannot_edit_post(self):
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.patch(
+            self.post_detail_url,
+            {"content": "Edited by superuser."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_post_owner_can_edit_post(self):
+        self.client.force_authenticate(user=self.user)
+
+        response = self.client.patch(
+            self.post_detail_url,
+            {"content": "Updated by the owner."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.post.refresh_from_db()
+
+        self.assertEqual(
+            self.post.content,
+            "Updated by the owner.",
+        )
+
+    def test_other_onboarded_user_cannot_edit_post(self):
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.patch(
+            self.post_detail_url,
+            {"content": "Edited by another user."},
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.post.refresh_from_db()
+
+        self.assertEqual(
+            self.post.content,
+            "A published community post.",
+        )
+
+    def test_incomplete_user_cannot_record_post_view(self):
+        url = reverse(
+            "music_api:community-post-view",
+            kwargs={"pk": self.post.id},
+        )
+
+        self.client.force_authenticate(user=self.incomplete_user)
+
+        response = self.client.post(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_staff_user_cannot_record_post_view(self):
+        url = reverse(
+            "music_api:community-post-view",
+            kwargs={"pk": self.post.id},
+        )
+
+        self.client.force_authenticate(user=self.staff_user)
+
+        response = self.client.post(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_superuser_cannot_record_post_view(self):
+        url = reverse(
+            "music_api:community-post-view",
+            kwargs={"pk": self.post.id},
+        )
+
+        self.client.force_authenticate(user=self.superuser)
+
+        response = self.client.post(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )

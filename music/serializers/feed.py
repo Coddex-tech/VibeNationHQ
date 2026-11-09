@@ -2,21 +2,23 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from .catalog import (
-    AlbumCardSerializer,
-    ArtistCardSerializer,
-    SongCardSerializer,
-)
 from .community import CommunityPostSerializer
+from .editorial import EditorialArticleCardSerializer
 
 
 class MusicFeedItemSerializer(serializers.Serializer):
     """
-    Serializes one heterogeneous item in the music feed.
+    Serializes one item in the mixed music feed.
 
-    The feed service decides which object belongs in the feed;
-    this serializer only converts that object into its public
-    representation.
+    Supported feed items:
+    - Community posts
+    - Editorial articles
+
+    The feed service handles candidate generation, ranking,
+    personalization, diversity, mixing, and pagination.
+
+    This serializer only converts selected candidates into
+    their public representations.
     """
 
     content_type = serializers.CharField(
@@ -30,108 +32,19 @@ class MusicFeedItemSerializer(serializers.Serializer):
     content = serializers.SerializerMethodField()
 
     def get_content(self, candidate):
-        content_type = candidate.content_type
-        obj = candidate.object
-
-        if content_type == "community_post":
+        if candidate.content_type == "community_post":
             return CommunityPostSerializer(
-                obj,
+                candidate.object,
                 context=self.context,
             ).data
 
-        if content_type == "editorial":
-            return self._serialize_editorial(obj)
-
-        if content_type == "song":
-            return SongCardSerializer(
-                obj,
+        if candidate.content_type == "editorial":
+            return EditorialArticleCardSerializer(
+                candidate.object,
                 context=self.context,
             ).data
-
-        if content_type == "album":
-            return AlbumCardSerializer(
-                obj,
-                context=self.context,
-            ).data
-
-        if content_type == "artist":
-            artist_data = ArtistCardSerializer(
-                obj,
-                context=self.context,
-            ).data
-
-            artist_data["is_following"] = bool(
-                getattr(obj, "is_following", False)
-            )
-
-            return artist_data
 
         return None
-
-    def _serialize_editorial(self, obj):
-        """
-        Keep the feed editorial representation lightweight.
-
-        We intentionally do not use EditorialArticleCardSerializer
-        here because its `liked` field depends on
-        `user_has_liked`, which would require additional query
-        handling for feed-sized result sets.
-        """
-        author = obj.author
-
-        full_name = author.get_full_name().strip()
-
-        if full_name:
-            author_name = full_name
-        else:
-            author_name = (
-                getattr(author, "username", None)
-                or getattr(author, "email", "")
-            )
-
-        song = None
-
-        if obj.song is not None:
-            song = SongCardSerializer(
-                obj.song,
-                context=self.context,
-            ).data
-
-        artist = None
-
-        if obj.artist is not None:
-            artist = ArtistCardSerializer(
-                obj.artist,
-                context=self.context,
-            ).data
-
-        album = None
-
-        if obj.album is not None:
-            album = AlbumCardSerializer(
-                obj.album,
-                context=self.context,
-            ).data
-
-        return {
-            "id": obj.id,
-            "title": obj.title,
-            "slug": obj.slug,
-            "excerpt": obj.excerpt,
-            "author": {
-                "id": obj.author_id,
-                "name": author_name,
-            },
-            "song": song,
-            "artist": artist,
-            "album": album,
-            "status": obj.status,
-            "published_at": obj.published_at,
-            "is_featured": obj.is_featured,
-            "views_count": obj.views_count,
-            "likes_count": obj.likes_count,
-            "comments_count": obj.comments_count,
-        }
 
     def to_representation(self, candidate):
         return {
@@ -143,7 +56,7 @@ class MusicFeedItemSerializer(serializers.Serializer):
 
 class MusicFeedSerializer(serializers.Serializer):
     """
-    Public response serializer for the music feed endpoint.
+    Public response serializer for the mixed music feed endpoint.
     """
 
     results = MusicFeedItemSerializer(

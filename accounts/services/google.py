@@ -67,6 +67,7 @@ def verify_google_id_token(*, token):
         raise InvalidGoogleTokenError(
             "Google account email is not verified."
         )
+
     return idinfo
 
 
@@ -93,14 +94,15 @@ def resolve_google_user(*, claims):
     Resolve a VibeNationHQ user from verified Google claims.
 
     Existing Google identity:
-        Return the linked VibeNationHQ user.
+        Return the linked ordinary VibeNationHQ user.
 
     New Google identity:
-        Create a new VibeNationHQ user when no existing
-        VibeNationHQ account uses the verified email.
+        Create an active VibeNationHQ account when no existing
+        account uses the verified email.
 
-    Existing VibeNationHQ accounts are not automatically
-    linked to a new Google identity.
+    Google-created accounts must still complete onboarding.
+
+    Existing accounts are never automatically linked.
     """
 
     provider_subject = claims.get("sub")
@@ -129,6 +131,11 @@ def resolve_google_user(*, claims):
     if identity is not None:
         user = identity.user
 
+        if user.is_staff or user.is_superuser:
+            raise GoogleAccountError(
+                "Staff accounts cannot use public Google authentication."
+            )
+
         if not user.is_active:
             raise GoogleAccountError(
                 "This VibeNation account is inactive."
@@ -145,6 +152,11 @@ def resolve_google_user(*, claims):
     )
 
     if existing_user is not None:
+        if existing_user.is_staff or existing_user.is_superuser:
+            raise GoogleAccountError(
+                "Staff accounts cannot use public Google authentication."
+            )
+
         raise GoogleAccountError(
             "A VibeNation account already exists with this email. "
             "Sign in with your existing account to link Google."
@@ -154,6 +166,9 @@ def resolve_google_user(*, claims):
         email=email,
         password=None,
         is_active=True,
+        is_staff=False,
+        is_superuser=False,
+        onboarding_completed=False,
     )
 
     UserIdentity.objects.create(
@@ -162,19 +177,15 @@ def resolve_google_user(*, claims):
         provider_subject=provider_subject,
         email=email,
     )
+
     return user
 
 
-def login_with_google(
-    *,
-    token,
-):
+def login_with_google(*, token):
     """
     Authenticate a user with a Google ID token.
 
-    Returns the resolved VibeNationHQ user.
-    Session creation is handled by the web
-    authentication layer.
+    Session creation is handled by the web authentication layer.
     """
 
     claims = verify_google_id_token(

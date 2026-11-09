@@ -2,15 +2,15 @@
 
 import {
   Bookmark,
+  ChartNoAxesColumn,
   Eye,
   Heart,
   MessageCircle,
   Share2,
-  ChartNoAxesColumn,
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { apiRequest } from '@/lib/api';
+import { apiRequest, ApiError } from '@/lib/api';
 
 type MusicEngagementBarProps = {
   postId: number;
@@ -22,6 +22,7 @@ type MusicEngagementBarProps = {
   viewsCount: number;
   variant?: 'feed' | 'detail';
   onCommentsClick?: () => void;
+  likeCommentOnly?: boolean;
 };
 
 type CommunityPostLikeResponse = {
@@ -49,6 +50,7 @@ export default function MusicEngagementBar({
   viewsCount,
   variant = 'feed',
   onCommentsClick,
+  likeCommentOnly = false,
 }: MusicEngagementBarProps) {
   const [isLiked, setIsLiked] = useState(initialIsLiked);
   const [isLikeUpdating, setIsLikeUpdating] = useState(false);
@@ -59,28 +61,67 @@ export default function MusicEngagementBar({
   const [likeCount, setLikeCount] = useState(likesCount);
   const [favoriteCount, setFavoriteCount] = useState(favoritesCount);
   const [currentViewsCount, setCurrentViewsCount] = useState(viewsCount);
+  const [likeError, setLikeError] = useState('');
 
+  const likeLock = useRef(false);
+  const saveLock = useRef(false);
+  const activePostId = useRef(postId);
+
+  // Reset state when this component starts representing a different post.
+  // Do not repeatedly overwrite optimistic state with props for the same post.
   useEffect(() => {
+    if (activePostId.current === postId) return;
+
+    activePostId.current = postId;
+    likeLock.current = false;
+    saveLock.current = false;
+
     setIsLiked(initialIsLiked);
+    setIsLikeUpdating(false);
     setLikeCount(likesCount);
-  }, [initialIsLiked, likesCount]);
+    setLikeError('');
+
+    setIsSaved(initialIsFavorited);
+    setIsSaveUpdating(false);
+    setFavoriteCount(favoritesCount);
+
+    setCurrentViewsCount(viewsCount);
+  }, [
+    postId,
+    initialIsLiked,
+    likesCount,
+    initialIsFavorited,
+    favoritesCount,
+    viewsCount,
+  ]);
+
+  // Reconcile server-provided counts when they change, without replacing
+  // the user's in-flight optimistic like state.
+  useEffect(() => {
+    if (likeLock.current) return;
+    setLikeCount(likesCount);
+  }, [likesCount, postId]);
 
   useEffect(() => {
+    if (likeLock.current) return;
+    setIsLiked(initialIsLiked);
+  }, [initialIsLiked, postId]);
+
+  useEffect(() => {
+    if (saveLock.current) return;
     setIsSaved(initialIsFavorited);
     setFavoriteCount(favoritesCount);
-  }, [initialIsFavorited, favoritesCount]);
+  }, [initialIsFavorited, favoritesCount, postId]);
 
   useEffect(() => {
     setCurrentViewsCount(viewsCount);
-  }, [viewsCount]);
+  }, [viewsCount, postId]);
 
   useEffect(() => {
     function handleViewUpdate(event: Event) {
       const customEvent = event as CommunityPostViewUpdatedEvent;
 
-      if (customEvent.detail?.postId !== postId) {
-        return;
-      }
+      if (customEvent.detail?.postId !== postId) return;
 
       setCurrentViewsCount(customEvent.detail.viewsCount);
     }
@@ -99,51 +140,115 @@ export default function MusicEngagementBar({
   }, [postId]);
 
   const handleLike = async () => {
-    if (isLikeUpdating) {
-      return;
-    }
+    if (likeLock.current) return;
 
+    likeLock.current = true;
     setIsLikeUpdating(true);
+    setLikeError('');
+
+    const requestedPostId = postId;
+    const previousLiked = isLiked;
+    const previousCount = likeCount;
+    const nextLiked = !previousLiked;
+
+    setIsLiked(nextLiked);
+    setLikeCount(
+      Math.max(0, previousCount + (nextLiked ? 1 : -1)),
+    );
 
     try {
       const response = await apiRequest<CommunityPostLikeResponse>(
-        `/api/v1/music/community/posts/${postId}/like/`,
+        `/api/v1/music/community/posts/${requestedPostId}/like/`,
         {
-          method: isLiked ? 'DELETE' : 'POST',
+          method: nextLiked ? 'POST' : 'DELETE',
         },
       );
 
+      if (activePostId.current !== requestedPostId) return;
+
       setIsLiked(response.liked);
       setLikeCount(response.likes_count);
-    } catch {
-      // Keep the current UI state unchanged.
+    } catch (error) {
+      if (activePostId.current !== requestedPostId) return;
+
+      const message = getRequestErrorMessage(error);
+      const normalizedMessage = message.toLowerCase();
+
+      // The server already has this like. Treat the duplicate POST as
+      // reconciliation, not as a reason to revert the UI to "not liked".
+      if (
+        nextLiked &&
+        (normalizedMessage.includes('already liked') ||
+          normalizedMessage.includes('already like'))
+      ) {
+        setIsLiked(true);
+        setLikeCount(previousCount);
+        setLikeError('');
+      } else if (
+        !nextLiked &&
+        (normalizedMessage.includes('not liked') ||
+          normalizedMessage.includes('already unliked') ||
+          normalizedMessage.includes('no like'))
+      ) {
+        setIsLiked(false);
+        setLikeCount(Math.max(0, previousCount - 1));
+        setLikeError('');
+      } else {
+        setIsLiked(previousLiked);
+        setLikeCount(previousCount);
+        setLikeError(message);
+        console.error('Failed to update community post like:', error);
+      }
     } finally {
-      setIsLikeUpdating(false);
+      if (activePostId.current === requestedPostId) {
+        likeLock.current = false;
+        setIsLikeUpdating(false);
+      }
     }
   };
 
   const handleSave = async () => {
-    if (isSaveUpdating) {
-      return;
-    }
+    if (saveLock.current) return;
 
+    saveLock.current = true;
     setIsSaveUpdating(true);
 
+    const requestedPostId = postId;
+    const previousSaved = isSaved;
+    const previousCount = favoriteCount;
+    const nextSaved = !previousSaved;
+
+    setIsSaved(nextSaved);
+    setFavoriteCount(
+      Math.max(0, previousCount + (nextSaved ? 1 : -1)),
+    );
+
     try {
-      const response =
-        await apiRequest<CommunityPostFavoriteResponse>(
-          `/api/v1/music/community/posts/${postId}/favorite/`,
-          {
-            method: isSaved ? 'DELETE' : 'POST',
-          },
-        );
+      const response = await apiRequest<CommunityPostFavoriteResponse>(
+        `/api/v1/music/community/posts/${requestedPostId}/favorite/`,
+        {
+          method: nextSaved ? 'POST' : 'DELETE',
+        },
+      );
+
+      if (activePostId.current !== requestedPostId) return;
 
       setIsSaved(response.favorited);
       setFavoriteCount(response.favorites_count);
-    } catch {
-      // Keep the current UI state unchanged.
+    } catch (error) {
+      if (activePostId.current !== requestedPostId) return;
+
+      setIsSaved(previousSaved);
+      setFavoriteCount(previousCount);
+      console.error(
+        'Failed to update community post favorite:',
+        error,
+      );
     } finally {
-      setIsSaveUpdating(false);
+      if (activePostId.current === requestedPostId) {
+        saveLock.current = false;
+        setIsSaveUpdating(false);
+      }
     }
   };
 
@@ -151,17 +256,14 @@ export default function MusicEngagementBar({
     const shareUrl =
       typeof window !== 'undefined' ? window.location.href : '';
 
-    if (
-      typeof navigator !== 'undefined' &&
-      navigator.share
-    ) {
+    if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
           title: 'VibeNationHQ',
           url: shareUrl,
         });
       } catch {
-        // The user cancelled the native share sheet, or sharing failed.
+        // Sharing may be cancelled by the user.
       }
 
       return;
@@ -175,7 +277,7 @@ export default function MusicEngagementBar({
       try {
         await navigator.clipboard.writeText(shareUrl);
       } catch {
-        // Clipboard access may be unavailable.
+        console.error('Unable to copy the share link.');
       }
     }
   };
@@ -183,20 +285,17 @@ export default function MusicEngagementBar({
   return (
     <div
       className={`
-        text-light-text-soft
-        dark:text-dark-text-soft
-        ${variant === 'detail' ? 'space-y-3' : ''}
+        text-light-text-soft dark:text-dark-text-soft
+        ${variant === 'detail' ? 'space-y-2' : ''}
       `}
     >
-      {variant === 'detail' && (
+      {variant === 'detail' && !likeCommentOnly && (
         <div
           className="
             flex items-center gap-2
-            border-b border-light-border
-            pb-3 text-sm font-medium
-            text-light-text-soft
+            border-b border-light-border pb-3
+            text-sm font-medium
             dark:border-dark-border
-            dark:text-dark-text-soft
           "
           aria-label={`${formatCount(currentViewsCount)} views`}
         >
@@ -205,7 +304,6 @@ export default function MusicEngagementBar({
             strokeWidth={1.9}
             aria-hidden="true"
           />
-
           <span>{formatCount(currentViewsCount)} views</span>
         </div>
       )}
@@ -216,26 +314,19 @@ export default function MusicEngagementBar({
           ${variant === 'detail' ? 'gap-2' : ''}
         `}
       >
-        <div
-          className="
-            flex min-w-0 flex-wrap
-            items-center gap-1 sm:gap-2
-          "
-        >
+        <div className="flex min-w-0 flex-wrap items-center gap-1 sm:gap-2">
           <button
             type="button"
-            onClick={handleLike}
+            onClick={() => void handleLike()}
             disabled={isLikeUpdating}
             aria-label={isLiked ? 'Unlike post' : 'Like post'}
             aria-pressed={isLiked}
             className={`
               inline-flex min-h-9 min-w-9
               items-center justify-center gap-1.5
-              rounded-full px-2.5
-              text-xs font-medium
-              transition-all duration-200
-              focus:outline-none
-              focus-visible:ring-4
+              rounded-full px-2.5 text-xs font-medium
+              transition-colors duration-200
+              focus:outline-none focus-visible:ring-4
               focus-visible:ring-brand-teal/15
               disabled:cursor-wait disabled:opacity-60
               ${
@@ -249,9 +340,14 @@ export default function MusicEngagementBar({
               className="h-[17px] w-[17px]"
               fill={isLiked ? 'currentColor' : 'none'}
               strokeWidth={1.9}
+              aria-hidden="true"
             />
 
-            {likeCount > 0 && <span>{formatCount(likeCount)}</span>}
+            {likeCount > 0 && (
+              <span aria-live="polite">
+                {formatCount(likeCount)}
+              </span>
+            )}
           </button>
 
           <button
@@ -263,21 +359,19 @@ export default function MusicEngagementBar({
                 : `View ${commentsCount} comments`
             }
             className="
-              inline-flex min-h-9 min-w-9
-              items-center justify-center gap-1.5
-              rounded-full px-2.5
-              text-xs font-medium
-              transition-colors duration-200
+              inline-flex min-h-9 min-w-9 items-center
+              justify-center gap-1.5 rounded-full px-2.5
+              text-xs font-medium transition-colors duration-200
               hover:bg-light-surface-soft hover:text-light-text
               dark:hover:bg-dark-surface-soft dark:hover:text-dark-text
-              focus:outline-none
-              focus-visible:ring-4
+              focus:outline-none focus-visible:ring-4
               focus-visible:ring-brand-teal/15
             "
           >
             <MessageCircle
               className="h-[17px] w-[17px]"
               strokeWidth={1.9}
+              aria-hidden="true"
             />
 
             {commentsCount > 0 && (
@@ -285,69 +379,71 @@ export default function MusicEngagementBar({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaveUpdating}
-            aria-label={isSaved ? 'Remove post from saved' : 'Save post'}
-            aria-pressed={isSaved}
-            className={`
-              inline-flex min-h-9 min-w-9
-              items-center justify-center gap-1.5
-              rounded-full px-2.5
-              text-xs font-medium
-              transition-all duration-200
-              focus:outline-none
-              focus-visible:ring-4
-              focus-visible:ring-brand-teal/15
-              disabled:cursor-wait disabled:opacity-60
-              ${
-                isSaved
-                  ? 'bg-brand-teal/10 text-brand-teal-dark dark:bg-brand-teal/15 dark:text-brand-teal-light'
-                  : 'hover:bg-light-surface-soft hover:text-light-text dark:hover:bg-dark-surface-soft dark:hover:text-dark-text'
-              }
-            `}
-          >
-            <Bookmark
-              className="h-[17px] w-[17px]"
-              fill={isSaved ? 'currentColor' : 'none'}
-              strokeWidth={1.9}
-            />
+          {!likeCommentOnly && (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleSave()}
+                disabled={isSaveUpdating}
+                aria-label={
+                  isSaved ? 'Remove post from saved' : 'Save post'
+                }
+                aria-pressed={isSaved}
+                className={`
+                  inline-flex min-h-9 min-w-9
+                  items-center justify-center gap-1.5
+                  rounded-full px-2.5 text-xs font-medium
+                  transition-colors duration-200
+                  focus:outline-none focus-visible:ring-4
+                  focus-visible:ring-brand-teal/15
+                  disabled:cursor-wait disabled:opacity-60
+                  ${
+                    isSaved
+                      ? 'bg-brand-teal/10 text-brand-teal-dark dark:bg-brand-teal/15 dark:text-brand-teal-light'
+                      : 'hover:bg-light-surface-soft hover:text-light-text dark:hover:bg-dark-surface-soft dark:hover:text-dark-text'
+                  }
+                `}
+              >
+                <Bookmark
+                  className="h-[17px] w-[17px]"
+                  fill={isSaved ? 'currentColor' : 'none'}
+                  strokeWidth={1.9}
+                  aria-hidden="true"
+                />
 
-            {favoriteCount > 0 && (
-              <span>{formatCount(favoriteCount)}</span>
-            )}
-          </button>
+                {favoriteCount > 0 && (
+                  <span>{formatCount(favoriteCount)}</span>
+                )}
+              </button>
 
-          <button
-            type="button"
-            onClick={handleShare}
-            aria-label="Share post"
-            className="
-              inline-flex min-h-9 min-w-9
-              items-center justify-center
-              rounded-full px-2.5
-              transition-colors duration-200
-              hover:bg-light-surface-soft hover:text-light-text
-              dark:hover:bg-dark-surface-soft dark:hover:text-dark-text
-              focus:outline-none
-              focus-visible:ring-4
-              focus-visible:ring-brand-teal/15
-            "
-          >
-            <Share2
-              className="h-[17px] w-[17px]"
-              strokeWidth={1.9}
-            />
-          </button>
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                aria-label="Share post"
+                className="
+                  inline-flex min-h-9 min-w-9 items-center
+                  justify-center rounded-full px-2.5
+                  transition-colors duration-200
+                  hover:bg-light-surface-soft hover:text-light-text
+                  dark:hover:bg-dark-surface-soft dark:hover:text-dark-text
+                  focus:outline-none focus-visible:ring-4
+                  focus-visible:ring-brand-teal/15
+                "
+              >
+                <Share2
+                  className="h-[17px] w-[17px]"
+                  strokeWidth={1.9}
+                  aria-hidden="true"
+                />
+              </button>
+            </>
+          )}
 
-          {variant === 'feed' && (
+          {variant === 'feed' && !likeCommentOnly && (
             <div
               className="
-                inline-flex min-h-9
-                items-center gap-1.5
-                rounded-full px-2.5
-                text-xs font-medium
+                inline-flex min-h-9 items-center gap-1.5
+                rounded-full px-2.5 text-xs font-medium
                 text-light-text-soft dark:text-dark-text-soft
               "
               aria-label={`${formatCount(currentViewsCount)} views`}
@@ -357,14 +453,34 @@ export default function MusicEngagementBar({
                 strokeWidth={1.9}
                 aria-hidden="true"
               />
-
               <span>{formatCount(currentViewsCount)}</span>
             </div>
           )}
         </div>
       </div>
+
+      {likeError && (
+        <p
+          role="status"
+          className="pt-1 text-xs text-red-600 dark:text-red-400"
+        >
+          {likeError}
+        </p>
+      )}
     </div>
   );
+}
+
+function getRequestErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message || 'The like could not be updated.';
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'The like could not be updated. Please try again.';
 }
 
 function formatCount(count: number): string {

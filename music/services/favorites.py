@@ -7,6 +7,8 @@ from music.models import (
     Album,
     SongFavorite,
     AlbumFavorite,
+    EditorialArticle,
+    EditorialArticleFavorite,
 )
 
 
@@ -166,6 +168,86 @@ class AlbumFavoriteService:
 
         Album.objects.filter(
             pk=album_id,
+            favorites_count__gt=0,
+        ).update(
+            favorites_count=models.F("favorites_count") - 1,
+        )
+
+
+# ============================================================
+# EDITORIAL ARTICLE FAVORITES
+# ============================================================
+
+class EditorialArticleFavoriteService:
+    """
+    Business logic for users favoriting editorial articles.
+    """
+
+    @staticmethod
+    @transaction.atomic
+    def create(
+        *,
+        user,
+        article: EditorialArticle,
+    ) -> EditorialArticleFavorite:
+        """
+        Favorite a published editorial article.
+
+        A user can only favorite an article once.
+        """
+
+        if article.status != EditorialArticle.Status.PUBLISHED:
+            raise ValidationError(
+                "You can only favorite published articles."
+            )
+
+        if EditorialArticleFavorite.objects.filter(
+            user=user,
+            article=article,
+        ).exists():
+            raise ValidationError(
+                "You have already favorited this article."
+            )
+
+        try:
+            favorite = EditorialArticleFavorite.objects.create(
+                user=user,
+                article=article,
+            )
+        except IntegrityError:
+            raise ValidationError(
+                "You have already favorited this article."
+            )
+
+        EditorialArticle.objects.filter(
+            pk=article.pk,
+        ).update(
+            favorites_count=models.F("favorites_count") + 1,
+        )
+
+        return favorite
+
+    @staticmethod
+    @transaction.atomic
+    def delete(
+        *,
+        favorite_instance: EditorialArticleFavorite,
+    ) -> None:
+        """
+        Remove an article favorite and safely decrement its counter.
+        """
+
+        article_id = favorite_instance.article_id
+
+        deleted, _ = EditorialArticleFavorite.objects.filter(
+            pk=favorite_instance.pk,
+        ).delete()
+
+        if not deleted:
+            return
+
+        EditorialArticle.objects.filter(
+            pk=article_id,
             favorites_count__gt=0,
         ).update(
             favorites_count=models.F("favorites_count") - 1,

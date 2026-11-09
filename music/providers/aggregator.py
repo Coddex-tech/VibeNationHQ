@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import replace
 
 from .base import (
+    MusicEntityType,
     MusicProviderError,
     MusicSearchQuery,
     MusicSearchResult,
@@ -13,19 +16,18 @@ from .registry import MusicProviderRegistry
 
 class MusicSearchAggregator:
     """
-    Combines search results from all registered music providers.
+    Combines normalized search results from registered music providers.
 
-    Providers remain responsible for fetching and normalizing
-    their own data. The aggregator combines those normalized
-    results into one VibeNationHQ search result set.
-
-    The aggregator is intentionally provider-agnostic so that
-    additional providers can be added later without changing
-    the search flow.
+    Responsibilities:
+    - Query registered providers independently.
+    - Continue when an individual provider fails.
+    - Deduplicate equivalent songs, albums, and artists.
+    - Merge useful metadata from duplicate results.
+    - Rank the combined results.
+    - Respect the requested result limit.
     """
 
     MAX_PROVIDER_RESULTS = 50
-    PROVIDER_RESULT_MULTIPLIER = 3
 
     def __init__(
         self,
@@ -51,33 +53,28 @@ class MusicSearchAggregator:
         if not query.query.strip():
             return []
 
-        provider_limit = min(
-            max(
-                query.limit
-                * self.PROVIDER_RESULT_MULTIPLIER,
-                query.limit,
-            ),
+        normalized_limit = min(
+            max(query.limit, 1),
             self.MAX_PROVIDER_RESULTS,
         )
 
         provider_query = replace(
             query,
-            limit=provider_limit,
+            limit=normalized_limit,
         )
 
         results: list[MusicSearchResult] = []
 
         for provider in self.registry.all():
             try:
-                provider_results = provider.search(
-                    provider_query
-                )
+                provider_results = provider.search(provider_query)
             except MusicProviderError:
                 # A single provider being unavailable should not
                 # prevent other providers from returning results.
                 continue
 
-            results.extend(provider_results)
+            if provider_results:
+                results.extend(provider_results)
 
         deduplicated = self._deduplicate(results)
 
@@ -86,52 +83,142 @@ class MusicSearchAggregator:
             results=deduplicated,
         )
 
-        return ranked[:query.limit]
+        return ranked[:normalized_limit]
 
     def _deduplicate(
         self,
         results: list[MusicSearchResult],
     ) -> list[MusicSearchResult]:
+        """
+        Deduplicate results using indexed candidate keys.
+
+        Candidate indexes avoid comparing every incoming result
+        against every result already collected. Final duplicate
+        decisions still use entity-specific matching rules.
+        """
+
         deduplicated: list[MusicSearchResult] = []
 
+        indexes: dict[tuple[str, ...], list[int]] = {}
+
         for result in results:
-            duplicate_index = self._find_duplicate(
-                result=result,
-                existing=deduplicated,
+            candidate_indexes: set[int] = set()
+
+            for key in self._duplicate_keys(result):
+                candidate_indexes.update(indexes.get(key, []))
+
+            duplicate_index = next(
+                (
+                    index
+                    for index in sorted(candidate_indexes)
+                    if self._are_duplicates(
+                        result,
+                        deduplicated[index],
+                    )
+                ),
+                None,
             )
 
             if duplicate_index is None:
+                result_index = len(deduplicated)
                 deduplicated.append(result)
-                continue
+            else:
+                result_index = duplicate_index
 
-            existing = deduplicated[duplicate_index]
-
-            deduplicated[duplicate_index] = (
-                self._merge_results(
-                    existing=existing,
+                deduplicated[result_index] = self._merge_results(
+                    existing=deduplicated[result_index],
                     incoming=result,
                 )
-            )
+
+            # Index both the incoming result and the merged result.
+            # This preserves lookup paths if the preferred metadata
+            # comes from a different provider.
+            for indexed_result in (
+                result,
+                deduplicated[result_index],
+            ):
+                for key in self._duplicate_keys(indexed_result):
+                    bucket = indexes.setdefault(key, [])
+
+                    if result_index not in bucket:
+                        bucket.append(result_index)
 
         return deduplicated
 
-    def _find_duplicate(
-        self,
-        *,
+    @classmethod
+    def _duplicate_keys(
+        cls,
         result: MusicSearchResult,
-        existing: list[MusicSearchResult],
-    ) -> int | None:
-        for index, candidate in enumerate(existing):
-            if result.entity_type != candidate.entity_type:
-                continue
+    ) -> list[tuple[str, ...]]:
+        """
+        Generate conservative keys for finding possible duplicates.
 
-            if self._same_isrc(result, candidate):
-                return index
+        Keys identify candidates only; _are_duplicates() makes the
+        final decision.
+        """
 
-            if self._same_recording(result, candidate):
-                return index
+        keys: list[tuple[str, ...]] = []
+        entity_type = result.entity_type
 
-        return None
+        if result.isrc:
+            normalized_isrc = result.isrc.strip().upper()
+
+            if normalized_isrc:
+                keys.append(
+                    ("isrc", str(entity_type), normalized_isrc)
+                )
+
+        title = cls._normalize_text(result.title)
+        artist = cls._normalize_text(result.artist_name)
+
+        if entity_type == MusicEntityType.SONG:
+            if title and artist:
+                keys.append(
+                    ("song", title, artist)
+                )
+
+        elif entity_type == MusicEntityType.ALBUM:
+            if title and artist:
+                keys.append(
+                    ("album", title, artist)
+                )
+
+        elif entity_type == MusicEntityType.ARTIST:
+            # Artist providers commonly put the artist's name in
+            # the normalized result's title field.
+            artist_title = title or artist
+
+            if artist_title:
+                keys.append(
+                    ("artist", artist_title)
+                )
+
+        return keys
+
+    @classmethod
+    def _are_duplicates(
+        cls,
+        first: MusicSearchResult,
+        second: MusicSearchResult,
+    ) -> bool:
+        """Apply entity-specific rules to candidate duplicates."""
+
+        if first.entity_type != second.entity_type:
+            return False
+
+        if cls._same_isrc(first, second):
+            return True
+
+        if first.entity_type == MusicEntityType.SONG:
+            return cls._same_recording(first, second)
+
+        if first.entity_type == MusicEntityType.ALBUM:
+            return cls._same_album(first, second)
+
+        if first.entity_type == MusicEntityType.ARTIST:
+            return cls._same_artist(first, second)
+
+        return False
 
     @staticmethod
     def _same_isrc(
@@ -146,32 +233,24 @@ class MusicSearchAggregator:
             == second.isrc.strip().upper()
         )
 
-    @staticmethod
+    @classmethod
     def _same_recording(
+        cls,
         first: MusicSearchResult,
         second: MusicSearchResult,
     ) -> bool:
         """
-        Conservative fallback when an ISRC is unavailable.
+        Match songs conservatively when an ISRC is unavailable.
 
-        Results are only merged when the title, artist and
-        duration are sufficiently aligned. This intentionally
-        avoids aggressive fuzzy matching.
+        Require the same normalized title, artist credit, and
+        durations within two seconds.
         """
 
-        first_title = MusicSearchAggregator._normalize_text(
-            first.title
-        )
-        second_title = MusicSearchAggregator._normalize_text(
-            second.title
-        )
+        first_title = cls._normalize_text(first.title)
+        second_title = cls._normalize_text(second.title)
 
-        first_artist = MusicSearchAggregator._normalize_text(
-            first.artist_name
-        )
-        second_artist = MusicSearchAggregator._normalize_text(
-            second.artist_name
-        )
+        first_artist = cls._normalize_text(first.artist_name)
+        second_artist = cls._normalize_text(second.artist_name)
 
         if not first_title or not second_title:
             return False
@@ -199,6 +278,57 @@ class MusicSearchAggregator:
             <= 2
         )
 
+    @classmethod
+    def _same_album(
+        cls,
+        first: MusicSearchResult,
+        second: MusicSearchResult,
+    ) -> bool:
+        """
+        Match albums by normalized title and artist.
+
+        Album duration is deliberately not used because providers
+        can report different durations or omit them entirely.
+        """
+
+        first_title = cls._normalize_text(first.title)
+        second_title = cls._normalize_text(second.title)
+
+        first_artist = cls._normalize_text(first.artist_name)
+        second_artist = cls._normalize_text(second.artist_name)
+
+        if not first_title or not second_title:
+            return False
+
+        if not first_artist or not second_artist:
+            return False
+
+        return (
+            first_title == second_title
+            and first_artist == second_artist
+        )
+
+    @classmethod
+    def _same_artist(
+        cls,
+        first: MusicSearchResult,
+        second: MusicSearchResult,
+    ) -> bool:
+        """Match artist entities by their normalized display names."""
+
+        first_name = cls._normalize_text(
+            first.title or first.artist_name
+        )
+        second_name = cls._normalize_text(
+            second.title or second.artist_name
+        )
+
+        return bool(
+            first_name
+            and second_name
+            and first_name == second_name
+        )
+
     @staticmethod
     def _normalize_text(
         value: str | None,
@@ -206,9 +336,19 @@ class MusicSearchAggregator:
         if not value:
             return ""
 
-        return " ".join(
-            value.casefold().strip().split()
+        value = unicodedata.normalize(
+            "NFKC",
+            value,
+        ).casefold()
+
+        value = re.sub(
+            r"[^\w\s]",
+            " ",
+            value,
+            flags=re.UNICODE,
         )
+
+        return " ".join(value.split())
 
     @staticmethod
     def _merge_results(
@@ -217,12 +357,8 @@ class MusicSearchAggregator:
         incoming: MusicSearchResult,
     ) -> MusicSearchResult:
         """
-        Keep the richer result while filling missing metadata
-        from the other provider.
-
-        The aggregator does not assume a specific provider is
-        always preferred. Provider-specific quality decisions
-        belong in the provider ranking layer.
+        Prefer the result with more useful metadata while filling
+        missing fields from the other provider.
         """
 
         preferred = MusicSearchAggregator._choose_preferred(
@@ -299,18 +435,53 @@ class MusicSearchAggregator:
         )
 
     @staticmethod
+    def _result_completeness(
+        result: MusicSearchResult,
+    ) -> int:
+        """Estimate metadata completeness for merge selection."""
+
+        values = (
+            result.artist_name,
+            result.album_name,
+            result.artwork_url,
+            result.release_date,
+            result.duration_seconds,
+            result.preview_url,
+            result.spotify_url,
+            result.apple_music_url,
+            result.youtube_url,
+            result.audiomack_url,
+            result.boomplay_url,
+            result.isrc,
+        )
+
+        completeness = sum(
+            value is not None and value != ""
+            for value in values
+        )
+
+        return completeness + len(result.metadata)
+
+    @staticmethod
     def _choose_preferred(
         first: MusicSearchResult,
         second: MusicSearchResult,
     ) -> MusicSearchResult:
         """
-        Select the richer result when duplicate entities
-        are returned by different providers.
+        Select the result with more available metadata.
 
-        With only one active provider today, this normally
-        returns the first result unchanged. The method remains
-        provider-agnostic so future provider quality rules
-        can be introduced without changing the aggregation flow.
+        Equal scores retain the first result for deterministic
+        selection.
         """
+
+        first_score = MusicSearchAggregator._result_completeness(
+            first
+        )
+        second_score = MusicSearchAggregator._result_completeness(
+            second
+        )
+
+        if second_score > first_score:
+            return second
 
         return first

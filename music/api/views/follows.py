@@ -1,6 +1,7 @@
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+
+from accounts.api.permissions import IsOrdinaryVibeNationUser
 
 from music.models import (
     Artist,
@@ -40,7 +41,7 @@ class ArtistFollowAPIView(generics.GenericAPIView):
     queryset = Artist.objects.filter(
         is_active=True,
     )
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def post(self, request, *args, **kwargs):
         artist = self.get_object()
@@ -121,7 +122,7 @@ class UserFollowAPIView(generics.GenericAPIView):
     DELETE -> unfollow user
     """
 
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsOrdinaryVibeNationUser]
 
     def get_queryset(self):
         """

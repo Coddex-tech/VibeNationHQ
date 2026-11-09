@@ -1,8 +1,10 @@
+
 from __future__ import annotations
 
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from rest_framework.exceptions import ValidationError
 
 from music.models import (
     Album,
@@ -16,29 +18,96 @@ from music.models import (
 
 class MusicFeedInteractionService:
     """
-    Records behavioral interactions used by the VibeNationHQ
-    music feed and recommendation system.
+    Records behavioral interaction history for VibeNationHQ.
 
     Persistent relationships such as favorites, ratings, likes,
     and follows remain the source of truth in their respective
     models.
 
-    This service records behavioral history after those actions
-    succeed.
+    This service records behavioral history after successful
+    actions.
 
-    Examples:
-
-        MusicFeedInteractionService.record_song_view(...)
-        MusicFeedInteractionService.record_preview_play(...)
-        MusicFeedInteractionService.record_artist_view(...)
+    Passive interactions can be recorded through the public
+    interaction API. Engagement interactions must be recorded
+    server-side after their corresponding persistent action
+    succeeds.
     """
+
+    TARGET_FIELDS = (
+        "song",
+        "album",
+        "artist",
+        "community_post",
+        "editorial_article",
+    )
 
     # ========================================================
     # Internal helpers
     # ========================================================
 
-    @staticmethod
+    @classmethod
+    def _get_target_ids(
+        cls,
+        *,
+        song: Song | None = None,
+        album: Album | None = None,
+        artist: Artist | None = None,
+        community_post: CommunityPost | None = None,
+        editorial_article: EditorialArticle | None = None,
+    ) -> dict:
+        targets = {
+            "song": song,
+            "album": album,
+            "artist": artist,
+            "community_post": community_post,
+            "editorial_article": editorial_article,
+        }
+
+        return {
+            field: (
+                target.pk
+                if target is not None
+                else None
+            )
+            for field, target in targets.items()
+        }
+
+    @classmethod
+    def _matches_existing_event(
+        cls,
+        *,
+        existing: MusicFeedInteraction,
+        user,
+        interaction_type: str,
+        target_ids: dict,
+    ) -> bool:
+        """
+        Check whether an existing event represents exactly
+        the same request.
+
+        An idempotency key cannot be reused for another user,
+        interaction type, or target.
+        """
+        if existing.user_id != user.pk:
+            return False
+
+        if existing.interaction_type != interaction_type:
+            return False
+
+        for field in cls.TARGET_FIELDS:
+            existing_target_id = getattr(
+                existing,
+                f"{field}_id",
+            )
+
+            if existing_target_id != target_ids[field]:
+                return False
+
+        return True
+
+    @classmethod
     def _record(
+        cls,
         *,
         user,
         interaction_type: str,
@@ -52,10 +121,22 @@ class MusicFeedInteractionService:
         """
         Create one behavioral interaction.
 
-        The database constraint on MusicFeedInteraction remains
-        the final authority for validating the target/type
-        combination.
+        Identical retries using the same idempotency key return
+        the original event.
+
+        Reusing a key for a different event raises a validation
+        error.
+
+        The nested atomic block ensures an IntegrityError does
+        not leave an enclosing transaction in a broken state.
         """
+        target_ids = cls._get_target_ids(
+            song=song,
+            album=album,
+            artist=artist,
+            community_post=community_post,
+            editorial_article=editorial_article,
+        )
 
         try:
             with transaction.atomic():
@@ -71,8 +152,6 @@ class MusicFeedInteractionService:
                 )
 
         except IntegrityError:
-            # An idempotency key may have already been processed
-            # because the client retried the same request.
             if idempotency_key is None:
                 raise
 
@@ -86,6 +165,22 @@ class MusicFeedInteractionService:
 
             if existing is None:
                 raise
+
+            if not cls._matches_existing_event(
+                existing=existing,
+                user=user,
+                interaction_type=interaction_type,
+                target_ids=target_ids,
+            ):
+                raise ValidationError(
+                    {
+                        "idempotency_key": (
+                            "This idempotency key has already "
+                            "been used for a different "
+                            "interaction."
+                        )
+                    }
+                )
 
             return existing
 
@@ -321,6 +416,24 @@ class MusicFeedInteractionService:
             community_post=post,
         )
 
+    @classmethod
+    def record_community_post_favorite(
+        cls,
+        *,
+        user,
+        post: CommunityPost,
+        idempotency_key: UUID | None = None,
+    ) -> MusicFeedInteraction:
+        return cls._record(
+            user=user,
+            interaction_type=(
+                MusicFeedInteraction.InteractionType
+                .FAVORITE_COMMUNITY_POST
+            ),
+            idempotency_key=idempotency_key,
+            community_post=post,
+        )
+
     # ========================================================
     # Editorial interactions
     # ========================================================
@@ -356,6 +469,24 @@ class MusicFeedInteractionService:
             interaction_type=(
                 MusicFeedInteraction.InteractionType
                 .LIKE_EDITORIAL
+            ),
+            idempotency_key=idempotency_key,
+            editorial_article=article,
+        )
+
+    @classmethod
+    def record_editorial_favorite(
+        cls,
+        *,
+        user,
+        article: EditorialArticle,
+        idempotency_key: UUID | None = None,
+    ) -> MusicFeedInteraction:
+        return cls._record(
+            user=user,
+            interaction_type=(
+                MusicFeedInteraction.InteractionType
+                .FAVORITE_EDITORIAL
             ),
             idempotency_key=idempotency_key,
             editorial_article=article,

@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -32,7 +33,7 @@ export default function VerifyEmailSuccessPage() {
                   </div>
 
                   <h1 className="mt-6 text-4xl font-bold tracking-tight text-light-text dark:text-dark-text xl:text-5xl">
-                    You&apos;re all set.
+                    One step closer.
                     <span className="text-brand-teal">
                       {' '}
                       Welcome to the Vibe.
@@ -40,9 +41,9 @@ export default function VerifyEmailSuccessPage() {
                   </h1>
 
                   <p className="mt-5 max-w-lg text-base leading-7 text-light-text-muted dark:text-dark-text-muted">
-                    Your email has been successfully verified. Your
-                    VibeNationHQ account is now ready. Take a moment to
-                    personalize your music experience before you dive in.
+                    Your email has been successfully verified.
+                    Now let's finish setting up your VibeNationHQ
+                    account so you can join the community.
                   </p>
                 </div>
               </div>
@@ -59,9 +60,9 @@ export default function VerifyEmailSuccessPage() {
                     </p>
 
                     <p className="mt-1 text-sm leading-6 text-light-text-muted dark:text-dark-text-muted">
-                      A verified email gives you a trusted way to receive
-                      important account messages and recover access when
-                      needed.
+                      A verified email gives you a trusted way
+                      to receive important account messages and
+                      recover access when needed.
                     </p>
                   </div>
                 </div>
@@ -93,12 +94,13 @@ export default function VerifyEmailSuccessPage() {
 
                 <div className="mt-7">
                   <h2 className="text-3xl font-bold tracking-tight text-light-text dark:text-dark-text">
-                    Email verified
+                    Email verified!
                   </h2>
 
                   <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-light-text-muted dark:text-dark-text-muted">
-                    Your email address has been successfully verified.
-                    Your VibeNationHQ account is ready to go.
+                    Your email address has been successfully
+                    verified. There's just one more required
+                    step before you get started.
                   </p>
                 </div>
 
@@ -115,31 +117,32 @@ export default function VerifyEmailSuccessPage() {
                       </p>
 
                       <p className="mt-0.5 text-xs text-light-text-muted dark:text-dark-text-muted">
-                        Your account email is now trusted.
+                        Your account email is now verified.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Personalization prompt */}
+                {/* Account setup prompt */}
                 <div className="mt-5 rounded-2xl border border-light-border-soft bg-light-surface-soft p-5 text-left dark:border-dark-border-soft dark:bg-dark-surface-soft">
                   <p className="text-sm font-semibold text-light-text dark:text-dark-text">
-                    One quick step before you start
+                    Let's set up your profile
                   </p>
 
                   <p className="mt-1 text-sm leading-6 text-light-text-muted dark:text-dark-text-muted">
-                    Choose the music genres you enjoy so we can make your
-                    music feed more relevant to your Vibe.
+                    Choose your display name and a unique
+                    username. These will help people recognise
+                    you across VibeNationHQ.
                   </p>
                 </div>
 
                 {/* Continue */}
                 <div className="mt-7">
                   <Link
-                    href="/music/onboarding/genres"
+                    href="/account/setup"
                     className="flex w-full items-center justify-center rounded-xl bg-brand-teal px-4 py-3.5 text-sm font-semibold text-white shadow-sm shadow-brand-teal/20 transition hover:bg-brand-teal-dark focus:outline-none focus:ring-4 focus:ring-brand-teal/20 active:scale-[0.99]"
                   >
-                    Countinue
+                    Set up my account
                   </Link>
                 </div>
 
@@ -148,8 +151,9 @@ export default function VerifyEmailSuccessPage() {
                   <ShieldCheckIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-teal" />
 
                   <p className="text-xs leading-5 text-light-text-soft dark:text-dark-text-soft">
-                    Keep your account details secure and never share your
-                    password or verification links with anyone.
+                    Keep your account details secure and never
+                    share your password or verification links
+                    with anyone.
                   </p>
                 </div>
 

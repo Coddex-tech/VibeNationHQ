@@ -447,26 +447,6 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {
-                        "title": "Song Ratings",
-                        "link": reverse_lazy(
-                            "admin:music_songrating_changelist"
-                        ),
-                        "icon": "star",
-                        "permission": lambda request: request.user.has_perm(
-                            "music.view_songrating"
-                        ),
-                    },
-                    {
-                        "title": "Album Ratings",
-                        "link": reverse_lazy(
-                            "admin:music_albumrating_changelist"
-                        ),
-                        "icon": "star_rate",
-                        "permission": lambda request: request.user.has_perm(
-                            "music.view_albumrating"
-                        ),
-                    },
-                    {
                         "title": "Song Favorites",
                         "link": reverse_lazy(
                             "admin:music_songfavorite_changelist"

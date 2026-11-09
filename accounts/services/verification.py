@@ -1,11 +1,11 @@
+
 import hashlib
 from datetime import timedelta
 
-from django.db import transaction
-from django.utils import timezone
 from django.conf import settings
 from django.core.mail import send_mail
-from django.utils.crypto import constant_time_compare
+from django.db import transaction
+from django.utils import timezone
 
 from ..models import EmailVerificationToken
 
@@ -30,7 +30,7 @@ def create_email_verification_token(user):
     """
     Create or replace the email verification token for a user.
 
-    Returns:Email
+    Returns:
         tuple[EmailVerificationToken, str]:
             The database token object and the raw token.
     """
@@ -63,6 +63,8 @@ def verify_email_token(*, raw_token):
     """
     Verify an email verification token.
 
+    Activates the user's account but does not complete onboarding.
+
     Returns:
         User
 
@@ -74,11 +76,9 @@ def verify_email_token(*, raw_token):
 
     try:
         verification_token = (
-            EmailVerificationToken.objects.select_related(
-                "user"
-            ).get(
-                token_hash=token_hash,
-            )
+            EmailVerificationToken.objects.select_for_update()
+            .select_related("user")
+            .get(token_hash=token_hash)
         )
     except EmailVerificationToken.DoesNotExist:
         raise ValueError(
@@ -111,6 +111,7 @@ def verify_email_token(*, raw_token):
     )
 
     return user
+
 
 def send_verification_email(*, user, raw_token):
     """

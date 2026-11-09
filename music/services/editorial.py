@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from music.models import (
@@ -11,6 +14,7 @@ from music.models import (
     EditorialComment,
     EditorialCommentReport,
 )
+
 
 
 class EditorialCommentService:
@@ -23,27 +27,83 @@ class EditorialCommentService:
         content: str,
         parent: EditorialComment | None = None,
     ) -> EditorialComment:
-        if article.status != EditorialArticle.Status.PUBLISHED:
+        # Lock and recheck the article to avoid creating
+        # comments while its publication status is changing.
+        locked_article = (
+            EditorialArticle.objects
+            .select_for_update()
+            .filter(pk=article.pk)
+            .first()
+        )
+
+        if (
+            locked_article is None
+            or locked_article.status
+            != EditorialArticle.Status.PUBLISHED
+        ):
             raise ValidationError(
                 "Comments can only be added to published articles."
             )
 
+        locked_parent = None
+        root_comment = None
+
         if parent is not None:
-            if parent.article_id != article.id:
+            locked_parent = (
+                EditorialComment.objects
+                .select_for_update()
+                .filter(pk=parent.pk)
+                .first()
+            )
+
+            if locked_parent is None:
+                raise ValidationError(
+                    "The parent comment does not exist."
+                )
+
+            if locked_parent.article_id != locked_article.pk:
                 raise ValidationError(
                     "The parent comment does not belong to this article."
                 )
 
-            if parent.status != EditorialComment.Status.PUBLISHED:
+            if (
+                locked_parent.status
+                != EditorialComment.Status.PUBLISHED
+            ):
                 raise ValidationError(
                     "You cannot reply to this comment."
                 )
 
+            # Direct replies point to their parent, which is
+            # the root. Deeper replies inherit the same root.
+            if locked_parent.parent_id is None:
+                root_comment = locked_parent
+            else:
+                root_comment = locked_parent.root_comment
+
+                # Defensive validation for legacy or malformed data.
+                if root_comment is None:
+                    raise ValidationError(
+                        "This comment thread is invalid. "
+                        "Please reply to another comment."
+                    )
+
+                if (
+                    root_comment.article_id != locked_article.pk
+                    or root_comment.parent_id is not None
+                    or root_comment.status
+                    != EditorialComment.Status.PUBLISHED
+                ):
+                    raise ValidationError(
+                        "This comment thread is no longer available."
+                    )
+
         try:
             comment = EditorialComment.objects.create(
                 user=user,
-                article=article,
-                parent=parent,
+                article=locked_article,
+                parent=locked_parent,
+                root_comment=root_comment,
                 content=content.strip(),
             )
         except IntegrityError as exc:
@@ -51,12 +111,16 @@ class EditorialCommentService:
                 "Unable to create this comment."
             ) from exc
 
-        EditorialArticle.objects.filter(pk=article.pk).update(
+        EditorialArticle.objects.filter(
+            pk=locked_article.pk,
+        ).update(
             comments_count=F("comments_count") + 1,
         )
 
-        if parent is not None:
-            EditorialComment.objects.filter(pk=parent.pk).update(
+        if locked_parent is not None:
+            EditorialComment.objects.filter(
+                pk=locked_parent.pk,
+            ).update(
                 replies_count=F("replies_count") + 1,
             )
 
@@ -69,14 +133,38 @@ class EditorialCommentService:
         comment: EditorialComment,
         content: str,
     ) -> EditorialComment:
-        if comment.status != EditorialComment.Status.PUBLISHED:
+        locked_comment = (
+            EditorialComment.objects
+            .select_for_update()
+            .filter(pk=comment.pk)
+            .first()
+        )
+
+        if (
+            locked_comment is None
+            or locked_comment.status
+            != EditorialComment.Status.PUBLISHED
+        ):
             raise ValidationError(
                 "This comment cannot be edited."
             )
 
-        comment.content = content.strip()
-        comment.is_edited = True
-        comment.save(
+        # Comments can only be edited within 15 minutes
+        # of their original creation time.
+        edit_deadline = (
+            locked_comment.created_at + timedelta(minutes=15)
+        )
+
+        if timezone.now() > edit_deadline:
+            raise ValidationError(
+                "Comments can only be edited within "
+                "15 minutes of posting."
+            )
+
+        locked_comment.content = content.strip()
+        locked_comment.is_edited = True
+
+        locked_comment.save(
             update_fields=[
                 "content",
                 "is_edited",
@@ -84,7 +172,7 @@ class EditorialCommentService:
             ],
         )
 
-        return comment
+        return locked_comment
 
     @staticmethod
     @transaction.atomic
@@ -92,63 +180,94 @@ class EditorialCommentService:
         *,
         comment: EditorialComment,
     ) -> None:
-        article_id = comment.article_id
-        parent_id = comment.parent_id
-
-        comment_ids = EditorialComment.objects.filter(
-            article_id=article_id,
-        ).values_list(
-            "id",
-            flat=True,
+        # Fetch the latest state inside the transaction.
+        locked_comment = (
+            EditorialComment.objects
+            .select_for_update()
+            .filter(pk=comment.pk)
+            .first()
         )
 
-        descendant_ids = set(
-            EditorialComment.objects.filter(
-                article_id=article_id,
-                parent_id__in=[comment.id],
-            ).values_list(
-                "id",
-                flat=True,
-            )
+        if locked_comment is None:
+            return
+
+        article_id = locked_comment.article_id
+        parent_id = locked_comment.parent_id
+
+        # Lock the article so comment creation/deletion operations
+        # for this article coordinate around the same row.
+        article = (
+            EditorialArticle.objects
+            .select_for_update()
+            .filter(pk=article_id)
+            .first()
         )
 
-        all_deleted_ids = {comment.id}
+        if article is None:
+            return
 
-        while descendant_ids:
-            all_deleted_ids.update(descendant_ids)
+        # Discover the entire subtree iteratively. This supports
+        # unlimited nesting without recursive Python calls.
+        all_deleted_ids = {locked_comment.pk}
+        frontier = {locked_comment.pk}
 
-            descendant_ids = set(
+        while frontier:
+            child_ids = set(
                 EditorialComment.objects.filter(
                     article_id=article_id,
-                    parent_id__in=descendant_ids,
+                    parent_id__in=frontier,
+                ).exclude(
+                    status=EditorialComment.Status.REMOVED,
                 ).values_list(
-                    "id",
+                    "pk",
                     flat=True,
                 )
             )
 
-        deleted_count = len(all_deleted_ids)
+            child_ids -= all_deleted_ids
 
-        comment.delete()
+            if not child_ids:
+                break
 
-        if deleted_count:
+            all_deleted_ids.update(child_ids)
+            frontier = child_ids
+
+        # Count only comments that currently contribute to the
+        # public article counter.
+        published_count = EditorialComment.objects.filter(
+            pk__in=all_deleted_ids,
+            status=EditorialComment.Status.PUBLISHED,
+        ).count()
+
+        # Soft-delete the subtree. Reports, likes, and moderation
+        # history remain attached to the existing records.
+        EditorialComment.objects.filter(
+            pk__in=all_deleted_ids,
+        ).exclude(
+            status=EditorialComment.Status.REMOVED,
+        ).update(
+            status=EditorialComment.Status.REMOVED,
+        )
+
+        if published_count:
             EditorialArticle.objects.filter(
                 pk=article_id,
             ).update(
                 comments_count=Greatest(
-                    F("comments_count") - deleted_count,
+                    F("comments_count") - published_count,
                     0,
                 ),
             )
 
+        # The deleted comment was one direct reply to its parent.
+        # Descendant counts are handled by the subtree operation.
         if parent_id is not None:
             EditorialComment.objects.filter(
                 pk=parent_id,
+                status=EditorialComment.Status.PUBLISHED,
+                replies_count__gt=0,
             ).update(
-                replies_count=Greatest(
-                    F("replies_count") - 1,
-                    0,
-                ),
+                replies_count=F("replies_count") - 1,
             )
 
 

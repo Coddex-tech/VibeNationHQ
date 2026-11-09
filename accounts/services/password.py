@@ -1,9 +1,10 @@
 from datetime import timedelta
+
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
-from django.conf import settings
-from django.core.mail import send_mail
-from django.contrib.auth import get_user_model
 
 from .sessions import UserSession
 from ..models import PasswordResetToken
@@ -48,8 +49,29 @@ PASSWORD_RESET_TOKEN_LIFETIME = timedelta(
     hours=1
 )
 
+
+def _is_password_reset_allowed(user):
+    """
+    Public password recovery is only available to
+    ordinary platform accounts.
+    """
+    return not (
+        user.is_staff
+        or user.is_superuser
+    )
+
+
+def _invalid_reset_token_error():
+    return ValueError(
+        "Invalid or expired password reset token."
+    )
+
+
 @transaction.atomic
 def create_password_reset_token(*, user):
+    if not _is_password_reset_allowed(user):
+        raise _invalid_reset_token_error()
+
     PasswordResetToken.objects.filter(
         user=user,
         used_at__isnull=True,
@@ -75,6 +97,7 @@ def create_password_reset_token(*, user):
 
     return reset_token, raw_token
 
+
 def verify_password_reset_token(*, raw_token):
     token_hash = PasswordResetToken.hash_token(
         raw_token,
@@ -89,26 +112,22 @@ def verify_password_reset_token(*, raw_token):
             )
         )
     except PasswordResetToken.DoesNotExist:
-        raise ValueError(
-            "Invalid or expired password reset token."
-        )
+        raise _invalid_reset_token_error()
 
     if reset_token.is_used:
-        raise ValueError(
-            "Invalid or expired password reset token."
-        )
+        raise _invalid_reset_token_error()
 
     if reset_token.is_expired:
-        raise ValueError(
-            "Invalid or expired password reset token."
-        )
+        raise _invalid_reset_token_error()
 
     if not reset_token.user.is_active:
-        raise ValueError(
-            "Invalid or expired password reset token."
-        )
+        raise _invalid_reset_token_error()
+
+    if not _is_password_reset_allowed(reset_token.user):
+        raise _invalid_reset_token_error()
 
     return reset_token
+
 
 @transaction.atomic
 def consume_password_reset_token(*, raw_token):
@@ -123,6 +142,7 @@ def consume_password_reset_token(*, raw_token):
             "used_at",
         ],
     )
+
     return reset_token
 
 
@@ -162,6 +182,9 @@ def request_password_reset(*, email):
     if not user.is_active:
         return None
 
+    if not _is_password_reset_allowed(user):
+        return None
+
     reset_token, raw_token = create_password_reset_token(
         user=user,
     )
@@ -170,6 +193,7 @@ def request_password_reset(*, email):
         user=user,
         raw_token=raw_token,
     )
+
     return reset_token
 
 
@@ -184,6 +208,10 @@ def reset_password(
     )
 
     user = reset_token.user
+
+    # Final safeguard immediately before changing the password.
+    if not _is_password_reset_allowed(user):
+        raise _invalid_reset_token_error()
 
     user.set_password(
         new_password,
@@ -206,4 +234,5 @@ def reset_password(
             revoked_at=timezone.now(),
         )
     )
+
     return user

@@ -888,144 +888,6 @@ class AlbumTrack(TimeStampedModel):
 
 
 # ============================================================
-# SONG RATING
-# ============================================================
-
-class SongRating(TimeStampedModel):
-    """
-    One community rating per user for a song.
-
-    Rating scale: 0.5 - 5.0 stars.
-    """
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="song_ratings",
-    )
-
-    song = models.ForeignKey(
-        Song,
-        on_delete=models.CASCADE,
-        related_name="ratings",
-    )
-
-    rating = models.DecimalField(
-        max_digits=2,
-        decimal_places=1,
-        validators=[
-            MinValueValidator(0.5),
-            MaxValueValidator(5),
-        ],
-    )
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "song"],
-                name="unique_user_song_rating",
-            ),
-            models.CheckConstraint(
-                condition=Q(
-                    rating__in=[
-                        0.5,
-                        1.0,
-                        1.5,
-                        2.0,
-                        2.5,
-                        3.0,
-                        3.5,
-                        4.0,
-                        4.5,
-                        5.0,
-                    ]
-                ),
-                name="song_rating_half_star",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["song", "-created_at"],
-            ),
-            models.Index(
-                fields=["user", "-created_at"],
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.user} rated {self.song} {self.rating}/5"
-
-
-# ============================================================
-# ALBUM RATING
-# ============================================================
-
-class AlbumRating(TimeStampedModel):
-    """
-    One community rating per user for an album/EP.
-
-    Rating scale: 0.5 - 5.0 stars.
-    """
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="album_ratings",
-    )
-
-    album = models.ForeignKey(
-        Album,
-        on_delete=models.CASCADE,
-        related_name="ratings",
-    )
-
-    rating = models.DecimalField(
-        max_digits=2,
-        decimal_places=1,
-        validators=[
-            MinValueValidator(0.5),
-            MaxValueValidator(5),
-        ],
-    )
-
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "album"],
-                name="unique_user_album_rating",
-            ),
-            models.CheckConstraint(
-                condition=Q(
-                    rating__in=[
-                        0.5,
-                        1.0,
-                        1.5,
-                        2.0,
-                        2.5,
-                        3.0,
-                        3.5,
-                        4.0,
-                        4.5,
-                        5.0,
-                    ]
-                ),
-                name="album_rating_half_star",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["album", "-created_at"],
-            ),
-            models.Index(
-                fields=["user", "-created_at"],
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.user} rated {self.album} {self.rating}/5"
-
-
-# ============================================================
 # EDITORIAL ARTICLE
 # ============================================================
 
@@ -1122,6 +984,10 @@ class EditorialArticle(TimeStampedModel):
     )
 
     likes_count = models.PositiveBigIntegerField(
+        default=0,
+    )
+
+    favorites_count = models.PositiveBigIntegerField(
         default=0,
     )
 
@@ -1509,7 +1375,6 @@ class CommunityPostTarget(TimeStampedModel):
 # ============================================================
 # EDITORIAL ARTICLE LIKE
 # ============================================================
-
 class EditorialArticleLike(TimeStampedModel):
     """
     One like per user per editorial article.
@@ -1547,10 +1412,49 @@ class EditorialArticleLike(TimeStampedModel):
         return f"{self.user} liked article {self.article_id}"
 
 
+class EditorialArticleFavorite(TimeStampedModel):
+    """
+    One favorite per user per editorial article.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="favorite_editorial_articles",
+    )
+
+    article = models.ForeignKey(
+        EditorialArticle,
+        on_delete=models.CASCADE,
+        related_name="favorites",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "article"],
+                name="unique_user_editorial_article_favorite",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["article", "-created_at"],
+            ),
+            models.Index(
+                fields=["user", "-created_at"],
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.user_id} favorited "
+            f"editorial article {self.article_id}"
+        )
+    
+
 # ============================================================
 # COMMUNITY POST LIKE
 # ============================================================
-
 class CommunityPostLike(TimeStampedModel):
     """
     One like per user per community post.
@@ -1665,6 +1569,14 @@ class EditorialComment(TimeStampedModel):
         related_name="replies",
     )
 
+    root_comment = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="thread_replies",
+    )
+
     content = models.TextField(
         max_length=3000,
     )
@@ -1723,6 +1635,13 @@ class EditorialComment(TimeStampedModel):
                     "-created_at",
                 ],
             ),
+            models.Index(
+                fields=[
+                    "root_comment",
+                    "status",
+                    "created_at",
+                ],
+            ),
         ]
 
     def __str__(self):
@@ -1730,7 +1649,6 @@ class EditorialComment(TimeStampedModel):
             f"{self.user} - "
             f"comment on article {self.article_id}"
         )
-
 
 # ============================================================
 # COMMUNITY POST COMMENT
@@ -2387,45 +2305,33 @@ class UserFollow(TimeStampedModel):
 # MUSIC FEED INTERACTION
 # ============================================================
 
+
 class MusicFeedInteraction(TimeStampedModel):
     """
     Behavioral interaction history used by the VibeNationHQ
-    music feed and recommendation system.
+    community feed and future music discovery system.
 
-    This model records meaningful user behavior so feed
-    ranking can learn from what users actually interact with.
-
-    IMPORTANT:
-
-    Existing engagement models remain the source of truth for
-    persistent relationships and state.
+    Persistent relationships remain the source of truth for
+    current user state.
 
     Examples:
-
         CommunityPostLike
+        CommunityPostFavorite
+        EditorialArticleLike
+        EditorialArticleFavorite
         SongFavorite
         ArtistFollow
-        SongRating
-        AlbumRating
 
-    MusicFeedInteraction is behavioral history, not a
-    replacement for those models.
+    This model records behavioral history, not a replacement
+    for those persistent relationship models.
 
-    An interaction may target exactly ONE supported content
-    entity:
-
-        - Song
-        - Album
-        - Artist
-        - CommunityPost
-        - EditorialArticle
+    Each interaction targets exactly ONE supported entity.
 
     Repeated interactions are allowed because behavior is
-    time-dependent. For example, a user may view or play the
-    same song multiple times.
+    time-dependent.
 
-    The optional idempotency_key allows the API to safely
-    ignore duplicate submissions caused by network retries.
+    The optional idempotency_key prevents duplicate event
+    creation caused by request retries.
     """
 
     class InteractionType(models.TextChoices):
@@ -2472,6 +2378,11 @@ class MusicFeedInteraction(TimeStampedModel):
             "Commented on community post",
         )
 
+        FAVORITE_COMMUNITY_POST = (
+            "favorite_community_post",
+            "Favorited community post",
+        )
+
         # ----------------------------------------------------
         # Editorial interactions
         # ----------------------------------------------------
@@ -2484,6 +2395,11 @@ class MusicFeedInteraction(TimeStampedModel):
         LIKE_EDITORIAL = (
             "like_editorial",
             "Liked editorial article",
+        )
+
+        FAVORITE_EDITORIAL = (
+            "favorite_editorial",
+            "Favorited editorial article",
         )
 
     user = models.ForeignKey(
@@ -2556,15 +2472,9 @@ class MusicFeedInteraction(TimeStampedModel):
         ordering = ["-created_at"]
 
         indexes = [
-            # Main user history query.
             models.Index(
-                fields=[
-                    "user",
-                    "-created_at",
-                ],
+                fields=["user", "-created_at"],
             ),
-
-            # User history by interaction type.
             models.Index(
                 fields=[
                     "user",
@@ -2572,41 +2482,20 @@ class MusicFeedInteraction(TimeStampedModel):
                     "-created_at",
                 ],
             ),
-
-            # Target-specific behavioral history.
             models.Index(
-                fields=[
-                    "song",
-                    "-created_at",
-                ],
+                fields=["song", "-created_at"],
             ),
-
             models.Index(
-                fields=[
-                    "album",
-                    "-created_at",
-                ],
+                fields=["album", "-created_at"],
             ),
-
             models.Index(
-                fields=[
-                    "artist",
-                    "-created_at",
-                ],
+                fields=["artist", "-created_at"],
             ),
-
             models.Index(
-                fields=[
-                    "community_post",
-                    "-created_at",
-                ],
+                fields=["community_post", "-created_at"],
             ),
-
             models.Index(
-                fields=[
-                    "editorial_article",
-                    "-created_at",
-                ],
+                fields=["editorial_article", "-created_at"],
             ),
         ]
 
@@ -2614,86 +2503,82 @@ class MusicFeedInteraction(TimeStampedModel):
             models.CheckConstraint(
                 condition=(
                     # Song interaction.
-                    (
-                        Q(
-                            interaction_type__in=[
-                                "view_song",
-                                "play_preview",
-                                "favorite_song",
-                                "rate_song",
-                            ],
-                            song__isnull=False,
-                            album__isnull=True,
-                            artist__isnull=True,
-                            community_post__isnull=True,
-                            editorial_article__isnull=True,
-                        )
+                    Q(
+                        interaction_type__in=[
+                            "view_song",
+                            "play_preview",
+                            "favorite_song",
+                            "rate_song",
+                        ],
+                        song__isnull=False,
+                        album__isnull=True,
+                        artist__isnull=True,
+                        community_post__isnull=True,
+                        editorial_article__isnull=True,
                     )
+
+                    |
 
                     # Album interaction.
-                    |
-                    (
-                        Q(
-                            interaction_type__in=[
-                                "view_album",
-                                "favorite_album",
-                                "rate_album",
-                            ],
-                            song__isnull=True,
-                            album__isnull=False,
-                            artist__isnull=True,
-                            community_post__isnull=True,
-                            editorial_article__isnull=True,
-                        )
+                    Q(
+                        interaction_type__in=[
+                            "view_album",
+                            "favorite_album",
+                            "rate_album",
+                        ],
+                        song__isnull=True,
+                        album__isnull=False,
+                        artist__isnull=True,
+                        community_post__isnull=True,
+                        editorial_article__isnull=True,
                     )
+
+                    |
 
                     # Artist interaction.
-                    |
-                    (
-                        Q(
-                            interaction_type__in=[
-                                "view_artist",
-                                "follow_artist",
-                            ],
-                            song__isnull=True,
-                            album__isnull=True,
-                            artist__isnull=False,
-                            community_post__isnull=True,
-                            editorial_article__isnull=True,
-                        )
+                    Q(
+                        interaction_type__in=[
+                            "view_artist",
+                            "follow_artist",
+                        ],
+                        song__isnull=True,
+                        album__isnull=True,
+                        artist__isnull=False,
+                        community_post__isnull=True,
+                        editorial_article__isnull=True,
                     )
+
+                    |
 
                     # Community post interaction.
-                    |
-                    (
-                        Q(
-                            interaction_type__in=[
-                                "view_community_post",
-                                "like_community_post",
-                                "comment_community_post",
-                            ],
-                            song__isnull=True,
-                            album__isnull=True,
-                            artist__isnull=True,
-                            community_post__isnull=False,
-                            editorial_article__isnull=True,
-                        )
+                    Q(
+                        interaction_type__in=[
+                            "view_community_post",
+                            "like_community_post",
+                            "comment_community_post",
+                            "favorite_community_post",
+                        ],
+                        song__isnull=True,
+                        album__isnull=True,
+                        artist__isnull=True,
+                        community_post__isnull=False,
+                        editorial_article__isnull=True,
                     )
 
-                    # Editorial interaction.
                     |
-                    (
-                        Q(
-                            interaction_type__in=[
-                                "view_editorial",
-                                "like_editorial",
-                            ],
-                            song__isnull=True,
-                            album__isnull=True,
-                            artist__isnull=True,
-                            community_post__isnull=True,
-                            editorial_article__isnull=False,
-                        )
+
+                    # Editorial interaction.
+                    Q(
+                        interaction_type__in=[
+                            "view_editorial",
+                            "like_editorial",
+                            "favorite_editorial",
+                        ],
+                        song__isnull=True,
+                        album__isnull=True,
+                        artist__isnull=True,
+                        community_post__isnull=True,
+                        editorial_article__isnull=False,
                     )
                 ),
                 name="valid_music_feed_interaction",
@@ -2705,3 +2590,87 @@ class MusicFeedInteraction(TimeStampedModel):
             f"{self.user} - "
             f"{self.interaction_type}"
         )
+
+
+class ContentDailyView(models.Model):
+    """
+    Stores daily view totals for published community posts
+    and editorial articles.
+
+    Each record belongs to exactly one content item and one
+    calendar date. These are view-event counts, not unique
+    visitor counts.
+    """
+
+    community_post = models.ForeignKey(
+        "CommunityPost",
+        on_delete=models.CASCADE,
+        related_name="daily_views",
+        null=True,
+        blank=True,
+    )
+
+    editorial_article = models.ForeignKey(
+        "EditorialArticle",
+        on_delete=models.CASCADE,
+        related_name="daily_views",
+        null=True,
+        blank=True,
+    )
+
+    date = models.DateField()
+    views_count = models.PositiveBigIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        models.Q(community_post__isnull=False)
+                        & models.Q(editorial_article__isnull=True)
+                    )
+                    | (
+                        models.Q(community_post__isnull=True)
+                        & models.Q(editorial_article__isnull=False)
+                    )
+                ),
+                name="content_daily_view_exactly_one_content",
+            ),
+            models.UniqueConstraint(
+                fields=["community_post", "date"],
+                condition=models.Q(community_post__isnull=False),
+                name="community_post_daily_view_unique",
+            ),
+            models.UniqueConstraint(
+                fields=["editorial_article", "date"],
+                condition=models.Q(editorial_article__isnull=False),
+                name="editorial_article_daily_view_unique",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["date"],
+                name="content_daily_view_date_idx",
+            ),
+            models.Index(
+                fields=["community_post", "date"],
+                name="community_daily_view_date_idx",
+            ),
+            models.Index(
+                fields=["editorial_article", "date"],
+                name="editorial_daily_view_date_idx",
+            ),
+        ]
+
+    def __str__(self):
+        content = (
+            f"Community post {self.community_post_id}"
+            if self.community_post_id is not None
+            else f"Editorial article {self.editorial_article_id}"
+        )
+
+        return f"{content} — {self.date}: {self.views_count} views"

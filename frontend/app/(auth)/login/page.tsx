@@ -24,6 +24,11 @@ type LoginResponse = {
     id: string;
     email: string;
     username: string;
+    display_name: string;
+    onboarding_completed: boolean;
+    is_active: boolean;
+    is_verified: boolean;
+    is_identity_verified: boolean;
   };
 };
 
@@ -53,7 +58,7 @@ export default function LoginPage() {
     const nextPath = searchParams.get('next');
 
     if (!nextPath) {
-      return '/';
+      return '/music';
     }
 
     if (
@@ -75,20 +80,37 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      await apiRequest<LoginResponse>(
-        '/api/accounts/login/',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            email,
-            password,
-          }),
-        },
-      );
+      const response =
+        await apiRequest<LoginResponse>(
+          '/api/accounts/login/',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              email,
+              password,
+            }),
+          },
+        );
 
       await refreshAuth();
 
-      router.push(getSafeNextPath());
+      const nextPath = getSafeNextPath();
+
+      if (!response.user.onboarding_completed) {
+        if (nextPath === '/account/setup') {
+          router.replace('/account/setup');
+        } else {
+          router.replace(
+            `/account/setup?next=${encodeURIComponent(
+              nextPath,
+            )}`,
+          );
+        }
+
+        return;
+      }
+
+      router.push(nextPath);
     } catch (error) {
       if (error instanceof ApiError) {
         const data = error.data;
@@ -404,10 +426,9 @@ export default function LoginPage() {
                           dark:placeholder:text-dark-text-soft
                           dark:focus:border-brand-teal
                           dark:focus:ring-brand-teal/15
-                          ${
-                            errors.email
-                              ? 'border-red-400 dark:border-red-400'
-                              : 'border-light-border dark:border-dark-border'
+                          ${errors.email
+                            ? 'border-red-400 dark:border-red-400'
+                            : 'border-light-border dark:border-dark-border'
                           }
                         `}
                       />
@@ -483,10 +504,9 @@ export default function LoginPage() {
                           dark:placeholder:text-dark-text-soft
                           dark:focus:border-brand-teal
                           dark:focus:ring-brand-teal/15
-                          ${
-                            errors.password
-                              ? 'border-red-400 dark:border-red-400'
-                              : 'border-light-border dark:border-dark-border'
+                          ${errors.password
+                            ? 'border-red-400 dark:border-red-400'
+                            : 'border-light-border dark:border-dark-border'
                           }
                         `}
                       />

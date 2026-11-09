@@ -22,3 +22,9 @@ class CommunityCommentThreadPagination(PageNumberPagination):
 
     page_size = 5
     page_size_query_param = None
+
+
+
+class EditorialCommentThreadPagination(PageNumberPagination):
+    page_size = 5
+    page_size_query_param = None

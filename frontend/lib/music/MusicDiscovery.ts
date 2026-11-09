@@ -13,6 +13,7 @@ export type MusicDiscoveryAlbum = {
   id: number;
   title: string;
   slug: string;
+  release_type: string;
   artists: MusicDiscoveryArtist[];
   artwork: string | null;
   release_date: string | null;

@@ -1,3 +1,4 @@
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -39,6 +40,8 @@ class EmailVerificationView(APIView):
     """
     Verify a user's email address, activate the account,
     and authenticate the user with a new web session.
+
+    Successful email verification does not complete onboarding.
     """
 
     authentication_classes = []
@@ -72,7 +75,15 @@ class EmailVerificationView(APIView):
                     "id": user.id,
                     "email": user.email,
                     "username": user.username,
+                    "display_name": user.display_name,
                     "is_active": user.is_active,
+                    "onboarding_completed": (
+                        user.onboarding_completed
+                    ),
+                    "is_verified": user.is_verified,
+                    "is_identity_verified": (
+                        user.is_identity_verified
+                    ),
                 },
             },
             status=status.HTTP_200_OK,

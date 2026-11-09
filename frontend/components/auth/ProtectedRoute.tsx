@@ -17,6 +17,7 @@ export default function ProtectedRoute({
   const pathname = usePathname();
 
   const {
+    user,
     isAuthenticated,
     isLoading,
   } = useAuth();
@@ -44,9 +45,41 @@ export default function ProtectedRoute({
     router,
   ]);
 
+  useEffect(() => {
+    if (
+      isLoading ||
+      !isAuthenticated ||
+      !user ||
+      user.onboarding_completed
+    ) {
+      return;
+    }
+
+    // Never redirect the setup page to itself.
+    if (pathname === '/account/setup') {
+      return;
+    }
+
+    const nextPath =
+      pathname || '/';
+
+    router.replace(
+      `/account/setup?next=${encodeURIComponent(
+        nextPath,
+      )}`,
+    );
+  }, [
+    isAuthenticated,
+    isLoading,
+    pathname,
+    router,
+    user,
+  ]);
+
   if (
     isLoading ||
-    isAuthenticated === null
+    isAuthenticated === null ||
+    (isAuthenticated && !user)
   ) {
     return (
       <div
@@ -117,6 +150,10 @@ export default function ProtectedRoute({
   }
 
   if (!isAuthenticated) {
+    return null;
+  }
+
+  if (!user.onboarding_completed) {
     return null;
   }
 

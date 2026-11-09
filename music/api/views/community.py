@@ -1,23 +1,36 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.db import transaction
 from django.db.models import (
     BooleanField,
+    Case,
     Count,
     Exists,
+    ExpressionWrapper,
+    F,
+    FloatField,
     OuterRef,
     Prefetch,
     Value,
+    When,
     Q,
 )
 
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
+
+from datetime import timedelta
 
 from music.api.pagination import (
     MusicPagination,
     CommunityCommentThreadPagination,
+)
+from accounts.api.permissions import (
+    IsOrdinaryVibeNationUser,
+    IsOrdinaryVibeNationUserOrReadOnly,
 )
 
 from music.models import (
@@ -26,6 +39,7 @@ from music.models import (
     CommunityPostCommentLike,
     CommunityPostFavorite,
     CommunityPostLike,
+    CommunityPostTarget,
     UserFollow,
 )
 
@@ -69,7 +83,7 @@ class CommunityPostListCreateAPIView(
     """
 
     permission_classes = [
-        IsAuthenticatedOrReadOnly,
+        IsOrdinaryVibeNationUserOrReadOnly,
     ]
 
     pagination_class = MusicPagination
@@ -138,7 +152,6 @@ class CommunityPostListCreateAPIView(
                     distinct=True,
                 ),
             )
-            .order_by("-created_at")
         )
 
         if self.request.user.is_authenticated:
@@ -172,7 +185,163 @@ class CommunityPostListCreateAPIView(
                 ),
             )
 
-        return queryset
+        # ----------------------------------------------------
+        # Optional song / album / artist filtering
+        # ----------------------------------------------------
+
+        target_filters = self.get_target_filters()
+
+        if target_filters is not None:
+            target_type, target_id = target_filters
+
+            queryset = queryset.filter(
+                target__target_type=target_type,
+            )
+
+            if target_type == CommunityPostTarget.TargetType.SONG:
+                queryset = queryset.filter(
+                    target__song_id=target_id,
+                )
+
+            elif target_type == CommunityPostTarget.TargetType.ALBUM:
+                queryset = queryset.filter(
+                    target__album_id=target_id,
+                )
+
+            elif target_type == CommunityPostTarget.TargetType.ARTIST:
+                queryset = queryset.filter(
+                    target__artist_id=target_id,
+                )
+
+        # ----------------------------------------------------
+        # Latest / Relevant ordering
+        # ----------------------------------------------------
+
+        ordering = self.request.query_params.get(
+            "ordering",
+            "latest",
+        ).strip().lower()
+
+        if ordering not in {"latest", "relevant"}:
+            raise ValidationError({
+                "ordering": (
+                    "Choose either 'latest' or 'relevant'."
+                ),
+            })
+
+        if ordering == "latest":
+            return queryset.order_by(
+                "-created_at",
+                "-pk",
+            )
+
+        # Relevant ranking:
+        #
+        # Likes:       3 points each
+        # Comments:    5 points each
+        # Views:       0.1 points each
+        #
+        # Recency bonus:
+        # Last 24 hours: 20 points
+        # Last 7 days:   10 points
+        # Last 30 days:   3 points
+        #
+        # These are initial tunable weights, not a claim
+        # that they are a universally optimal ranking.
+
+        now = timezone.now()
+
+        queryset = queryset.annotate(
+            _engagement_score=ExpressionWrapper(
+                F("likes_count") * Value(3.0)
+                + F("comments_count") * Value(5.0)
+                + F("views_count") * Value(0.1),
+                output_field=FloatField(),
+            ),
+        )
+
+        queryset = queryset.annotate(
+            _recency_score=Case(
+                When(
+                    created_at__gte=now - timedelta(days=1),
+                    then=Value(20.0),
+                ),
+                When(
+                    created_at__gte=now - timedelta(days=7),
+                    then=Value(10.0),
+                ),
+                When(
+                    created_at__gte=now - timedelta(days=30),
+                    then=Value(3.0),
+                ),
+                default=Value(0.0),
+                output_field=FloatField(),
+            ),
+        )
+
+        queryset = queryset.annotate(
+            _relevance_score=ExpressionWrapper(
+                F("_engagement_score")
+                + F("_recency_score"),
+                output_field=FloatField(),
+            ),
+        )
+
+        return queryset.order_by(
+            "-_relevance_score",
+            "-created_at",
+            "-pk",
+        )
+
+    def get_target_filters(self):
+        """
+        Validate optional target filters for song, album,
+        and artist community-post lists.
+
+        Both target_type and target_id must be supplied
+        together. If neither is supplied, the endpoint
+        returns the general community feed.
+        """
+
+        target_type = self.request.query_params.get(
+            "target_type",
+        )
+        target_id = self.request.query_params.get(
+            "target_id",
+        )
+
+        if not target_type and not target_id:
+            return None
+
+        if not target_type or not target_id:
+            raise ValidationError({
+                "target": (
+                    "Both target_type and target_id "
+                    "must be supplied together."
+                ),
+            })
+
+        allowed_types = {
+            CommunityPostTarget.TargetType.SONG,
+            CommunityPostTarget.TargetType.ALBUM,
+            CommunityPostTarget.TargetType.ARTIST,
+        }
+
+        if target_type not in allowed_types:
+            raise ValidationError({
+                "target_type": (
+                    "Choose song, album, or artist."
+                ),
+            })
+
+        if not target_id.isdigit() or int(target_id) < 1:
+            raise ValidationError({
+                "target_id": (
+                    "A positive numeric target ID is required."
+                ),
+            })
+
+        return target_type, int(target_id)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -231,12 +400,18 @@ class CommunityPostViewAPIView(generics.GenericAPIView):
     """
     Record a view of a published community post.
 
-    Only authenticated users can record views.
-    The post owner does not receive another view when
-    refreshing the same page.
+    Only authenticated ordinary users can record views.
+
+    The post owner does not generate recommendation-history
+    events from viewing their own post.
+
+    The existing view-count behavior is preserved:
+    an owner's reload does not add another view.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [
+        IsOrdinaryVibeNationUser,
+    ]
 
     def post(self, request, *args, **kwargs):
         post = CommunityPost.objects.filter(
@@ -254,9 +429,8 @@ class CommunityPostViewAPIView(generics.GenericAPIView):
 
         is_owner = post.user_id == request.user.pk
 
-        # A reload must not add another view for the post owner.
-        # Other authenticated users can still receive a view
-        # when they refresh the page.
+        # Preserve existing behavior: an owner's reload
+        # does not increase the post's view count.
         if is_owner and navigation_type == "reload":
             return Response(
                 {
@@ -266,15 +440,24 @@ class CommunityPostViewAPIView(generics.GenericAPIView):
                 status=status.HTTP_200_OK,
             )
 
-        views_count = CommunityPostService.record_view(
-            post=post,
-        )
-
-        if views_count is None:
-            return Response(
-                {"detail": "Community post not found."},
-                status=status.HTTP_404_NOT_FOUND,
+        with transaction.atomic():
+            views_count = CommunityPostService.record_view(
+                post=post,
             )
+
+            if views_count is None:
+                return Response(
+                    {"detail": "Community post not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            # Do not use the creator's own views to personalize
+            # recommendations for that creator.
+            if not is_owner:
+                MusicFeedInteractionService.record_community_post_view(
+                    user=request.user,
+                    post=post,
+                )
 
         return Response(
             {
@@ -393,10 +576,9 @@ class CommunityPostDetailAPIView(
             "DELETE",
         ]:
             return [
-                IsAuthenticatedOrReadOnly(),
+                IsOrdinaryVibeNationUser(),
                 IsOwner(),
             ]
-
         return [
             IsAuthenticatedOrReadOnly(),
         ]
@@ -475,35 +657,6 @@ class CommunityPostDetailAPIView(
         )
 
 
-class CommunityPostFavoriteListAPIView(
-    generics.ListAPIView
-):
-    """
-    List the authenticated user's favorited community posts.
-
-    Favorites are ordered by when they were saved, with the
-    most recently favorited post first.
-
-    The same CommunityPostSerializer used by the feed is returned,
-    so favorite posts have the same representation as feed posts.
-    """
-
-    permission_classes = [
-        IsAuthenticated,
-    ]
-
-    pagination_class = MusicPagination
-
-    serializer_class = CommunityPostSerializer
-
-    def get_queryset(self):
-        return (
-            CommunityPostFavoriteService.get_user_favorites(
-                user=self.request.user,
-            )
-        )
-
-
 class CommunityPostFavoriteAPIView(
     generics.GenericAPIView
 ):
@@ -516,24 +669,30 @@ class CommunityPostFavoriteAPIView(
     )
 
     permission_classes = [
-        IsAuthenticatedOrReadOnly,
+        IsOrdinaryVibeNationUser,
     ]
 
     def post(self, request, *args, **kwargs):
         post = self.get_object()
 
-        CommunityPostFavoriteService.create(
-            user=request.user,
-            post=post,
-        )
-
-        favorites_count = (
-            CommunityPostFavorite.objects
-            .filter(
-                post_id=post.pk,
+        with transaction.atomic():
+            CommunityPostFavoriteService.create(
+                user=request.user,
+                post=post,
             )
-            .count()
-        )
+
+            MusicFeedInteractionService.record_community_post_favorite(
+                user=request.user,
+                post=post,
+            )
+
+            favorites_count = (
+                CommunityPostFavorite.objects
+                .filter(
+                    post_id=post.pk,
+                )
+                .count()
+            )
 
         return Response(
             {
@@ -637,21 +796,18 @@ class CommunityPostCommentListCreateAPIView(
             queryset = queryset.filter(
                 parent__isnull=True,
             )
-
         return queryset
 
     def get_permissions(self):
         if self.request.method == "POST":
             return [
-                IsAuthenticatedOrReadOnly(),
+                IsOrdinaryVibeNationUser(),
             ]
-
         return []
 
     def get_serializer_class(self):
         if self.request.method == "POST":
             return CommunityPostCommentCreateSerializer
-
         return CommunityPostCommentSerializer
 
     def create(self, request, *args, **kwargs):
@@ -659,8 +815,8 @@ class CommunityPostCommentListCreateAPIView(
         Validate the incoming comment data and ensure the submitted
         post matches the post specified in the URL.
 
-        Create the comment through the service layer, then retrieve
-        and return its complete serialized representation.
+        Create the comment and record its interaction history
+        atomically, then return its complete serialized representation.
         """
 
         serializer = self.get_serializer(
@@ -686,20 +842,19 @@ class CommunityPostCommentListCreateAPIView(
                 },
             )
 
-        # Create the comment or reply through the service layer.
-        # The authenticated user is explicitly passed to the service.
-        comment = CommunityPostCommentService.create(
-            user=request.user,
-            post=submitted_post,
-            parent=serializer.validated_data.get("parent"),
-            content=serializer.validated_data["content"],
-        )
+        # Create the comment and record its interaction together.
+        with transaction.atomic():
+            comment = CommunityPostCommentService.create(
+                user=request.user,
+                post=submitted_post,
+                parent=serializer.validated_data.get("parent"),
+                content=serializer.validated_data["content"],
+            )
 
-        # Record the interaction after successful comment creation.
-        MusicFeedInteractionService.record_community_post_comment(
-            user=request.user,
-            post=comment.post,
-        )
+            MusicFeedInteractionService.record_community_post_comment(
+                user=request.user,
+                post=comment.post,
+            )
 
         # Reload the new comment independently of get_queryset().
         # get_queryset() applies list-specific filters, including
@@ -729,7 +884,6 @@ class CommunityPostCommentListCreateAPIView(
             .get()
         )
 
-        # Serialize the complete comment representation.
         output_serializer = CommunityPostCommentSerializer(
             comment,
             context=self.get_serializer_context(),
@@ -739,7 +893,6 @@ class CommunityPostCommentListCreateAPIView(
             output_serializer.data,
             status=status.HTTP_201_CREATED,
         )
-
 
 
 class CommunityPostCommentThreadAPIView(
@@ -866,7 +1019,7 @@ class CommunityPostCommentDetailAPIView(
             "DELETE",
         ]:
             return [
-                IsAuthenticatedOrReadOnly(),
+                IsOrdinaryVibeNationUser(),
                 IsOwner(),
             ]
 
@@ -952,7 +1105,7 @@ class CommunityPostReportAPIView(
     )
 
     permission_classes = [
-        IsAuthenticatedOrReadOnly,
+        IsOrdinaryVibeNationUser,
     ]
 
     def post(self, request, *args, **kwargs):
@@ -1004,7 +1157,7 @@ class CommunityPostCommentReportAPIView(
     )
 
     permission_classes = [
-        IsAuthenticatedOrReadOnly,
+        IsOrdinaryVibeNationUser,
     ]
 
     def post(self, request, *args, **kwargs):

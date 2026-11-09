@@ -21,8 +21,8 @@ type RegistrationResponse = {
   user: {
     id: string;
     email: string;
-    username: string;
     is_active: boolean;
+    onboarding_completed: boolean;
   };
 };
 

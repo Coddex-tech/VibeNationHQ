@@ -1,11 +1,12 @@
+
+from __future__ import annotations
+
 from rest_framework import serializers
 
 from music.providers.base import MusicSearchResult
 
 
-class MusicProviderSearchResultSerializer(
-    serializers.Serializer
-):
+class MusicProviderSearchResultSerializer(serializers.Serializer):
     provider = serializers.CharField()
     provider_id = serializers.CharField()
     entity_type = serializers.CharField()
@@ -15,7 +16,6 @@ class MusicProviderSearchResultSerializer(
         allow_null=True,
         required=False,
     )
-
     album_name = serializers.CharField(
         allow_null=True,
         required=False,
@@ -25,17 +25,14 @@ class MusicProviderSearchResultSerializer(
         allow_null=True,
         required=False,
     )
-
     release_date = serializers.CharField(
         allow_null=True,
         required=False,
     )
-
     duration_seconds = serializers.IntegerField(
         allow_null=True,
         required=False,
     )
-
     preview_url = serializers.URLField(
         allow_null=True,
         required=False,
@@ -45,22 +42,18 @@ class MusicProviderSearchResultSerializer(
         allow_null=True,
         required=False,
     )
-
     apple_music_url = serializers.URLField(
         allow_null=True,
         required=False,
     )
-
     youtube_url = serializers.URLField(
         allow_null=True,
         required=False,
     )
-
     audiomack_url = serializers.URLField(
         allow_null=True,
         required=False,
     )
-
     boomplay_url = serializers.URLField(
         allow_null=True,
         required=False,
@@ -70,20 +63,15 @@ class MusicProviderSearchResultSerializer(
         allow_null=True,
         required=False,
     )
-
     isrc = serializers.CharField(
         allow_null=True,
         required=False,
     )
-
     metadata = serializers.JSONField(
         required=False,
     )
 
-    def to_representation(
-        self,
-        instance: MusicSearchResult,
-    ):
+    def to_representation(self, instance: MusicSearchResult):
         return {
             "provider": instance.provider.value,
             "provider_id": instance.provider_id,

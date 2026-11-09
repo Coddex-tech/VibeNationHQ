@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -18,13 +19,10 @@ from .base import (
 
 class ITunesProvider:
     """
-    Music metadata/search provider backed by Apple's
-    public iTunes Search API.
+    Music metadata/search provider backed by Apple's public iTunes API.
 
-    This provider handles communication with Apple and
-    normalization into VibeNationHQ's provider format.
-
-    It does not create or modify VibeNationHQ database records.
+    This provider fetches and normalizes external music metadata.
+    It never creates or modifies VibeNationHQ database records.
     """
 
     name = MusicProviderName.ITUNES
@@ -79,25 +77,17 @@ class ITunesProvider:
         self,
         query: MusicSearchQuery,
     ) -> list[MusicSearchResult]:
-        """
-        Search Apple's iTunes catalog and return normalized results.
-        """
+        """Search Apple's catalog and return normalized results."""
 
         cleaned_query = query.query.strip()
 
         if not cleaned_query:
             return []
 
-        limit = max(
-            1,
-            min(query.limit, 50),
-        )
+        limit = max(1, min(query.limit, 50))
+        country = self._normalize_country(query.country)
 
-        country = self._normalize_country(
-            query.country,
-        )
-
-        params = {
+        params: dict[str, object] = {
             "term": cleaned_query,
             "media": "music",
             "country": country,
@@ -144,32 +134,26 @@ class ITunesProvider:
         provider_id: str,
         country: str = "NG",
     ) -> MusicSearchResult | None:
-        """
-        Retrieve a single Apple/iTunes catalog item by ID.
-        """
+        """Retrieve a single Apple catalog item by ID."""
 
-        if not provider_id.strip():
+        cleaned_provider_id = provider_id.strip()
+
+        if not cleaned_provider_id:
             return None
 
-        try:
-            apple_id = int(provider_id)
-        except ValueError as exc:
-            raise MusicProviderResponseError(
-                "Apple provider IDs must be numeric."
-            ) from exc
-
-        normalized_country = self._normalize_country(
-            country,
+        apple_id = self._parse_positive_id(
+            cleaned_provider_id,
+            description="Apple provider IDs",
         )
 
-        params = {
-            "id": apple_id,
-            "country": normalized_country,
-        }
+        normalized_country = self._normalize_country(country)
 
         data = self._request(
             url=self.LOOKUP_URL,
-            params=params,
+            params={
+                "id": apple_id,
+                "country": normalized_country,
+            },
         )
 
         results = data.get("results")
@@ -179,7 +163,70 @@ class ITunesProvider:
                 "Apple returned an invalid lookup response."
             )
 
-        expected_entity = entity_type
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+
+            result = self._normalize_result(
+                item,
+                country=normalized_country,
+            )
+
+            if (
+                result is not None
+                and result.entity_type == entity_type
+            ):
+                return result
+
+        return None
+
+    def get_album_tracks(
+        self,
+        *,
+        album_provider_id: str,
+        country: str = "NG",
+    ) -> list[MusicSearchResult]:
+        """
+        Retrieve and validate tracks belonging to an Apple album.
+
+        Tracks are ordered by disc number and track number. Invalid
+        or incomplete tracklists raise MusicProviderResponseError
+        so callers can preserve an existing tracklist.
+        """
+
+        cleaned_provider_id = album_provider_id.strip()
+
+        if not cleaned_provider_id:
+            raise MusicProviderResponseError(
+                "Apple album provider ID cannot be empty."
+            )
+
+        apple_album_id = self._parse_positive_id(
+            cleaned_provider_id,
+            description="Apple album provider IDs",
+        )
+
+        normalized_country = self._normalize_country(country)
+
+        data = self._request(
+            url=self.LOOKUP_URL,
+            params={
+                "id": apple_album_id,
+                "entity": "song",
+                "country": normalized_country,
+            },
+        )
+
+        results = data.get("results")
+
+        if not isinstance(results, list):
+            raise MusicProviderResponseError(
+                "Apple returned an invalid album tracklist response."
+            )
+
+        album_found = False
+        expected_track_count: int | None = None
+        tracks: list[MusicSearchResult] = []
 
         for item in results:
             if not isinstance(item, dict):
@@ -193,10 +240,135 @@ class ITunesProvider:
             if result is None:
                 continue
 
-            if result.entity_type == expected_entity:
-                return result
+            if result.entity_type == MusicEntityType.ALBUM:
+                collection_id = result.metadata.get("collection_id")
 
-        return None
+                if str(collection_id) != str(apple_album_id):
+                    continue
+
+                album_found = True
+
+                raw_track_count = result.metadata.get("track_count")
+
+                if raw_track_count is not None:
+                    if (
+                        not isinstance(raw_track_count, int)
+                        or isinstance(raw_track_count, bool)
+                        or raw_track_count < 1
+                    ):
+                        raise MusicProviderResponseError(
+                            "Apple returned an invalid album track count."
+                        )
+
+                    expected_track_count = raw_track_count
+
+                continue
+
+            if result.entity_type != MusicEntityType.SONG:
+                continue
+
+            # Accept only songs explicitly associated with this album.
+            collection_id = result.metadata.get("collection_id")
+
+            if str(collection_id) != str(apple_album_id):
+                continue
+
+            track_number = result.metadata.get("track_number")
+            disc_number = result.metadata.get("disc_number", 1)
+
+            if (
+                not isinstance(track_number, int)
+                or isinstance(track_number, bool)
+                or track_number < 1
+            ):
+                raise MusicProviderResponseError(
+                    "Apple returned a track without a valid track number."
+                )
+
+            if (
+                not isinstance(disc_number, int)
+                or isinstance(disc_number, bool)
+                or disc_number < 1
+            ):
+                raise MusicProviderResponseError(
+                    "Apple returned a track with an invalid disc number."
+                )
+
+            tracks.append(result)
+
+        if not album_found:
+            raise MusicProviderResponseError(
+                "Apple did not return the requested album "
+                "in its tracklist response."
+            )
+
+        if not tracks:
+            raise MusicProviderResponseError(
+                "Apple returned no tracks for the requested album."
+            )
+
+        provider_track_ids = [
+            track.provider_id
+            for track in tracks
+        ]
+
+        if len(provider_track_ids) != len(set(provider_track_ids)):
+            raise MusicProviderResponseError(
+                "Apple returned duplicate track IDs for the album."
+            )
+
+        disc_track_pairs = [
+            (
+                track.metadata.get("disc_number", 1),
+                track.metadata["track_number"],
+            )
+            for track in tracks
+        ]
+
+        if len(disc_track_pairs) != len(set(disc_track_pairs)):
+            raise MusicProviderResponseError(
+                "Apple returned duplicate track positions for the album."
+            )
+
+        if (
+            expected_track_count is not None
+            and len(tracks) != expected_track_count
+        ):
+            raise MusicProviderResponseError(
+                "Apple returned an incomplete album tracklist: "
+                f"expected {expected_track_count} tracks but received "
+                f"{len(tracks)}."
+            )
+
+        tracks.sort(
+            key=lambda track: (
+                track.metadata.get("disc_number", 1),
+                track.metadata["track_number"],
+                track.provider_id,
+            )
+        )
+
+        return tracks
+
+    @staticmethod
+    def _parse_positive_id(
+        value: str,
+        *,
+        description: str,
+    ) -> int:
+        try:
+            parsed_id = int(value)
+        except ValueError as exc:
+            raise MusicProviderResponseError(
+                f"{description} must be numeric."
+            ) from exc
+
+        if parsed_id <= 0:
+            raise MusicProviderResponseError(
+                f"{description} must be positive integers."
+            )
+
+        return parsed_id
 
     def _get_entity(
         self,
@@ -206,8 +378,7 @@ class ITunesProvider:
             return self.ENTITY_MAP[entity_type]
         except KeyError as exc:
             raise MusicProviderError(
-                f"Unsupported iTunes entity type: "
-                f"{entity_type}"
+                f"Unsupported iTunes entity type: {entity_type}"
             ) from exc
 
     def _request(
@@ -216,12 +387,9 @@ class ITunesProvider:
         url: str,
         params: dict[str, object],
     ) -> dict:
-        """
-        Perform a GET request against Apple's public API.
-        """
+        """Perform a GET request against Apple's public API."""
 
-        query_string = urlencode(params)
-        request_url = f"{url}?{query_string}"
+        request_url = f"{url}?{urlencode(params)}"
 
         request = Request(
             request_url,
@@ -250,18 +418,13 @@ class ITunesProvider:
                 f"HTTP {exc.code}."
             ) from exc
 
-        except (
-            URLError,
-            TimeoutError,
-        ) as exc:
+        except (URLError, TimeoutError, OSError) as exc:
             raise MusicProviderUnavailableError(
                 "Apple iTunes Search API is currently unavailable."
             ) from exc
 
         try:
-            data = json.loads(
-                raw_body.decode("utf-8")
-            )
+            data = json.loads(raw_body.decode("utf-8"))
         except (
             UnicodeDecodeError,
             json.JSONDecodeError,
@@ -284,16 +447,9 @@ class ITunesProvider:
         country: str | None = None,
     ) -> MusicSearchResult | None:
         """
-        Convert one Apple result into VibeNationHQ's
-        normalized MusicSearchResult structure.
+        Normalize one Apple result into VibeNationHQ's provider format.
 
-        Artist artwork is used only when Apple directly
-        provides an artwork URL. No additional API request
-        is made to retrieve representative artwork.
-
-        If Apple does not provide artist artwork, the result
-        returns without artwork and the frontend can display
-        its fallback avatar.
+        Only supported music songs, albums, and artists are accepted.
         """
 
         entity_type = self._detect_entity_type(item)
@@ -318,8 +474,7 @@ class ITunesProvider:
             return None
 
         normalized_country = self._normalize_country(
-            country
-            or item.get("country")
+            country or item.get("country")
         )
 
         artwork_url = self._normalize_artwork_url(
@@ -349,9 +504,7 @@ class ITunesProvider:
             item.get("collectionName")
         )
 
-        isrc = self._clean_string(
-            item.get("isrc")
-        )
+        isrc = self._clean_string(item.get("isrc"))
 
         metadata = {
             "provider": self.name.value,
@@ -360,24 +513,16 @@ class ITunesProvider:
             "artist_id": item.get("artistId"),
             "collection_id": item.get("collectionId"),
             "track_id": item.get("trackId"),
-            "artist_view_url": item.get(
-                "artistViewUrl"
-            ),
-            "collection_view_url": item.get(
-                "collectionViewUrl"
-            ),
-            "track_view_url": item.get(
-                "trackViewUrl"
-            ),
+            "artist_view_url": item.get("artistViewUrl"),
+            "collection_view_url": item.get("collectionViewUrl"),
+            "track_view_url": item.get("trackViewUrl"),
             "primary_genre_name": self._clean_string(
                 item.get("primaryGenreName")
             ),
-            "track_number": item.get(
-                "trackNumber"
-            ),
-            "track_count": item.get(
-                "trackCount"
-            ),
+            "track_number": item.get("trackNumber"),
+            "track_count": item.get("trackCount"),
+            "disc_number": item.get("discNumber"),
+            "disc_count": item.get("discCount"),
         }
 
         metadata = {
@@ -413,24 +558,29 @@ class ITunesProvider:
         self,
         item: dict,
     ) -> MusicEntityType | None:
+        """
+        Identify supported entities using Apple's wrapper and kind.
+
+        Artist and collection entities are handled separately from
+        track entities so non-song tracks such as music videos,
+        podcasts, and films cannot be misclassified as songs.
+        """
+
         wrapper_type = item.get("wrapperType")
         kind = item.get("kind")
-
-        if wrapper_type == "track":
-            return MusicEntityType.SONG
-
-        if wrapper_type == "collection":
-            return MusicEntityType.ALBUM
 
         if wrapper_type == "artist":
             return MusicEntityType.ARTIST
 
-        if kind in {
-            "song",
-            "feature-movie",
-            "podcast",
-            "music-video",
-        }:
+        if wrapper_type == "collection":
+            collection_type = item.get("collectionType")
+
+            if collection_type in (None, "Album"):
+                return MusicEntityType.ALBUM
+
+            return None
+
+        if wrapper_type == "track" and kind == "song":
             return MusicEntityType.SONG
 
         return None
@@ -443,20 +593,19 @@ class ITunesProvider:
     ) -> str | None:
         if entity_type == MusicEntityType.SONG:
             value = item.get("trackId")
-
         elif entity_type == MusicEntityType.ALBUM:
             value = item.get("collectionId")
-
         elif entity_type == MusicEntityType.ARTIST:
             value = item.get("artistId")
-
         else:
             value = None
 
-        if value is None:
+        if value is None or isinstance(value, bool):
             return None
 
-        return str(value)
+        cleaned = str(value).strip()
+
+        return cleaned or None
 
     def _get_title(
         self,
@@ -465,19 +614,13 @@ class ITunesProvider:
         entity_type: MusicEntityType,
     ) -> str | None:
         if entity_type == MusicEntityType.SONG:
-            return self._clean_string(
-                item.get("trackName")
-            )
+            return self._clean_string(item.get("trackName"))
 
         if entity_type == MusicEntityType.ALBUM:
-            return self._clean_string(
-                item.get("collectionName")
-            )
+            return self._clean_string(item.get("collectionName"))
 
         if entity_type == MusicEntityType.ARTIST:
-            return self._clean_string(
-                item.get("artistName")
-            )
+            return self._clean_string(item.get("artistName"))
 
         return None
 
@@ -485,41 +628,36 @@ class ITunesProvider:
         self,
         artwork_url: object,
     ) -> str | None:
+        """
+        Prefer a larger Apple artwork variant for standard artwork paths.
+
+        Other URL formats remain unchanged.
+        """
+
         value = self._clean_string(artwork_url)
 
         if not value:
             return None
 
-        if "100x100" in value:
-            value = value.replace(
-                "100x100",
-                "600x600",
-            )
+        return re.sub(
+            r"/(?:100|60)x(?:100|60)(?=/|$)",
+            "/600x600",
+            value,
+            count=1,
+        )
 
-        elif "60x60" in value:
-            value = value.replace(
-                "60x60",
-                "600x600",
-            )
-
-        return value
-
+    @staticmethod
     def _get_duration_seconds(
-        self,
         milliseconds: object,
     ) -> int | None:
-        if not isinstance(
-            milliseconds,
-            (int, float),
+        if (
+            not isinstance(milliseconds, (int, float))
+            or isinstance(milliseconds, bool)
+            or milliseconds <= 0
         ):
             return None
 
-        if milliseconds <= 0:
-            return None
-
-        return round(
-            milliseconds / 1000
-        )
+        return round(milliseconds / 1000)
 
     def _normalize_release_date(
         self,
@@ -537,11 +675,9 @@ class ITunesProvider:
         value: object,
     ) -> str:
         """
-        Normalize Apple's country value to an ISO-style
-        two-letter country code.
+        Normalize a country name or code to a two-letter code.
 
-        Apple may return either a country name or a code.
-        The provider contract always receives a two-letter code.
+        Unknown values fall back to Nigeria (NG).
         """
 
         cleaned = self._clean_string(value)
@@ -550,29 +686,23 @@ class ITunesProvider:
             return "NG"
 
         normalized = cleaned.casefold()
-
-        mapped = self.COUNTRY_MAP.get(
-            normalized
-        )
+        mapped = self.COUNTRY_MAP.get(normalized)
 
         if mapped:
             return mapped
 
-        # Already looks like a two-letter country code.
         if len(cleaned) == 2 and cleaned.isalpha():
             return cleaned.upper()
 
-        # Unknown country names should not leak into the
-        # normalized provider contract.
         return "NG"
 
+    @staticmethod
     def _clean_string(
-        self,
         value: object,
     ) -> str | None:
         if not isinstance(value, str):
             return None
 
-        value = value.strip()
+        cleaned = value.strip()
 
-        return value or None
+        return cleaned or None

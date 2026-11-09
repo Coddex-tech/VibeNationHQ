@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { getMediaUrl } from '@/lib/api';
 
 import FadeIn from '@/components/FadeIn';
 import {
@@ -83,7 +84,9 @@ function EditorialImage({
   src: string | null;
   alt: string;
 }) {
-  if (!src) {
+  const imageUrl = getMediaUrl(src);
+
+  if (!imageUrl) {
     return (
       <div
         className="
@@ -102,7 +105,7 @@ function EditorialImage({
 
   return (
     <Image
-      src={src}
+      src={imageUrl}
       alt={alt}
       fill
       sizes="

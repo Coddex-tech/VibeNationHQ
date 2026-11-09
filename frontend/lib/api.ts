@@ -23,21 +23,43 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Resolves relative Django media paths against the configured backend URL.
+ * Absolute URLs are preserved, including external provider URLs.
+ */
+export function getMediaUrl(
+  path: string | null | undefined,
+): string | null {
+  if (!path) {
+    return null;
+  }
+
+  try {
+    return new URL(path, API_URL).toString();
+  } catch {
+    return path;
+  }
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const response = await fetch(
-    `${API_URL}${path}`,
-    {
-      ...options,
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    },
-  );
+  const headers = new Headers(options.headers);
+
+  const isFormData =
+    typeof FormData !== 'undefined' &&
+    options.body instanceof FormData;
+
+  if (!isFormData && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    credentials: 'include',
+    headers,
+  });
 
   let data: unknown = null;
 
@@ -49,8 +71,7 @@ export async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData =
-      data &&
-      typeof data === 'object'
+      data && typeof data === 'object'
         ? (data as ApiErrorResponse)
         : null;
 

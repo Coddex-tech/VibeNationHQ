@@ -1,25 +1,29 @@
-
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
 import {
-  Disc3,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Loader2,
   Music2,
   Plus,
+  RefreshCw,
   Sparkles,
 } from 'lucide-react';
 
-import type {
-  MusicFeedItem,
-  MusicFeedResponse,
+import {
+  getMusicFeed,
+  type MusicFeedItem,
+  type MusicFeedResponse,
 } from '@/lib/music/MusicFeed';
 
 import MusicEditorialPost from './MusicEditorialPost';
-import MusicPost from './MusicPost';
-import ArtistDiscoveryItem from './ArtistDiscoveryItem';
-import MusicDiscoveryItem from './MusicDiscoveryItem';
+import MusicPost from './CommunityPost';
 
 type MusicFeedProps = {
   initialFeed: MusicFeedResponse;
@@ -28,22 +32,36 @@ type MusicFeedProps = {
 export default function MusicFeed({
   initialFeed,
 }: MusicFeedProps) {
-  const [feed] =
+  const [feed, setFeed] =
     useState<MusicFeedResponse>(initialFeed);
+
+  const [isLoadingMore, setIsLoadingMore] =
+    useState(false);
+
+  const [loadMoreError, setLoadMoreError] =
+    useState<string | null>(null);
 
   const [showCreateButton, setShowCreateButton] =
     useState(true);
 
   /*
-   * Only the first community post from each author
+   * The ref prevents multiple requests from starting
+   * before React has updated the loading state.
+   */
+  const loadingMoreRef = useRef(false);
+
+  /*
+   * This element is observed by IntersectionObserver.
+   * When it enters the viewport, the next feed page loads.
+   */
+  const loadMoreTriggerRef =
+    useRef<HTMLDivElement | null>(null);
+
+  /*
+   * Only the first eligible community post from each author
    * receives a Follow button.
    *
-   * Authors already being followed and the current
-   * user's own posts do not receive one.
-   *
-   * This map is calculated from the initial feed and
-   * remains stable while individual post components
-   * synchronize follow changes.
+   * This calculation includes every loaded page.
    */
   const followButtonPostIds = useMemo(() => {
     const eligiblePostIds = new Set<number>();
@@ -73,6 +91,131 @@ export default function MusicFeed({
     return eligiblePostIds;
   }, [feed.results]);
 
+  /*
+   * Fetch the next page from the backend's existing
+   * mixed-feed snapshot.
+   *
+   * The backend remains responsible for:
+   * - Community/editorial mixing
+   * - Ranking
+   * - Personalization
+   * - Cursor pagination
+   *
+   * The frontend only appends the returned items.
+   */
+  const handleLoadMore = useCallback(async () => {
+    if (
+      loadingMoreRef.current ||
+      !feed.has_more ||
+      !feed.next_cursor
+    ) {
+      return;
+    }
+
+    loadingMoreRef.current = true;
+    setIsLoadingMore(true);
+    setLoadMoreError(null);
+
+    try {
+      const nextPage = await getMusicFeed({
+        cursor: feed.next_cursor,
+      });
+
+      setFeed((currentFeed) => {
+        /*
+         * Protect against duplicate entries if an item
+         * is unexpectedly repeated in a response.
+         */
+        const existingIds = new Set(
+          currentFeed.results.map(
+            (item) =>
+              `${item.content_type}-${item.content.id}`,
+          ),
+        );
+
+        const newItems = nextPage.results.filter(
+          (item) =>
+            !existingIds.has(
+              `${item.content_type}-${item.content.id}`,
+            ),
+        );
+
+        return {
+          results: [
+            ...currentFeed.results,
+            ...newItems,
+          ],
+          has_more: nextPage.has_more,
+          next_cursor: nextPage.next_cursor,
+        };
+      });
+    } catch (error) {
+      console.error(
+        'Failed to load more music feed items:',
+        error,
+      );
+
+      setLoadMoreError(
+        'We couldn’t load more posts. Please try again.',
+      );
+    } finally {
+      loadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [feed.has_more, feed.next_cursor]);
+
+  /*
+   * Automatic infinite scrolling.
+   *
+   * When the loading trigger approaches the viewport,
+   * fetch the next page automatically.
+   *
+   * The 600px root margin starts loading before the
+   * user reaches the absolute bottom of the feed.
+   */
+  useEffect(() => {
+    const trigger = loadMoreTriggerRef.current;
+
+    if (
+      !trigger ||
+      !feed.has_more ||
+      isLoadingMore ||
+      loadMoreError
+    ) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+
+        if (entry?.isIntersecting) {
+          void handleLoadMore();
+        }
+      },
+      {
+        root: null,
+        rootMargin: '600px 0px',
+        threshold: 0,
+      },
+    );
+
+    observer.observe(trigger);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    feed.has_more,
+    isLoadingMore,
+    loadMoreError,
+    handleLoadMore,
+  ]);
+
+  /*
+   * Hide the floating create button while scrolling down.
+   * Reveal it immediately when scrolling back up.
+   */
   useEffect(() => {
     let lastScrollY = window.scrollY;
 
@@ -81,12 +224,6 @@ export default function MusicFeed({
       const scrollDelta =
         currentScrollY - lastScrollY;
 
-      /*
-       * Only filter tiny touchpad/trackpad jitter.
-       *
-       * A real change of direction immediately
-       * controls the button.
-       */
       if (scrollDelta > 4) {
         setShowCreateButton(false);
       } else if (scrollDelta < -4) {
@@ -132,55 +269,176 @@ export default function MusicFeed({
                 }
               />
             ))}
-
-            {feed.has_more && (
-              <div
-                className="
-                  border-t border-light-border-soft
-                  px-5 py-10
-                  text-center
-                  dark:border-dark-border-soft
-                "
-              >
-                <div
-                  className="
-                    mx-auto flex h-10 w-10
-                    items-center justify-center
-                    rounded-full
-                    bg-brand-teal/10
-                    text-brand-teal
-                    dark:bg-brand-teal/15
-                  "
-                >
-                  <Sparkles className="h-5 w-5" />
-                </div>
-
-                <p
-                  className="
-                    mt-3 text-sm font-semibold
-                    text-light-text
-                    dark:text-dark-text
-                  "
-                >
-                  More music waiting for you
-                </p>
-
-                <p
-                  className="
-                    mt-1 text-xs leading-5
-                    text-light-text-muted
-                    dark:text-dark-text-muted
-                  "
-                >
-                  Keep exploring to discover more
-                  songs, artists, and conversations.
-                </p>
-              </div>
-            )}
           </div>
         )}
+
+        {/* Loading error and manual retry */}
+        {loadMoreError && (
+          <div
+            role="alert"
+            className="
+              mt-6 rounded-xl
+              border border-red-200
+              bg-red-50
+              px-4 py-4
+              text-center
+              dark:border-red-900/50
+              dark:bg-red-950/20
+            "
+          >
+            <p
+              className="
+                text-sm
+                text-red-700
+                dark:text-red-300
+              "
+            >
+              {loadMoreError}
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                void handleLoadMore();
+              }}
+              disabled={isLoadingMore}
+              className="
+                mt-3 inline-flex
+                items-center gap-2
+                rounded-full
+                bg-red-100
+                px-4 py-2
+                text-xs font-semibold
+                text-red-700
+                transition-colors
+                hover:bg-red-200
+                disabled:cursor-not-allowed
+                disabled:opacity-60
+                dark:bg-red-900/30
+                dark:text-red-300
+                dark:hover:bg-red-900/50
+              "
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Automatic loading trigger */}
+        {feed.has_more && (
+          <div
+            ref={loadMoreTriggerRef}
+            aria-live="polite"
+            aria-busy={isLoadingMore}
+            className="
+              flex min-h-36
+              flex-col
+              items-center
+              justify-center
+              border-t border-light-border-soft
+              px-5 py-10
+              text-center
+              dark:border-dark-border-soft
+            "
+          >
+            <div
+              className="
+                flex h-10 w-10
+                items-center justify-center
+                rounded-full
+                bg-brand-teal/10
+                text-brand-teal
+                dark:bg-brand-teal/15
+              "
+            >
+              {isLoadingMore ? (
+                <Loader2
+                  className="
+                    h-5 w-5
+                    animate-spin
+                  "
+                />
+              ) : (
+                <Sparkles className="h-5 w-5" />
+              )}
+            </div>
+
+            <p
+              className="
+                mt-3 text-sm font-semibold
+                text-light-text
+                dark:text-dark-text
+              "
+            >
+              {isLoadingMore
+                ? 'Finding more music for you...'
+                : 'More music waiting for you'}
+            </p>
+
+            <p
+              className="
+                mt-1 text-xs leading-5
+                text-light-text-muted
+                dark:text-dark-text-muted
+              "
+            >
+              {isLoadingMore
+                ? 'Please wait while we load your next feed.'
+                : 'Keep scrolling to discover more conversations and editorial stories.'}
+            </p>
+          </div>
+        )}
+
+        {/* All feed items exhausted */}
+        {!feed.has_more &&
+          feed.results.length > 0 && (
+            <div
+              className="
+                border-t border-light-border-soft
+                px-5 py-10
+                text-center
+                dark:border-dark-border-soft
+              "
+            >
+              <div
+                className="
+                  mx-auto flex h-10 w-10
+                  items-center justify-center
+                  rounded-full
+                  bg-brand-teal/10
+                  text-brand-teal
+                  dark:bg-brand-teal/15
+                "
+              >
+                <Sparkles className="h-5 w-5" />
+              </div>
+
+              <p
+                className="
+                  mt-3 text-sm font-semibold
+                  text-light-text
+                  dark:text-dark-text
+                "
+              >
+                You’re all caught up!
+              </p>
+
+              <p
+                className="
+                  mt-1 text-xs leading-5
+                  text-light-text-muted
+                  dark:text-dark-text-muted
+                "
+              >
+                You've reached the end of your music feed.
+                Check back later for more.
+              </p>
+            </div>
+          )}
       </section>
 
+      {/* Floating create post button */}
       <Link
         href="/music/create"
         aria-label="Create music post"
@@ -279,174 +537,9 @@ function MusicFeedItemView({
         />
       );
 
-    case 'song':
-      return (
-        <MusicDiscoveryItem
-          type="song"
-          item={item.content}
-        />
-      );
-
-    case 'album':
-      return (
-        <MusicDiscoveryItem
-          type="album"
-          item={item.content}
-        />
-      );
-
-    case 'artist':
-      return (
-        <ArtistDiscoveryItem
-          artist={item.content}
-        />
-      );
-
     default:
       return null;
   }
-}
-
-type DiscoveryFeedItemProps = {
-  type: 'Song' | 'Album' | 'Artist';
-  title: string;
-  subtitle: string;
-  artwork: string | null;
-  href: string;
-};
-
-function DiscoveryFeedItem({
-  type,
-  title,
-  subtitle,
-  artwork,
-  href,
-}: DiscoveryFeedItemProps) {
-  return (
-    <article
-      className="
-        border-b
-        border-light-border-soft
-        px-4 py-5
-        dark:border-dark-border-soft
-        sm:px-6 sm:py-6
-      "
-    >
-      <div
-        className="
-          flex items-center gap-3
-        "
-      >
-        <div
-          className="
-            relative h-14 w-14 shrink-0
-            overflow-hidden rounded-xl
-            bg-light-surface-soft
-            dark:bg-dark-surface-soft
-          "
-        >
-          {artwork ? (
-            <Image
-              src={artwork}
-              alt=""
-              fill
-              sizes="56px"
-              className="object-cover"
-            />
-          ) : (
-            <div
-              className="
-                flex h-full w-full
-                items-center justify-center
-                text-xs font-bold
-                text-light-text-soft
-                dark:text-dark-text-soft
-              "
-            >
-              VN
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1">
-          <div
-            className="
-              flex items-center gap-2
-            "
-          >
-            <span
-              className="
-                inline-flex items-center gap-1
-                text-[11px] font-semibold
-                uppercase tracking-wide
-                text-brand-teal-dark
-                dark:text-brand-teal-light
-              "
-            >
-              {type === 'Song' && (
-                <Music2 className="h-3.5 w-3.5" />
-              )}
-
-              {type === 'Album' && (
-                <Disc3 className="h-3.5 w-3.5" />
-              )}
-
-              {type === 'Artist' && (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-
-              {type}
-            </span>
-          </div>
-
-          <h3
-            className="
-              mt-1 truncate
-              text-sm font-bold
-              text-light-text
-              dark:text-dark-text
-            "
-          >
-            {title}
-          </h3>
-
-          <p
-            className="
-              mt-0.5 truncate
-              text-xs
-              text-light-text-muted
-              dark:text-dark-text-muted
-            "
-          >
-            {subtitle}
-          </p>
-        </div>
-
-        <Link
-          href={href}
-          className="
-            shrink-0
-            rounded-lg
-            border border-light-border
-            px-3 py-2
-            text-xs font-semibold
-            text-light-text
-            transition-colors
-            hover:border-brand-teal/30
-            hover:bg-brand-teal/5
-            hover:text-brand-teal-dark
-            dark:border-dark-border
-            dark:text-dark-text
-            dark:hover:border-brand-teal/30
-            dark:hover:bg-brand-teal/10
-            dark:hover:text-brand-teal-light
-          "
-        >
-          View
-        </Link>
-      </div>
-    </article>
-  );
 }
 
 function MusicFeedEmptyState() {
@@ -495,34 +588,4 @@ function MusicFeedEmptyState() {
       </p>
     </div>
   );
-}
-
-function getArtistNames(
-  artists: {
-    name: string;
-  }[],
-): string {
-  if (artists.length === 0) {
-    return 'Unknown artist';
-  }
-
-  return artists
-    .map((artist) => artist.name)
-    .join(', ');
-}
-
-function formatCount(value: number): string {
-  if (value < 1_000) {
-    return String(value);
-  }
-
-  if (value < 1_000_000) {
-    return `${(value / 1_000).toFixed(
-      value >= 10_000 ? 0 : 1,
-    )}K`;
-  }
-
-  return `${(value / 1_000_000).toFixed(
-    value >= 10_000_000 ? 0 : 1,
-  )}M`;
 }

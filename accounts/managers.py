@@ -1,47 +1,75 @@
-import re
-
 from django.contrib.auth.models import BaseUserManager
+
+from .validators import (
+    USERNAME_MAX_LENGTH,
+    is_username_available,
+    normalize_generated_username,
+)
 
 
 class UserManager(BaseUserManager):
     """
-    Custom manager for the VibeNationHQ User model.
+    Custom manager for VibeNationHQ accounts.
+
+    Ordinary platform users cannot be created with Django
+    administrative privileges through create_user().
     """
+
+    USERNAME_MAX_LENGTH = USERNAME_MAX_LENGTH
 
     def _generate_username(self, email):
         """
         Generate a unique username from the user's email address.
+
+        Generated usernames use lowercase letters, numbers,
+        and underscores. Users can choose their own capitalization
+        during onboarding.
         """
 
-        base = email.split("@")[0].lower()
+        email_prefix = email.split("@")[0]
 
-        # Keep only letters, numbers, underscores and hyphens.
-        base = re.sub(r"[^a-z0-9_-]", "", base)
-
-        # Make sure we have something usable.
-        if not base:
-            base = "user"
-
-        # Django's default username field allows 150 characters.
-        base = base[:140]
+        base = normalize_generated_username(email_prefix)
 
         username = base
         counter = 1
 
-        while self.model.objects.filter(username=username).exists():
-            username = f"{base}_{counter}"
+        while not is_username_available(username):
+            suffix = f"_{counter}"
+
+            available_length = (
+                self.USERNAME_MAX_LENGTH - len(suffix)
+            )
+
+            if available_length < 1:
+                raise RuntimeError(
+                    "Unable to generate a unique username "
+                    "within the allowed length."
+                )
+
+            username = (
+                f"{base[:available_length]}{suffix}"
+            )
+
             counter += 1
 
         return username
 
-    def create_user(self, email, password=None, **extra_fields):
+    def _create_user(self, email, password=None, **extra_fields):
+        """
+        Internal account creation method.
+
+        Used by ordinary user creation and superuser creation.
+        """
+
         if not email:
             raise ValueError("The email address is required.")
 
         email = self.normalize_email(email)
 
         if not extra_fields.get("username"):
-            extra_fields["username"] = self._generate_username(email)
+            extra_fields["username"] = self._generate_username(
+                email
+            )
 
         user = self.model(
             email=email,
@@ -53,7 +81,38 @@ class UserManager(BaseUserManager):
 
         return user
 
+    def create_user(self, email, password=None, **extra_fields):
+        """
+        Create an ordinary VibeNation account.
+
+        Administrative privileges must not be granted through
+        ordinary user registration.
+        """
+
+        if extra_fields.get("is_staff", False):
+            raise ValueError(
+                "Ordinary VibeNation users cannot have is_staff=True."
+            )
+
+        if extra_fields.get("is_superuser", False):
+            raise ValueError(
+                "Ordinary VibeNation users cannot be superusers."
+            )
+
+        extra_fields.setdefault("is_staff", False)
+        extra_fields.setdefault("is_superuser", False)
+
+        return self._create_user(
+            email=email,
+            password=password,
+            **extra_fields,
+        )
+
     def create_superuser(self, email, password=None, **extra_fields):
+        """
+        Create a Django superuser.
+        """
+
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
@@ -62,9 +121,9 @@ class UserManager(BaseUserManager):
             raise ValueError("Superuser must have is_staff=True.")
 
         if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superuser must have is_superuser=True.")
+            raise ValueError("Superuser must be is_superuser=True.")
 
-        return self.create_user(
+        return self._create_user(
             email=email,
             password=password,
             **extra_fields,

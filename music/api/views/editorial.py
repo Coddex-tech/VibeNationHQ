@@ -2,26 +2,44 @@ from __future__ import annotations
 
 from django.db.models import (
     BooleanField,
+    Count,
     Exists,
     OuterRef,
+    Q,
+    F,
     Value,
 )
+
+from django.db import (
+    transaction,
+    IntegrityError,
+)
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+
+from rest_framework.exceptions import NotFound
 from rest_framework import generics, status
 from rest_framework.permissions import (
     IsAuthenticated,
     IsAuthenticatedOrReadOnly,
+    AllowAny,
 )
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from music.api.pagination import MusicPagination
+from music.api.pagination import (
+    MusicPagination,
+    EditorialCommentThreadPagination,
+)
 from music.api.permissions import IsOwner
+
 from music.models import (
     EditorialArticle,
     EditorialArticleLike,
+    EditorialArticleFavorite,
     EditorialComment,
     EditorialCommentLike,
+    ContentDailyView,
 )
 from music.serializers.editorial import (
     EditorialArticleCardSerializer,
@@ -44,7 +62,6 @@ from music.services.editorial import (
 # ============================================================
 # EDITORIAL ARTICLE
 # ============================================================
-
 
 class EditorialArticleListAPIView(
     generics.ListAPIView,
@@ -78,17 +95,20 @@ class EditorialArticleListAPIView(
             .order_by(
                 "-published_at",
                 "-created_at",
+                "pk",
             )
         )
 
-        return self._annotate_like_state(
-            queryset,
-        )
+        return self._annotate_engagement_state(queryset)
 
-    def _annotate_like_state(self, queryset):
+    def _annotate_engagement_state(self, queryset):
         if not self.request.user.is_authenticated:
             return queryset.annotate(
                 user_has_liked=Value(
+                    False,
+                    output_field=BooleanField(),
+                ),
+                user_has_favorited=Value(
                     False,
                     output_field=BooleanField(),
                 ),
@@ -99,8 +119,14 @@ class EditorialArticleListAPIView(
             article_id=OuterRef("pk"),
         )
 
+        user_favorites = EditorialArticleFavorite.objects.filter(
+            user=self.request.user,
+            article_id=OuterRef("pk"),
+        )
+
         return queryset.annotate(
             user_has_liked=Exists(user_likes),
+            user_has_favorited=Exists(user_favorites),
         )
 
 
@@ -112,7 +138,6 @@ class EditorialArticleDetailAPIView(
     """
 
     serializer_class = EditorialArticleSerializer
-
     lookup_field = "slug"
 
     def get_queryset(self):
@@ -142,6 +167,10 @@ class EditorialArticleDetailAPIView(
                     False,
                     output_field=BooleanField(),
                 ),
+                user_has_favorited=Value(
+                    False,
+                    output_field=BooleanField(),
+                ),
             )
 
         user_likes = EditorialArticleLike.objects.filter(
@@ -149,16 +178,101 @@ class EditorialArticleDetailAPIView(
             article_id=OuterRef("pk"),
         )
 
-        return queryset.annotate(
-            user_has_liked=Exists(user_likes),
+        user_favorites = EditorialArticleFavorite.objects.filter(
+            user=self.request.user,
+            article_id=OuterRef("pk"),
         )
 
+        return queryset.annotate(
+            user_has_liked=Exists(user_likes),
+            user_has_favorited=Exists(user_favorites),
+        )
+
+
+class EditorialArticleViewAPIView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    queryset = EditorialArticle.objects.filter(
+        status=EditorialArticle.Status.PUBLISHED,
+    )
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        article = self.get_object()
+
+        today = timezone.localdate()
+        now = timezone.now()
+
+        # Increment the lifetime view count only while the
+        # article remains published.
+        updated_rows = (
+            EditorialArticle.objects
+            .filter(
+                pk=article.pk,
+                status=EditorialArticle.Status.PUBLISHED,
+            )
+            .update(
+                views_count=F("views_count") + 1,
+            )
+        )
+
+        if updated_rows == 0:
+            raise NotFound()
+
+        daily_filter = {
+            "editorial_article_id": article.pk,
+            "date": today,
+        }
+
+        # Increment today's record atomically when it exists.
+        daily_updated = ContentDailyView.objects.filter(
+            **daily_filter,
+        ).update(
+            views_count=F("views_count") + 1,
+            updated_at=now,
+        )
+
+        if daily_updated == 0:
+            # Use a savepoint so an expected uniqueness conflict
+            # does not break the surrounding transaction.
+            try:
+                with transaction.atomic():
+                    ContentDailyView.objects.create(
+                        **daily_filter,
+                        views_count=1,
+                    )
+
+            except IntegrityError:
+                # A concurrent request may have created the
+                # same article/date record first.
+                daily_record_exists = ContentDailyView.objects.filter(
+                    **daily_filter,
+                ).exists()
+
+                if not daily_record_exists:
+                    # This was not the expected uniqueness race.
+                    raise
+
+                daily_updated = ContentDailyView.objects.filter(
+                    **daily_filter,
+                ).update(
+                    views_count=F("views_count") + 1,
+                    updated_at=now,
+                )
+
+                if daily_updated != 1:
+                    raise
+
+        # Keep the existing response shape unchanged.
+        article.refresh_from_db(fields=["views_count"])
+
+        return Response({
+            "views_count": article.views_count,
+        })
+    
 
 # ============================================================
 # EDITORIAL COMMENTS
 # ============================================================
-
-
 class EditorialCommentListCreateAPIView(
     generics.ListCreateAPIView,
 ):
@@ -196,7 +310,17 @@ class EditorialCommentListCreateAPIView(
                 "article",
                 "parent",
             )
-            .order_by("created_at")
+            .annotate(
+                thread_replies_count=Count(
+                    "thread_replies",
+                    filter=Q(
+                        thread_replies__status=EditorialComment.Status.PUBLISHED,
+                        thread_replies__article_id=article.pk,
+                    ),
+                    distinct=True,
+                ),
+            )
+            .order_by("created_at", "pk")
         )
 
         parent_value = self.request.query_params.get(
@@ -290,6 +414,78 @@ class EditorialCommentListCreateAPIView(
         return Response(
             response_serializer.data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+# ============================================================
+# EDITORIAL COMMENT THREAD
+# ============================================================
+class EditorialCommentThreadAPIView(
+    generics.ListAPIView,
+):
+    """
+    Paginated list of all published descendants of a
+    top-level editorial comment.
+
+    Replies retain their immediate parent relationship,
+    allowing the frontend to reconstruct nested threads.
+    """
+
+    serializer_class = EditorialCommentSerializer
+    pagination_class = EditorialCommentThreadPagination
+    permission_classes = []
+
+    def get_queryset(self):
+        article = get_object_or_404(
+            EditorialArticle.objects.filter(
+                status=EditorialArticle.Status.PUBLISHED,
+            ),
+            pk=self.kwargs["article_id"],
+        )
+
+        root_comment = get_object_or_404(
+            EditorialComment.objects.filter(
+                article=article,
+                parent__isnull=True,
+                status=EditorialComment.Status.PUBLISHED,
+            ),
+            pk=self.kwargs["root_comment_id"],
+        )
+
+        queryset = (
+            EditorialComment.objects
+            .filter(
+                article=article,
+                root_comment_id=root_comment.pk,
+                status=EditorialComment.Status.PUBLISHED,
+            )
+            .select_related(
+                "user",
+                "article",
+                "parent",
+                "root_comment",
+            )
+            .order_by(
+                "created_at",
+                "pk",
+            )
+        )
+
+        if not self.request.user.is_authenticated:
+            return queryset.annotate(
+                user_has_liked=Value(
+                    False,
+                    output_field=BooleanField(),
+                ),
+            )
+
+        user_likes = EditorialCommentLike.objects.filter(
+            user=self.request.user,
+            comment_id=OuterRef("pk"),
+        )
+
+        return queryset.annotate(
+            user_has_liked=Exists(user_likes),
         )
 
 
@@ -433,8 +629,6 @@ class EditorialArticleReportAPIView(
 # ============================================================
 # EDITORIAL COMMENT REPORT
 # ============================================================
-
-
 class EditorialCommentReportAPIView(
     APIView,
 ):

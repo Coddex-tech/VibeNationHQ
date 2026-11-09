@@ -19,6 +19,8 @@ from accounts.models import (
     PhoneOTP,
     UserPhone,
 )
+from music.models import UserFollow
+
 from accounts.services.verification import (
     VERIFICATION_RESEND_COOLDOWN,
     create_email_verification_token,
@@ -3820,3 +3822,710 @@ class PhoneAPITests(APITestCase):
             otp.phone_number,
             "+2348012345678",
         )
+
+
+
+
+
+
+
+class PublicProfileAPITests(TestCase):
+
+    def setUp(self):
+        self.profile_user = User.objects.create_user(
+            email="profile@example.com",
+            password="StrongPassword123!",
+            username="VoodooPlatform",
+            display_name="Voodoo Platform 🎵",
+            bio="Music, entertainment and culture.",
+            is_active=True,
+            onboarding_completed=True,
+        )
+
+        self.url = reverse(
+            "public-user-profile",
+            kwargs={
+                "username": self.profile_user.username,
+            },
+        )
+
+    def test_anonymous_user_can_view_public_profile(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["username"],
+            "VoodooPlatform",
+        )
+
+        self.assertEqual(
+            response.data["display_name"],
+            "Voodoo Platform 🎵",
+        )
+
+    def test_profile_contains_expected_public_fields(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        expected_fields = [
+            "id",
+            "username",
+            "display_name",
+            "bio",
+            "profile_image",
+            "is_verified",
+            "is_identity_verified",
+            "followers_count",
+            "following_count",
+            "is_following",
+            "is_own_profile",
+            "date_joined",
+        ]
+
+        for field in expected_fields:
+            self.assertIn(
+                field,
+                response.data,
+            )
+
+    def test_profile_does_not_expose_private_fields(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        private_fields = [
+            "email",
+            "phone",
+            "password",
+            "is_staff",
+            "is_superuser",
+            "groups",
+            "user_permissions",
+        ]
+
+        for field in private_fields:
+            self.assertNotIn(
+                field,
+                response.data,
+            )
+
+    def test_username_lookup_is_case_insensitive(self):
+        url = reverse(
+            "public-user-profile",
+            kwargs={
+                "username": "voodooplatform",
+            },
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["username"],
+            "VoodooPlatform",
+        )
+
+    def test_missing_profile_returns_404(self):
+        url = reverse(
+            "public-user-profile",
+            kwargs={
+                "username": "nonexistentuser",
+            },
+        )
+
+        response = self.client.get(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_inactive_user_profile_returns_404(self):
+        self.profile_user.is_active = False
+
+        self.profile_user.save(
+            update_fields=["is_active"],
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_staff_profile_returns_404(self):
+        self.profile_user.is_staff = True
+
+        self.profile_user.save(
+            update_fields=["is_staff"],
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_superuser_profile_returns_404(self):
+        self.profile_user.is_superuser = True
+
+        self.profile_user.save(
+            update_fields=["is_superuser"],
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_incomplete_onboarding_profile_returns_404(self):
+        self.profile_user.onboarding_completed = False
+
+        self.profile_user.save(
+            update_fields=["onboarding_completed"],
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_profile_returns_correct_follower_count(self):
+        follower_one = User.objects.create_user(
+            email="follower1@example.com",
+            password="StrongPassword123!",
+        )
+
+        follower_two = User.objects.create_user(
+            email="follower2@example.com",
+            password="StrongPassword123!",
+        )
+
+        UserFollow.objects.create(
+            follower=follower_one,
+            following=self.profile_user,
+        )
+
+        UserFollow.objects.create(
+            follower=follower_two,
+            following=self.profile_user,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["followers_count"],
+            2,
+        )
+
+    def test_profile_returns_correct_following_count(self):
+        followed_user_one = User.objects.create_user(
+            email="following1@example.com",
+            password="StrongPassword123!",
+        )
+
+        followed_user_two = User.objects.create_user(
+            email="following2@example.com",
+            password="StrongPassword123!",
+        )
+
+        UserFollow.objects.create(
+            follower=self.profile_user,
+            following=followed_user_one,
+        )
+
+        UserFollow.objects.create(
+            follower=self.profile_user,
+            following=followed_user_two,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertEqual(
+            response.data["following_count"],
+            2,
+        )
+
+    def test_authenticated_viewer_sees_correct_follow_status(self):
+        viewer = User.objects.create_user(
+            email="viewer@example.com",
+            password="StrongPassword123!",
+            onboarding_completed=True,
+        )
+
+        session, raw_secret = create_session(
+            user=viewer,
+        )
+
+        UserFollow.objects.create(
+            follower=viewer,
+            following=self.profile_user,
+        )
+
+        self.client.cookies[AUTH_COOKIE_NAME] = (
+            raw_secret
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["is_following"],
+        )
+
+        self.assertFalse(
+            response.data["is_own_profile"],
+        )
+
+    def test_authenticated_viewer_not_following_profile(self):
+        viewer = User.objects.create_user(
+            email="viewer@example.com",
+            password="StrongPassword123!",
+        )
+
+        session, raw_secret = create_session(
+            user=viewer,
+        )
+
+        self.client.cookies[AUTH_COOKIE_NAME] = (
+            raw_secret
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertFalse(
+            response.data["is_following"],
+        )
+
+    def test_profile_owner_sees_own_profile_status(self):
+        session, raw_secret = create_session(
+            user=self.profile_user,
+        )
+
+        self.client.cookies[AUTH_COOKIE_NAME] = (
+            raw_secret
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["is_own_profile"],
+        )
+
+        self.assertFalse(
+            response.data["is_following"],
+        )
+
+    def test_anonymous_viewer_has_false_follow_status(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertFalse(
+            response.data["is_following"],
+        )
+
+        self.assertFalse(
+            response.data["is_own_profile"],
+        )
+
+    def test_verification_statuses_are_returned(self):
+        self.profile_user.is_verified = True
+        self.profile_user.is_identity_verified = True
+
+        self.profile_user.save(
+            update_fields=[
+                "is_verified",
+                "is_identity_verified",
+            ],
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+        )
+
+        self.assertTrue(
+            response.data["is_verified"],
+        )
+
+        self.assertTrue(
+            response.data["is_identity_verified"],
+        )
+
+
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from rest_framework.test import APIClient
+from io import BytesIO
+
+from PIL import Image
+
+
+class ProfileUpdateAPITests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="profileupdate@example.com",
+            password="StrongPassword123!",
+            username="ProfileUser",
+            display_name="Original Name",
+            bio="Original bio",
+            is_active=True,
+            is_staff=False,
+            is_superuser=False,
+            onboarding_completed=True,
+        )
+
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
+
+        self.url = reverse("profile-update")
+
+    def test_user_can_update_display_name(self):
+        response = self.client.patch(
+            self.url,
+            {"display_name": "New Display Name"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.display_name,
+            "New Display Name",
+        )
+
+        self.assertEqual(
+            response.data["user"]["display_name"],
+            "New Display Name",
+        )
+
+    def test_user_can_update_username(self):
+        response = self.client.patch(
+            self.url,
+            {"username": "NewUsername"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.username, "NewUsername")
+
+    def test_username_preserves_capitalization(self):
+        response = self.client.patch(
+            self.url,
+            {"username": "VoodooPlatform"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.username,
+            "VoodooPlatform",
+        )
+
+    def test_user_can_update_bio(self):
+        response = self.client.patch(
+            self.url,
+            {"bio": "My updated profile biography."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.bio,
+            "My updated profile biography.",
+        )
+
+    def test_user_can_clear_bio(self):
+        response = self.client.patch(
+            self.url,
+            {"bio": ""},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.bio, "")
+
+    def test_user_can_update_multiple_profile_fields(self):
+        response = self.client.patch(
+            self.url,
+            {
+                "username": "UpdatedProfile",
+                "display_name": "Updated Display",
+                "bio": "Updated biography.",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(
+            self.user.username,
+            "UpdatedProfile",
+        )
+        self.assertEqual(
+            self.user.display_name,
+            "Updated Display",
+        )
+        self.assertEqual(
+            self.user.bio,
+            "Updated biography.",
+        )
+
+    def test_username_must_be_at_least_three_characters(self):
+        response = self.client.patch(
+            self.url,
+            {"username": "ab"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_username_must_not_exceed_thirty_characters(self):
+        response = self.client.patch(
+            self.url,
+            {"username": "a" * 31},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_username_rejects_invalid_characters(self):
+        invalid_usernames = [
+            "user.name",
+            "user-name",
+            "user name",
+            "@username",
+            "user!",
+        ]
+
+        for username in invalid_usernames:
+            with self.subTest(username=username):
+                response = self.client.patch(
+                    self.url,
+                    {"username": username},
+                    format="json",
+                )
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                )
+
+    def test_username_uniqueness_is_case_insensitive(self):
+        User.objects.create_user(
+            email="anotherprofile@example.com",
+            password="StrongPassword123!",
+            username="ExistingUser",
+            is_active=True,
+        )
+
+        response = self.client.patch(
+            self.url,
+            {"username": "existinguser"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.user.refresh_from_db()
+
+        self.assertEqual(self.user.username, "ProfileUser")
+
+    def test_display_name_cannot_be_empty(self):
+        response = self.client.patch(
+            self.url,
+            {"display_name": "   "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_display_name_cannot_exceed_one_hundred_characters(self):
+        response = self.client.patch(
+            self.url,
+            {"display_name": "A" * 101},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unauthenticated_user_cannot_update_profile(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.patch(
+            self.url,
+            {"display_name": "Unauthorized"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_staff_user_cannot_update_public_profile(self):
+        staff_user = User.objects.create_superuser(
+            email="staffprofile@example.com",
+            password="StrongPassword123!",
+            username="StaffProfile",
+        )
+
+        # Keep the staff permission but remove superuser privileges.
+        staff_user.is_superuser = False
+        staff_user.save(update_fields=["is_superuser"])
+
+        self.client.force_authenticate(user=staff_user)
+
+        response = self.client.patch(
+            self.url,
+            {"display_name": "Staff Name"},
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_superuser_cannot_update_public_profile(self):
+        superuser = User.objects.create_superuser(
+            email="superprofile@example.com",
+            password="StrongPassword123!",
+            username="SuperProfile",
+        )
+
+        self.client.force_authenticate(user=superuser)
+
+        response = self.client.patch(
+            self.url,
+            {"display_name": "Superuser Name"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_incomplete_onboarding_user_cannot_update_profile(self):
+        self.user.onboarding_completed = False
+        self.user.save(update_fields=["onboarding_completed"])
+
+        response = self.client.patch(
+            self.url,
+            {"display_name": "Incomplete User"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_profile_image_upload(self):
+        image_buffer = BytesIO()
+
+        image = Image.new("RGB", (100, 100), color="white")
+        image.save(image_buffer, format="PNG")
+        image_buffer.seek(0)
+
+        uploaded_image = SimpleUploadedFile(
+            "profile.png",
+            image_buffer.getvalue(),
+            content_type="image/png",
+        )
+
+        with self.settings(
+            MEDIA_ROOT="/tmp/vibenation-test-media"
+        ):
+            response = self.client.patch(
+                self.url,
+                {"profile_image": uploaded_image},
+                format="multipart",
+            )
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            response.data,
+        )
+
+        self.user.refresh_from_db()
+
+        self.assertTrue(self.user.profile_image)
+
+    def test_response_does_not_expose_private_account_fields(self):
+        response = self.client.patch(
+            self.url,
+            {"display_name": "Public Name"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        public_fields = response.data["user"]
+
+        self.assertNotIn("email", public_fields)
+        self.assertNotIn("phone", public_fields)
+        self.assertNotIn("password", public_fields)
+        self.assertNotIn("is_staff", public_fields)
+        self.assertNotIn("is_superuser", public_fields)

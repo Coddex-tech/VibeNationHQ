@@ -4,7 +4,6 @@ from django.contrib import admin
 from .models import (
     Album,
     AlbumFavorite,
-    AlbumRating,
     AlbumTrack,
     Artist,
     ArtistFollow,
@@ -24,7 +23,6 @@ from .models import (
     Genre,
     Song,
     SongFavorite,
-    SongRating,
     UserFollow,
 )
 
@@ -511,103 +509,7 @@ class AlbumTrackAdmin(TimeStampedAdmin):
         "album",
         "track_number",
     )
-
-
-# ============================================================
-# SONG RATINGS
-# ============================================================
-
-@admin.register(SongRating)
-class SongRatingAdmin(TimeStampedAdmin):
-    list_display = (
-        "song",
-        "user",
-        "rating",
-        "created_at",
-    )
-
-    search_fields = (
-        "song__title",
-        "song__artists__name",
-        "user__username",
-        "user__email",
-    )
-
-    list_filter = (
-        "rating",
-        "created_at",
-    )
-
-    autocomplete_fields = (
-        "user",
-        "song",
-    )
-
-    ordering = (
-        "-created_at",
-    )
-
-    date_hierarchy = "created_at"
-
-    readonly_fields = (
-        "user",
-        "song",
-        "rating",
-        "created_at",
-        "updated_at",
-    )
-
-    def has_add_permission(self, request):
-        return False
-
-
-# ============================================================
-# ALBUM RATINGS
-# ============================================================
-
-@admin.register(AlbumRating)
-class AlbumRatingAdmin(TimeStampedAdmin):
-    list_display = (
-        "album",
-        "user",
-        "rating",
-        "created_at",
-    )
-
-    search_fields = (
-        "album__title",
-        "album__artists__name",
-        "user__username",
-        "user__email",
-    )
-
-    list_filter = (
-        "rating",
-        "created_at",
-    )
-
-    autocomplete_fields = (
-        "user",
-        "album",
-    )
-
-    ordering = (
-        "-created_at",
-    )
-
-    date_hierarchy = "created_at"
-
-    readonly_fields = (
-        "user",
-        "album",
-        "rating",
-        "created_at",
-        "updated_at",
-    )
-
-    def has_add_permission(self, request):
-        return False
-
+    
 
 # ============================================================
 # EDITORIAL ARTICLE

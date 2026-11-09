@@ -1,13 +1,23 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowUpRight,
-  Clock3,
+  Bookmark,
   ChartNoAxesColumn,
+  Clock3,
+  Heart,
   MessageCircle,
 } from 'lucide-react';
+
+import {
+  favoriteEditorialArticle,
+  likeEditorialArticle,
+  unfavoriteEditorialArticle,
+  unlikeEditorialArticle,
+} from '@/lib/music/EditorialArticles';
 
 import type {
   MusicFeedEditorialArticle,
@@ -15,10 +25,12 @@ import type {
 
 type MusicEditorialPostProps = {
   article: MusicFeedEditorialArticle;
+  onUnfavorited?: () => void;
 };
 
 export default function MusicEditorialPost({
   article,
+  onUnfavorited,
 }: MusicEditorialPostProps) {
   const publishedLabel =
     formatRelativeTime(article.published_at);
@@ -30,6 +42,116 @@ export default function MusicEditorialPost({
     null;
 
   const musicContext = getMusicContext(article);
+
+  const [liked, setLiked] = useState(article.liked);
+  const [likesCount, setLikesCount] = useState(
+    article.likes_count,
+  );
+
+  const [favorited, setFavorited] = useState(
+    article.favorited,
+  );
+  const [favoritesCount, setFavoritesCount] =
+    useState(article.favorites_count);
+
+  const [likePending, setLikePending] = useState(false);
+  const [favoritePending, setFavoritePending] =
+    useState(false);
+
+  const [interactionError, setInteractionError] =
+    useState<string | null>(null);
+
+  const likeLock = useRef(false);
+  const favoriteLock = useRef(false);
+
+  async function handleLike() {
+    if (likeLock.current) {
+      return;
+    }
+
+    likeLock.current = true;
+    setLikePending(true);
+    setInteractionError(null);
+
+    const previousLiked = liked;
+    const previousCount = likesCount;
+    const nextLiked = !previousLiked;
+
+    setLiked(nextLiked);
+    setLikesCount(
+      Math.max(
+        0,
+        previousCount + (nextLiked ? 1 : -1),
+      ),
+    );
+
+    try {
+      const response = nextLiked
+        ? await likeEditorialArticle(article.id)
+        : await unlikeEditorialArticle(article.id);
+
+      setLiked(response.liked);
+      setLikesCount(response.likes_count);
+    } catch {
+      setLiked(previousLiked);
+      setLikesCount(previousCount);
+      setInteractionError(
+        'Could not update your like. Please try again.',
+      );
+    } finally {
+      likeLock.current = false;
+      setLikePending(false);
+    }
+  }
+
+  async function handleFavorite() {
+    if (favoriteLock.current) {
+      return;
+    }
+
+    favoriteLock.current = true;
+    setFavoritePending(true);
+    setInteractionError(null);
+
+    const previousFavorited = favorited;
+    const previousCount = favoritesCount;
+    const nextFavorited = !previousFavorited;
+
+    setFavorited(nextFavorited);
+    setFavoritesCount(
+      Math.max(
+        0,
+        previousCount + (nextFavorited ? 1 : -1),
+      ),
+    );
+
+    try {
+      const response = nextFavorited
+        ? await favoriteEditorialArticle(article.id)
+        : await unfavoriteEditorialArticle(article.id);
+
+      setFavorited(response.favorited);
+      setFavoritesCount(response.favorites_count);
+
+      if (!response.favorited) {
+        onUnfavorited?.();
+      }
+    } catch {
+      setFavorited(previousFavorited);
+      setFavoritesCount(previousCount);
+      setInteractionError(
+        'Could not update your favorite. Please try again.',
+      );
+    } finally {
+      favoriteLock.current = false;
+      setFavoritePending(false);
+    }
+  }
+
+  const articleUrl =
+    `/music/editorial/${article.slug}`;
+
+  const commentsUrl = `${articleUrl}#comments`;
 
   return (
     <article
@@ -95,7 +217,7 @@ export default function MusicEditorialPost({
       {/* Article content */}
       <div className="mt-5">
         <Link
-          href={`/news/${article.slug}`}
+          href={articleUrl}
           className="
             group block
             focus:outline-none
@@ -148,7 +270,7 @@ export default function MusicEditorialPost({
         </div>
       )}
 
-      {/* Article metadata */}
+      {/* Article engagement and navigation */}
       <div
         className="
           mt-5 flex flex-wrap
@@ -158,33 +280,114 @@ export default function MusicEditorialPost({
       >
         <div
           className="
-            flex items-center gap-4
+            flex flex-wrap items-center
+            gap-x-4 gap-y-3
             text-xs
             text-light-text-soft
             dark:text-dark-text-soft
           "
         >
-          <span className="inline-flex items-center gap-1.5">
+          {/* Like */}
+          <button
+            type="button"
+            onClick={handleLike}
+            disabled={likePending}
+            aria-pressed={liked}
+            aria-label={
+              liked ? 'Unlike article' : 'Like article'
+            }
+            className={`
+              inline-flex items-center gap-1.5
+              rounded-full
+              transition-colors
+              disabled:cursor-not-allowed
+              disabled:opacity-60
+              ${
+                liked
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'hover:text-rose-600 dark:hover:text-rose-400'
+              }
+            `}
+          >
+            <Heart
+              className="h-4 w-4"
+              fill={liked ? 'currentColor' : 'none'}
+              strokeWidth={1.8}
+            />
+            <span>{formatCount(likesCount)}</span>
+          </button>
+
+          {/* Comment: opens the article at its comments section */}
+          <Link
+            href={commentsUrl}
+            aria-label={`View ${formatCount(article.comments_count)} comments`}
+            className="
+              inline-flex items-center gap-1.5
+              rounded-full
+              transition-colors
+              hover:text-brand-teal-dark
+              focus:outline-none
+              focus-visible:ring-2
+              focus-visible:ring-brand-teal/40
+              dark:hover:text-brand-teal-light
+            "
+          >
+            <MessageCircle
+              className="h-4 w-4"
+              strokeWidth={1.8}
+            />
+            <span>
+              {formatCount(article.comments_count)}
+            </span>
+          </Link>
+
+          {/* Favorite */}
+          <button
+            type="button"
+            onClick={handleFavorite}
+            disabled={favoritePending}
+            aria-pressed={favorited}
+            aria-label={
+              favorited
+                ? 'Remove article from favorites'
+                : 'Add article to favorites'
+            }
+            className={`
+              inline-flex items-center gap-1.5
+              rounded-full
+              transition-colors
+              disabled:cursor-not-allowed
+              disabled:opacity-60
+              ${
+                favorited
+                  ? 'text-brand-teal-dark dark:text-brand-teal-light'
+                  : 'hover:text-brand-teal-dark dark:hover:text-brand-teal-light'
+              }
+            `}
+          >
+            <Bookmark
+              className="h-4 w-4"
+              fill={favorited ? 'currentColor' : 'none'}
+              strokeWidth={1.8}
+            />
+            <span>{formatCount(favoritesCount)}</span>
+          </button>
+
+          {/* Views */}
+          <span
+            className="inline-flex items-center gap-1.5"
+            aria-label={`${formatCount(article.views_count)} views`}
+          >
             <ChartNoAxesColumn
               className="h-[15px] w-[15px]"
               strokeWidth={1.8}
             />
-            {formatCount(article.views_count)}
-          </span>
-
-          <span className="inline-flex items-center gap-1.5">
-            <MessageCircle
-              className="h-3.5 w-3.5"
-              strokeWidth={1.8}
-            />
-            {formatCount(
-              article.comments_count,
-            )}
+            <span>{formatCount(article.views_count)}</span>
           </span>
         </div>
 
         <Link
-          href={`/news/${article.slug}`}
+          href={articleUrl}
           className="
             inline-flex items-center gap-1.5
             rounded-full
@@ -208,6 +411,19 @@ export default function MusicEditorialPost({
           />
         </Link>
       </div>
+
+      {interactionError && (
+        <p
+          role="alert"
+          className="
+            mt-3 text-sm
+            text-red-600
+            dark:text-red-400
+          "
+        >
+          {interactionError}
+        </p>
+      )}
     </article>
   );
 }
@@ -227,20 +443,16 @@ function MusicContext({
     <Link
       href={href}
       className="
-        group flex items-center gap-3
-        overflow-hidden
-        rounded-2xl
-        border border-light-border
-        bg-light-surface-soft
-        p-3
-        transition-all duration-200
-        hover:border-brand-teal/30
-        hover:bg-light-surface
-        dark:border-dark-border
-        dark:bg-dark-surface-soft
-        dark:hover:border-brand-teal/30
-        dark:hover:bg-dark-surface
-      "
+      group flex items-center gap-3
+      overflow-hidden
+      rounded-2xl
+      bg-light-surface-soft
+      p-3
+      transition-colors duration-200
+      hover:bg-light-surface
+      dark:bg-dark-surface-soft
+      dark:hover:bg-dark-surface
+    "
     >
       <div
         className="
@@ -331,8 +543,7 @@ function getMusicContext(
 
     return {
       title: article.song.title,
-      subtitle:
-        artists || 'Featured song',
+      subtitle: artists || 'Featured song',
       href: `/music/songs/${article.song.slug}`,
     };
   }
@@ -344,8 +555,7 @@ function getMusicContext(
 
     return {
       title: article.album.title,
-      subtitle:
-        artists || 'Featured album',
+      subtitle: artists || 'Featured album',
       href: `/music/albums/${article.album.slug}`,
     };
   }
@@ -374,48 +584,37 @@ function formatRelativeTime(
     return 'Recently';
   }
 
-  const difference =
-    Date.now() - date.getTime();
+  const difference = Date.now() - date.getTime();
 
   if (difference < 0) {
     return 'Just now';
   }
 
-  const seconds = Math.floor(
-    difference / 1000,
-  );
+  const seconds = Math.floor(difference / 1000);
 
   if (seconds < 60) {
     return 'Just now';
   }
 
-  const minutes = Math.floor(
-    seconds / 60,
-  );
+  const minutes = Math.floor(seconds / 60);
 
   if (minutes < 60) {
     return `${minutes}m`;
   }
 
-  const hours = Math.floor(
-    minutes / 60,
-  );
+  const hours = Math.floor(minutes / 60);
 
   if (hours < 24) {
     return `${hours}h`;
   }
 
-  const days = Math.floor(
-    hours / 24,
-  );
+  const days = Math.floor(hours / 24);
 
   if (days < 30) {
     return `${days}d`;
   }
 
-  const months = Math.floor(
-    days / 30,
-  );
+  const months = Math.floor(days / 30);
 
   if (months < 12) {
     return `${months}mo`;

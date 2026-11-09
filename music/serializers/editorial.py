@@ -22,7 +22,6 @@ from .catalog import (
 # EDITORIAL ARTICLE
 # ============================================================
 
-
 class EditorialArticleCardSerializer(BaseModelSerializer):
     """
     Lightweight serializer for editorial article listings,
@@ -49,6 +48,12 @@ class EditorialArticleCardSerializer(BaseModelSerializer):
         default=False,
     )
 
+    favorited = serializers.BooleanField(
+        source="user_has_favorited",
+        read_only=True,
+        default=False,
+    )
+
     class Meta:
         model = EditorialArticle
         fields = [
@@ -66,6 +71,8 @@ class EditorialArticleCardSerializer(BaseModelSerializer):
             "views_count",
             "likes_count",
             "liked",
+            "favorites_count",
+            "favorited",
             "comments_count",
         ]
         read_only_fields = fields
@@ -123,6 +130,12 @@ class EditorialArticleSerializer(
         default=False,
     )
 
+    favorited = serializers.BooleanField(
+        source="user_has_favorited",
+        read_only=True,
+        default=False,
+    )
+
     class Meta:
         model = EditorialArticle
         fields = [
@@ -142,6 +155,8 @@ class EditorialArticleSerializer(
             "views_count",
             "likes_count",
             "liked",
+            "favorites_count",
+            "favorited",
             "comments_count",
             "created_at",
             "updated_at",
@@ -173,7 +188,6 @@ class EditorialArticleSerializer(
 # EDITORIAL COMMENT
 # ============================================================
 
-
 class EditorialCommentSerializer(
     BaseModelSerializer,
 ):
@@ -190,6 +204,13 @@ class EditorialCommentSerializer(
         default=False,
     )
 
+    # Number of all published descendants in this conversation,
+    # distinct from replies_count, which counts direct replies.
+    thread_replies_count = serializers.IntegerField(
+        read_only=True,
+        default=0,
+    )
+
     class Meta:
         model = EditorialComment
         fields = [
@@ -197,11 +218,13 @@ class EditorialCommentSerializer(
             "user",
             "article",
             "parent",
+            "root_comment",
             "content",
             "views_count",
             "likes_count",
             "liked",
             "replies_count",
+            "thread_replies_count",
             "status",
             "is_edited",
             "created_at",
@@ -214,6 +237,11 @@ class EditorialCommentSerializer(
             "id": obj.user_id,
             "name": self._get_user_display_name(
                 obj.user,
+            ),
+            "username": getattr(
+                obj.user,
+                "username",
+                "",
             ),
         }
 
@@ -285,8 +313,6 @@ class EditorialCommentUpdateSerializer(
 # ============================================================
 # EDITORIAL ARTICLE REPORT
 # ============================================================
-
-
 class EditorialArticleReportSerializer(
     BaseModelSerializer,
 ):
@@ -332,8 +358,6 @@ class EditorialArticleReportCreateSerializer(
 # ============================================================
 # EDITORIAL COMMENT REPORT
 # ============================================================
-
-
 class EditorialCommentReportSerializer(
     BaseModelSerializer,
 ):

@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -48,11 +49,14 @@ class MusicSearchResult:
 
     VibeNationHQ works with this structure instead of depending
     directly on the implementation details of a specific provider.
+
+    Provider-specific listening URLs remain available internally
+    for imports and detail pages. Search serializers decide which
+    fields are exposed to API consumers.
     """
 
     provider: MusicProviderName
     provider_id: str
-
     entity_type: MusicEntityType
 
     title: str
@@ -73,12 +77,23 @@ class MusicSearchResult:
     boomplay_url: str | None = None
 
     country: str | None = None
-
     isrc: str | None = None
 
-    metadata: dict[str, Any] = field(
-        default_factory=dict,
-    )
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """
+        Reject unusable normalized results at the provider boundary.
+        """
+
+        if not isinstance(self.provider_id, str) or not self.provider_id.strip():
+            raise ValueError("MusicSearchResult.provider_id cannot be empty.")
+
+        if not isinstance(self.title, str) or not self.title.strip():
+            raise ValueError("MusicSearchResult.title cannot be empty.")
+
+        if not isinstance(self.metadata, dict):
+            raise ValueError("MusicSearchResult.metadata must be a dictionary.")
 
     @property
     def external_id(self) -> str:
@@ -120,6 +135,20 @@ class MusicProvider(Protocol):
     ) -> MusicSearchResult | None:
         """
         Retrieve one known provider entity by its external ID.
+        """
+        ...
+
+    def get_album_tracks(
+        self,
+        *,
+        album_provider_id: str,
+        country: str = "NG",
+    ) -> list[MusicSearchResult]:
+        """
+        Retrieve the available tracks belonging to a provider album.
+
+        Results contain normalized song metadata, ordered by the
+        provider's official track order where available.
         """
         ...
 

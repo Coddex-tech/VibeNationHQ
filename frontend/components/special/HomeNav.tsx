@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,7 +20,11 @@ import { useEffect, useState } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
 import ConfirmationModal from '../ui/ConfirmationModal';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { ApiError, apiRequest } from '@/lib/api';
+import {
+  ApiError,
+  apiRequest,
+  getMediaUrl,
+} from '@/lib/api';
 
 type NavItem = {
   href: string;
@@ -47,6 +52,33 @@ const navItems: NavItem[] = [
   },
 ];
 
+const footerLinks = [
+  {
+    href: '/about',
+    label: 'About Us',
+  },
+  {
+    href: '/advertise',
+    label: 'Advertise With Us',
+  },
+  {
+    href: '/contact',
+    label: 'Contact Us',
+  },
+  {
+    href: '/privacy',
+    label: 'Privacy Policy',
+  },
+  {
+    href: '/services',
+    label: 'Services',
+  },
+  {
+    href: '/dmca',
+    label: 'DMCA',
+  },
+];
+
 function isNavItemActive(
   pathname: string,
   href: string,
@@ -61,11 +93,31 @@ function isNavItemActive(
   );
 }
 
+function getUserInitials(
+  displayName: string,
+  username: string,
+): string {
+  const name = displayName.trim();
+
+  if (name) {
+    const parts = name.split(/\s+/);
+
+    if (parts.length >= 2) {
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    }
+
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  return username.slice(0, 2).toUpperCase();
+}
+
 export default function HomeNav() {
   const pathname = usePathname();
   const router = useRouter();
 
   const {
+    user,
     isAuthenticated,
     isLoading,
   } = useAuth();
@@ -152,10 +204,7 @@ export default function HomeNav() {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [
-    isMenuOpen,
-    isLogoutModalOpen,
-  ]);
+  }, [isMenuOpen, isLogoutModalOpen]);
 
   useEffect(() => {
     if (!isMenuOpen && !isLogoutModalOpen) {
@@ -221,9 +270,7 @@ export default function HomeNav() {
           {/* Hamburger */}
           <button
             type="button"
-            onClick={() =>
-              setIsMenuOpen(true)
-            }
+            onClick={() => setIsMenuOpen(true)}
             aria-label="Open navigation menu"
             aria-expanded={isMenuOpen}
             className="
@@ -292,9 +339,7 @@ export default function HomeNav() {
                   focus-visible:ring-4
                   focus-visible:ring-brand-teal/15
                   ${
-                    pathname.startsWith(
-                      '/notifications',
-                    )
+                    pathname.startsWith('/notifications')
                       ? `
                         bg-brand-teal/10
                         text-brand-teal
@@ -316,6 +361,55 @@ export default function HomeNav() {
               </Link>
             )}
 
+          {/* User profile picture */}
+          {!isLoading &&
+            isAuthenticated === true &&
+            user && (
+              <Link
+                href={`/account/${encodeURIComponent(user.username)}`}
+                aria-label={`View ${user.display_name || user.username}'s profile`}
+                title={user.display_name || user.username}
+                className="
+                  relative
+                  inline-flex h-10 w-10
+                  shrink-0 items-center justify-center
+                  overflow-hidden
+                  rounded-full
+                  border border-light-border
+                  bg-light-surface-soft
+                  text-sm font-bold
+                  text-brand-teal
+                  transition-all duration-200
+                  hover:border-brand-teal
+                  hover:ring-4
+                  hover:ring-brand-teal/10
+                  focus:outline-none
+                  focus-visible:ring-4
+                  focus-visible:ring-brand-teal/20
+                  dark:border-dark-border
+                  dark:bg-dark-surface-soft
+                  dark:text-brand-teal-light
+                "
+              >
+                {user.profile_image ? (
+                  <Image
+                    src={getMediaUrl(user.profile_image)}
+                    alt={`${user.display_name || user.username}'s profile picture`}
+                    fill
+                    sizes="40px"
+                    className="object-cover"
+                  />
+                ) : (
+                  <span>
+                    {getUserInitials(
+                      user.display_name,
+                      user.username,
+                    )}
+                  </span>
+                )}
+              </Link>
+            )}
+
           {/* Theme */}
           <ThemeToggle />
         </div>
@@ -331,9 +425,7 @@ export default function HomeNav() {
           "
           role="presentation"
           onMouseDown={(event) => {
-            if (
-              event.target === event.currentTarget
-            ) {
+            if (event.target === event.currentTarget) {
               closeMenu();
             }
           }}
@@ -357,9 +449,7 @@ export default function HomeNav() {
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            onMouseDown={(event) =>
-              event.stopPropagation()
-            }
+            onMouseDown={(event) => event.stopPropagation()}
           >
             {/* Drawer header */}
             <div
@@ -454,11 +544,10 @@ export default function HomeNav() {
                 <div className="mt-3 space-y-1">
                   {navItems.map((item) => {
                     const Icon = item.icon;
-                    const active =
-                      isNavItemActive(
-                        pathname,
-                        item.href,
-                      );
+                    const active = isNavItemActive(
+                      pathname,
+                      item.href,
+                    );
 
                     return (
                       <Link
@@ -466,9 +555,7 @@ export default function HomeNav() {
                         href={item.href}
                         onClick={closeMenu}
                         aria-current={
-                          active
-                            ? 'page'
-                            : undefined
+                          active ? 'page' : undefined
                         }
                         className={`
                           flex min-h-12
@@ -523,7 +610,7 @@ export default function HomeNav() {
                     );
                   })}
 
-                  {/* Notifications */}
+                  {/* Notifications and Favorites */}
                   {!isLoading &&
                     isAuthenticated === true && (
                       <>
@@ -531,23 +618,18 @@ export default function HomeNav() {
                           href="/notifications"
                           onClick={closeMenu}
                           aria-current={
-                            pathname.startsWith(
-                              '/notifications',
-                            )
+                            pathname.startsWith('/notifications')
                               ? 'page'
                               : undefined
                           }
                           className={`
                             flex min-h-12
                             items-center gap-4
-                            rounded-xl
-                            px-3
+                            rounded-xl px-3
                             text-base font-semibold
                             transition-colors
                             ${
-                              pathname.startsWith(
-                                '/notifications',
-                              )
+                              pathname.startsWith('/notifications')
                                 ? `
                                   bg-brand-teal/10
                                   text-brand-teal-dark
@@ -576,34 +658,25 @@ export default function HomeNav() {
                           >
                             <Bell className="h-[18px] w-[18px]" />
                           </span>
-
-                          <span>
-                            Notifications
-                          </span>
+                          <span>Notifications</span>
                         </Link>
 
-                        {/* Favorites */}
                         <Link
                           href="/favorites"
                           onClick={closeMenu}
                           aria-current={
-                            pathname.startsWith(
-                              '/favorites',
-                            )
+                            pathname.startsWith('/favorites')
                               ? 'page'
                               : undefined
                           }
                           className={`
                             flex min-h-12
                             items-center gap-4
-                            rounded-xl
-                            px-3
+                            rounded-xl px-3
                             text-base font-semibold
                             transition-colors
                             ${
-                              pathname.startsWith(
-                                '/favorites',
-                              )
+                              pathname.startsWith('/favorites')
                                 ? `
                                   bg-brand-teal/10
                                   text-brand-teal-dark
@@ -632,10 +705,7 @@ export default function HomeNav() {
                           >
                             <Heart className="h-[18px] w-[18px]" />
                           </span>
-
-                          <span>
-                            Favorites
-                          </span>
+                          <span>Favorites</span>
                         </Link>
                       </>
                     )}
@@ -647,23 +717,18 @@ export default function HomeNav() {
                         href="/account"
                         onClick={closeMenu}
                         aria-current={
-                          pathname.startsWith(
-                            '/account',
-                          )
+                          pathname.startsWith('/account')
                             ? 'page'
                             : undefined
                         }
                         className={`
                           flex min-h-12
                           items-center gap-4
-                          rounded-xl
-                          px-3
+                          rounded-xl px-3
                           text-base font-semibold
                           transition-colors
                           ${
-                            pathname.startsWith(
-                              '/account',
-                            )
+                            pathname.startsWith('/account')
                               ? `
                                 bg-brand-teal/10
                                 text-brand-teal-dark
@@ -692,7 +757,6 @@ export default function HomeNav() {
                         >
                           <UserRound className="h-[18px] w-[18px]" />
                         </span>
-
                         <span>Account</span>
                       </Link>
                     )}
@@ -700,44 +764,109 @@ export default function HomeNav() {
                   {/* Sign in */}
                   {!isLoading &&
                     isAuthenticated === false && (
-                      <Link
-                        href="/login"
-                        onClick={closeMenu}
-                        className="
-                          flex min-h-12
-                          items-center gap-4
-                          rounded-xl
-                          px-3
-                          text-base font-semibold
-                          text-light-text
-                          transition-colors
-                          hover:bg-light-surface-soft
-                          dark:text-dark-text
-                          dark:hover:bg-dark-surface-soft
-                        "
-                      >
-                        <span
+                      <>
+                        <Link
+                          href="/login"
+                          onClick={closeMenu}
                           className="
-                            flex h-9 w-9
-                            items-center justify-center
-                            rounded-lg
-                            bg-light-surface-soft
-                            text-light-text-muted
-                            dark:bg-dark-surface-soft
-                            dark:text-dark-text-muted
+                            flex min-h-12
+                            items-center gap-4
+                            rounded-xl px-3
+                            text-base font-semibold
+                            text-light-text
+                            transition-colors
+                            hover:bg-light-surface-soft
+                            dark:text-dark-text
+                            dark:hover:bg-dark-surface-soft
                           "
                         >
-                          <LogIn className="h-[18px] w-[18px]" />
-                        </span>
-
-                        <span>Sign in</span>
-                      </Link>
+                          <span
+                            className="
+                              flex h-9 w-9
+                              items-center justify-center
+                              rounded-lg
+                              bg-light-surface-soft
+                              text-light-text-muted
+                              dark:bg-dark-surface-soft
+                              dark:text-dark-text-muted
+                            "
+                          >
+                            <LogIn className="h-[18px] w-[18px]" />
+                          </span>
+                          <span>Sign in</span>
+                        </Link>
+                      </>
                     )}
                 </div>
               </nav>
 
+              {/* Company and legal links */}
+              <div
+                className="
+                  mx-auto mt-6
+                  w-full max-w-lg
+                  border-t
+                  border-light-border-soft
+                  pt-4
+                  dark:border-dark-border-soft
+                "
+              >
+                <p
+                  className="
+                    px-3
+                    text-[10px] font-bold
+                    uppercase tracking-[0.12em]
+                    text-light-text-soft
+                    dark:text-dark-text-soft
+                  "
+                >
+                  Company &amp; Legal
+                </p>
+
+                <nav
+                  aria-label="Company and legal links"
+                  className="
+                    mt-3 flex flex-wrap
+                    items-center
+                    gap-x-4 gap-y-3
+                    px-3
+                  "
+                >
+                  {footerLinks.map((item) => (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={closeMenu}
+                      className="
+                        text-xs
+                        text-light-text-muted
+                        transition-colors
+                        hover:text-brand-teal
+                        focus:outline-none
+                        focus-visible:underline
+                        dark:text-dark-text-muted
+                        dark:hover:text-brand-teal-light
+                      "
+                    >
+                      {item.label}
+                    </Link>
+                  ))}
+                </nav>
+
+                <p
+                  className="
+                    mt-4 px-3
+                    text-[11px]
+                    text-light-text-soft
+                    dark:text-dark-text-soft
+                  "
+                >
+                  © {new Date().getFullYear()} VibeNationHQ
+                </p>
+              </div>
+
               {/* Bottom actions */}
-              <div className="mt-auto pt-8">
+              <div className="mt-auto pt-6">
                 <div
                   className="
                     border-t
@@ -746,6 +875,7 @@ export default function HomeNav() {
                   "
                 />
 
+                {/* Appearance */}
                 <div
                   className="
                     mt-5
@@ -817,7 +947,6 @@ export default function HomeNav() {
                       >
                         <LogOut className="h-[18px] w-[18px]" />
                       </span>
-
                       <span>Log out</span>
                     </button>
                   )}
@@ -829,20 +958,17 @@ export default function HomeNav() {
                       href="/signup"
                       onClick={closeMenu}
                       className="
-                        mt-3
-                        flex h-12
+                        mt-2
+                        flex min-h-12
                         w-full
                         items-center justify-center
                         rounded-xl
                         bg-brand-teal
                         px-4
-                        text-sm font-bold
+                        text-sm font-semibold
                         text-white
-                        shadow-sm
-                        shadow-brand-teal/20
-                        transition-all duration-200
+                        transition-colors
                         hover:bg-brand-teal-dark
-                        active:scale-[0.99]
                         focus:outline-none
                         focus-visible:ring-4
                         focus-visible:ring-brand-teal/20

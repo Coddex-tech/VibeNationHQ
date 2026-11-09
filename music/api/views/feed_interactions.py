@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from django.shortcuts import get_object_or_404
@@ -6,12 +7,23 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from music.models import (
-    MusicFeedInteraction,
+from accounts.api.permissions import (
+    IsOrdinaryVibeNationUser,
 )
+
+from music.models import (
+    Album,
+    Artist,
+    CommunityPost,
+    EditorialArticle,
+    MusicFeedInteraction,
+    Song,
+)
+
 from music.serializers.feed_interactions import (
     MusicFeedInteractionSerializer,
 )
+
 from music.services.feed_interactions import (
     MusicFeedInteractionService,
 )
@@ -19,62 +31,80 @@ from music.services.feed_interactions import (
 
 class MusicFeedInteractionAPIView(APIView):
     """
-    Records an authenticated user's behavioral interaction
-    with music-related content.
+    Records passive behavioral interactions submitted by
+    authenticated ordinary VibeNation users.
 
-    The request is validated by
-    MusicFeedInteractionSerializer.
-
-    The target object is resolved here, while persistence is
-    delegated to MusicFeedInteractionService.
+    Engagement interactions such as likes, favorites,
+    comments, ratings, and follows must be recorded by
+    their respective backend action endpoints.
     """
 
     permission_classes = [
         IsAuthenticated,
+        IsOrdinaryVibeNationUser,
     ]
 
+    INTERACTION_METHODS = {
+        "view_song": (
+            "record_song_view",
+            "song",
+        ),
+        "play_preview": (
+            "record_preview_play",
+            "song",
+        ),
+        "view_album": (
+            "record_album_view",
+            "album",
+        ),
+        "view_artist": (
+            "record_artist_view",
+            "artist",
+        ),
+        "view_community_post": (
+            "record_community_post_view",
+            "post",
+        ),
+        "view_editorial": (
+            "record_editorial_view",
+            "article",
+        ),
+    }
+
     def post(self, request, *args, **kwargs):
-        serializer = (
-            MusicFeedInteractionSerializer(
-                data=request.data,
-            )
+        serializer = MusicFeedInteractionSerializer(
+            data=request.data,
         )
 
         serializer.is_valid(
             raise_exception=True,
         )
 
-        target_model = (
-            serializer.get_target_model()
+        interaction_type = (
+            serializer.validated_data["interaction_type"]
+        )
+
+        target_type = (
+            serializer.validated_data["target_type"]
         )
 
         target_id = serializer.get_target_id()
-
-        target = get_object_or_404(
-            target_model,
-            pk=target_id,
-        )
-
-        interaction_type = (
-            serializer.validated_data[
-                "interaction_type"
-            ]
-        )
 
         idempotency_key = (
             serializer.get_idempotency_key()
         )
 
-        interaction = (
-            self._record_interaction(
-                request=request,
-                interaction_type=interaction_type,
-                target=target,
-                target_type=serializer.validated_data[
-                    "target_type"
-                ],
-                idempotency_key=idempotency_key,
-            )
+        target = self._get_eligible_target(
+            target_type=target_type,
+            target_id=target_id,
+        )
+
+        interaction = self._record_interaction(
+            user=request.user,
+            interaction_type=interaction_type,
+            target_type=target_type,
+            target=target,
+            idempotency_key=idempotency_key,
         )
 
         return Response(
@@ -83,258 +113,100 @@ class MusicFeedInteractionAPIView(APIView):
                 "interaction_type": (
                     interaction.interaction_type
                 ),
-                "target_type": serializer.validated_data[
-                    "target_type"
-                ],
-                "target_id": target.id,
+                "target_type": target_type,
+                "target_id": target.pk,
             },
             status=status.HTTP_201_CREATED,
         )
 
-    def _record_interaction(
+    def _get_eligible_target(
         self,
         *,
-        request,
-        interaction_type: str,
-        target,
         target_type: str,
-        idempotency_key,
+        target_id: int,
     ):
+        """
+        Resolve a target only when it is currently eligible
+        for passive interaction tracking.
+
+        Unpublished, archived, hidden, removed, and inactive
+        content is not eligible.
+        """
+
         if target_type == "song":
-            return self._record_song_interaction(
-                request=request,
-                interaction_type=interaction_type,
-                target=target,
-                idempotency_key=idempotency_key,
+            return get_object_or_404(
+                Song,
+                pk=target_id,
+                status=Song.Status.PUBLISHED,
             )
 
         if target_type == "album":
-            return self._record_album_interaction(
-                request=request,
-                interaction_type=interaction_type,
-                target=target,
-                idempotency_key=idempotency_key,
+            return get_object_or_404(
+                Album,
+                pk=target_id,
+                status=Album.Status.PUBLISHED,
             )
 
         if target_type == "artist":
-            return self._record_artist_interaction(
-                request=request,
-                interaction_type=interaction_type,
-                target=target,
-                idempotency_key=idempotency_key,
+            return get_object_or_404(
+                Artist,
+                pk=target_id,
+                is_active=True,
             )
 
         if target_type == "community_post":
-            return (
-                self._record_community_post_interaction(
-                    request=request,
-                    interaction_type=interaction_type,
-                    target=target,
-                    idempotency_key=idempotency_key,
-                )
+            return get_object_or_404(
+                CommunityPost,
+                pk=target_id,
+                status=CommunityPost.Status.PUBLISHED,
             )
 
         if target_type == "editorial":
-            return self._record_editorial_interaction(
-                request=request,
-                interaction_type=interaction_type,
-                target=target,
-                idempotency_key=idempotency_key,
+            return get_object_or_404(
+                EditorialArticle,
+                pk=target_id,
+                status=EditorialArticle.Status.PUBLISHED,
             )
 
-        raise ValueError(
-            f"Unsupported interaction target type: "
-            f"{target_type}"
-        )
+        return None
 
-    def _record_song_interaction(
+    def _record_interaction(
         self,
         *,
-        request,
+        user,
         interaction_type: str,
+        target_type: str,
         target,
         idempotency_key,
-    ):
-        service = (
-            MusicFeedInteractionService
+    ) -> MusicFeedInteraction:
+        """
+        Dispatch only passive interactions accepted by
+        MusicFeedInteractionSerializer.
+        """
+
+        method_config = self.INTERACTION_METHODS.get(
+            interaction_type,
         )
 
-        if interaction_type == "view_song":
-            return service.record_song_view(
-                user=request.user,
-                song=target,
-                idempotency_key=idempotency_key,
+        if method_config is None:
+            raise ValueError(
+                f"Unsupported passive interaction: "
+                f"{interaction_type}"
             )
 
-        if interaction_type == "play_preview":
-            return service.record_preview_play(
-                user=request.user,
-                song=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "favorite_song":
-            return service.record_song_favorite(
-                user=request.user,
-                song=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "rate_song":
-            return service.record_song_rating(
-                user=request.user,
-                song=target,
-                idempotency_key=idempotency_key,
-            )
-
-        raise ValueError(
-            f"Unsupported song interaction: "
-            f"{interaction_type}"
+        service_method_name, target_argument = (
+            method_config
         )
 
-    def _record_album_interaction(
-        self,
-        *,
-        request,
-        interaction_type: str,
-        target,
-        idempotency_key,
-    ):
-        service = (
-            MusicFeedInteractionService
+        service_method = getattr(
+            MusicFeedInteractionService,
+            service_method_name,
         )
 
-        if interaction_type == "view_album":
-            return service.record_album_view(
-                user=request.user,
-                album=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "favorite_album":
-            return service.record_album_favorite(
-                user=request.user,
-                album=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "rate_album":
-            return service.record_album_rating(
-                user=request.user,
-                album=target,
-                idempotency_key=idempotency_key,
-            )
-
-        raise ValueError(
-            f"Unsupported album interaction: "
-            f"{interaction_type}"
-        )
-
-    def _record_artist_interaction(
-        self,
-        *,
-        request,
-        interaction_type: str,
-        target,
-        idempotency_key,
-    ):
-        service = (
-            MusicFeedInteractionService
-        )
-
-        if interaction_type == "view_artist":
-            return service.record_artist_view(
-                user=request.user,
-                artist=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "follow_artist":
-            return service.record_artist_follow(
-                user=request.user,
-                artist=target,
-                idempotency_key=idempotency_key,
-            )
-
-        raise ValueError(
-            f"Unsupported artist interaction: "
-            f"{interaction_type}"
-        )
-
-    def _record_community_post_interaction(
-        self,
-        *,
-        request,
-        interaction_type: str,
-        target,
-        idempotency_key,
-    ):
-        service = (
-            MusicFeedInteractionService
-        )
-
-        if interaction_type == "view_community_post":
-            return (
-                service.record_community_post_view(
-                    user=request.user,
-                    post=target,
-                    idempotency_key=idempotency_key,
-                )
-            )
-
-        if interaction_type == "like_community_post":
-            return (
-                service.record_community_post_like(
-                    user=request.user,
-                    post=target,
-                    idempotency_key=idempotency_key,
-                )
-            )
-
-        if (
-            interaction_type
-            == "comment_community_post"
-        ):
-            return (
-                service.record_community_post_comment(
-                    user=request.user,
-                    post=target,
-                    idempotency_key=idempotency_key,
-                )
-            )
-
-        raise ValueError(
-            "Unsupported community post "
-            f"interaction: {interaction_type}"
-        )
-
-    def _record_editorial_interaction(
-        self,
-        *,
-        request,
-        interaction_type: str,
-        target,
-        idempotency_key,
-    ):
-        service = (
-            MusicFeedInteractionService
-        )
-
-        if interaction_type == "view_editorial":
-            return service.record_editorial_view(
-                user=request.user,
-                article=target,
-                idempotency_key=idempotency_key,
-            )
-
-        if interaction_type == "like_editorial":
-            return service.record_editorial_like(
-                user=request.user,
-                article=target,
-                idempotency_key=idempotency_key,
-            )
-
-        raise ValueError(
-            f"Unsupported editorial interaction: "
-            f"{interaction_type}"
+        return service_method(
+            user=user,
+            **{
+                target_argument: target,
+            },
+            idempotency_key=idempotency_key,
         )
