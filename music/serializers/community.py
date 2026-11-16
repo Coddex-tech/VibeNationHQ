@@ -28,6 +28,27 @@ from .catalog import (
 User = get_user_model()
 
 
+def get_prefetched_mentioned_usernames(obj):
+    """
+    Return usernames resolved for this content object.
+
+    Mention records must be prefetched by the API queryset
+    into `prefetched_mentions`.
+
+    This deliberately avoids database queries inside serializers.
+    """
+    mentions = getattr(
+        obj,
+        "prefetched_mentions",
+        [],
+    )
+
+    return [
+        mention.mentioned_user.username
+        for mention in mentions
+    ]
+
+
 # ============================================================
 # USER DETAIL
 # ============================================================
@@ -408,6 +429,8 @@ class CommunityPostSerializer(BaseModelSerializer):
         read_only=True,
     )
 
+    mentioned_usernames = serializers.SerializerMethodField()
+
     target = CommunityPostTargetSerializer(
         read_only=True,
     )
@@ -427,6 +450,7 @@ class CommunityPostSerializer(BaseModelSerializer):
 
             # Content
             "content",
+            "mentioned_usernames",
             "slug",
             "rating",
 
@@ -494,6 +518,9 @@ class CommunityPostSerializer(BaseModelSerializer):
                 0,
             )
         )
+
+    def get_mentioned_usernames(self, obj):
+        return get_prefetched_mentioned_usernames(obj)
 
 
 # ============================================================
@@ -709,6 +736,8 @@ class CommunityPostCommentSerializer(
         read_only=True,
     )
 
+    mentioned_usernames = serializers.SerializerMethodField()
+
     post_creator_id = serializers.IntegerField(
         source="post.user_id",
         read_only=True,
@@ -728,6 +757,7 @@ class CommunityPostCommentSerializer(
             "post_creator_id",
             "parent",
             "content",
+            "mentioned_usernames",
 
             "views_count",
             "likes_count",
@@ -744,6 +774,9 @@ class CommunityPostCommentSerializer(
         ]
 
         read_only_fields = fields
+
+    def get_mentioned_usernames(self, obj):
+        return get_prefetched_mentioned_usernames(obj)
 
     def get_is_liked(self, obj):
         """

@@ -22,7 +22,7 @@ import {
   type MusicFeedResponse,
 } from '@/lib/music/MusicFeed';
 
-import MusicEditorialPost from './MusicEditorialPost';
+import MusicEditorialPost from '../editorial/MusicEditorialPost';
 import MusicPost from './CommunityPost';
 
 type MusicFeedProps = {

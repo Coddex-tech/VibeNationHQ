@@ -41,6 +41,7 @@ import MusicAttachment from './MusicAttachment';
 import MusicEngagementBar from './MusicEngagementBar';
 import MusicPostComments from './MusicPostComments';
 import VerificationBadge from '../Icons';
+import MentionText from '../MentionText';
 
 type MusicPostProps = {
   post: CommunityPost;
@@ -712,7 +713,6 @@ export default function MusicPost({
                   src={profileImageUrl}
                   alt=""
                   fill
-                  unoptimized
                   sizes="(max-width: 640px) 40px, 44px"
                   className="rounded-full object-cover"
                   onError={() => setHasProfileImageError(true)}
@@ -1036,19 +1036,13 @@ export default function MusicPost({
               }
             `}
           >
-            <Link
-              href={`/music/community/posts/${displayPost.id}/${encodeURIComponent(
+            <MentionText
+              content={displayedContent}
+              mentionedUsernames={displayPost.mentioned_usernames ?? []}
+              textHref={`/music/community/posts/${displayPost.id}/${encodeURIComponent(
                 displayPost.slug,
               )}`}
-              aria-label={`Read full community post by @${cleanUsername}`}
-              className="
-                rounded-sm
-                focus-visible:outline-none
-                focus-visible:ring-2 focus-visible:ring-brand-teal
-              "
-            >
-              {displayedContent}
-            </Link>
+            />
 
             {isContentTruncated && (
               <>

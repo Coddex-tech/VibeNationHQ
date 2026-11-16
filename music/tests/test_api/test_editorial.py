@@ -1685,3 +1685,161 @@ class EditorialCommentReportAPIViewTests(APITestCase):
             response.status_code,
             status.HTTP_404_NOT_FOUND,
         )
+
+
+from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
+
+from rest_framework.test import APITestCase
+
+from music.models import (
+    EditorialArticle,
+    EditorialComment,
+    UserMention,
+)
+
+
+from music.services.editorial import EditorialCommentService
+
+
+class EditorialCommentMentionDeletionTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.mentioner = User.objects.create_user(
+            username="mentioner",
+            email="mentioner@example.com",
+            password="testpassword",
+        )
+
+        cls.mentioned_user = User.objects.create_user(
+            username="mentioned",
+            email="mentioned@example.com",
+            password="testpassword",
+        )
+
+        cls.author = User.objects.create_user(
+            username="editor",
+            email="editor@example.com",
+            password="testpassword",
+        )
+
+        cls.article = EditorialArticle.objects.create(
+            title="Published Article",
+            slug="published-article",
+            content="Article content.",
+            author=cls.author,
+            status=EditorialArticle.Status.PUBLISHED,
+            published_at=timezone.now(),
+        )
+
+    def test_deleting_comment_removes_mentions_from_entire_reply_subtree(self):
+        # Create the root comment.
+        root_comment = EditorialComment.objects.create(
+            user=self.mentioner,
+            article=self.article,
+            content="Root comment.",
+            status=EditorialComment.Status.PUBLISHED,
+        )
+
+        # Create a direct reply.
+        reply = EditorialComment.objects.create(
+            user=self.mentioner,
+            article=self.article,
+            parent=root_comment,
+            root_comment=root_comment,
+            content="First-level reply.",
+            status=EditorialComment.Status.PUBLISHED,
+        )
+
+        # Create a deeply nested reply.
+        nested_reply = EditorialComment.objects.create(
+            user=self.mentioner,
+            article=self.article,
+            parent=reply,
+            root_comment=root_comment,
+            content="Nested reply.",
+            status=EditorialComment.Status.PUBLISHED,
+        )
+
+        # Create an unrelated comment that must retain its mention.
+        unrelated_comment = EditorialComment.objects.create(
+            user=self.mentioner,
+            article=self.article,
+            content="Unrelated comment.",
+            status=EditorialComment.Status.PUBLISHED,
+        )
+
+        content_type = ContentType.objects.get_for_model(
+            EditorialComment,
+        )
+
+        subtree_ids = [
+            root_comment.pk,
+            reply.pk,
+            nested_reply.pk,
+        ]
+
+        # Create one mention relationship for each comment
+        # in the subtree and one for the unrelated comment.
+        for comment in [
+            root_comment,
+            reply,
+            nested_reply,
+            unrelated_comment,
+        ]:
+            UserMention.objects.create(
+                mentioner=self.mentioner,
+                mentioned_user=self.mentioned_user,
+                content_type=content_type,
+                object_id=str(comment.pk),
+            )
+
+        self.assertEqual(
+            UserMention.objects.filter(
+                content_type=content_type,
+            ).count(),
+            4,
+        )
+
+        # Delete the root comment and its entire subtree.
+        EditorialCommentService.delete(
+            comment=root_comment,
+        )
+
+        # No mention relationships should remain for the
+        # deleted root comment or any of its descendants.
+        self.assertFalse(
+            UserMention.objects.filter(
+                content_type=content_type,
+                object_id__in=[
+                    str(comment_id)
+                    for comment_id in subtree_ids
+                ],
+            ).exists(),
+        )
+
+        # The unrelated comment's mention must remain untouched.
+        self.assertTrue(
+            UserMention.objects.filter(
+                content_type=content_type,
+                object_id=str(unrelated_comment.pk),
+                mentioned_user=self.mentioned_user,
+            ).exists(),
+        )
+
+        # Confirm that the comments were soft-deleted,
+        # not physically removed.
+        for comment_id in subtree_ids:
+            self.assertEqual(
+                EditorialComment.objects.get(
+                    pk=comment_id,
+                ).status,
+                EditorialComment.Status.REMOVED,
+            )
+
+        self.assertEqual(
+            EditorialComment.objects.get(
+                pk=unrelated_comment.pk,
+            ).status,
+            EditorialComment.Status.PUBLISHED,
+        )

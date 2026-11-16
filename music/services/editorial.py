@@ -14,7 +14,8 @@ from music.models import (
     EditorialComment,
     EditorialCommentReport,
 )
-
+from music.services.mentions import MentionService
+from notifications.services.notification import NotificationService
 
 
 class EditorialCommentService:
@@ -111,6 +112,12 @@ class EditorialCommentService:
                 "Unable to create this comment."
             ) from exc
 
+        MentionService.sync_mentions(
+            mentioner=user,
+            content_object=comment,
+            content=comment.content,
+        )
+
         EditorialArticle.objects.filter(
             pk=locked_article.pk,
         ).update(
@@ -124,6 +131,24 @@ class EditorialCommentService:
                 replies_count=F("replies_count") + 1,
             )
 
+            # Notify the author of the direct parent comment.
+            # Each reply receives its own individual notification.
+            if locked_parent.user_id != user.pk:
+                NotificationService.create_event(
+                    recipient=locked_parent.user,
+                    actor=user,
+                    event_type="editorial_comment_reply",
+                    target=comment,
+                    metadata={
+                        "comment_id": str(comment.pk),
+                        "parent_comment_id": str(
+                            locked_parent.pk
+                        ),
+                        "root_comment_id": str(
+                            root_comment.pk
+                        ),
+                    },
+                )
         return comment
 
     @staticmethod
@@ -170,6 +195,12 @@ class EditorialCommentService:
                 "is_edited",
                 "updated_at",
             ],
+        )
+
+        MentionService.sync_mentions(
+            mentioner=locked_comment.user,
+            content_object=locked_comment,
+            content=locked_comment.content,
         )
 
         return locked_comment
@@ -231,6 +262,13 @@ class EditorialCommentService:
 
             all_deleted_ids.update(child_ids)
             frontier = child_ids
+
+        # Remove mention relationships belonging to the entire
+        # comment subtree, including all nested replies.
+        MentionService.delete_mentions_for_objects(
+            target_model=EditorialComment,
+            object_ids=all_deleted_ids,
+        )
 
         # Count only comments that currently contribute to the
         # public article counter.

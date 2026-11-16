@@ -1481,7 +1481,6 @@ export default function ProfileSettingsPage() {
                                                                 src={visibleImage}
                                                                 alt="Profile picture preview"
                                                                 fill
-                                                                unoptimized
                                                                 sizes="96px"
                                                                 className="pointer-events-none object-cover"
                                                             />
@@ -2104,7 +2103,6 @@ export default function ProfileSettingsPage() {
                                 alt="Enlarged profile picture"
                                 width={1200}
                                 height={1200}
-                                unoptimized
                                 draggable={false}
                                 className="
                                     max-h-[78vh]
@@ -2264,7 +2262,6 @@ export default function ProfileSettingsPage() {
                                             src={cropSource.url}
                                             alt="Image being cropped"
                                             fill
-                                            unoptimized
                                             sizes="(max-width: 640px) 100vw, 640px"
                                             draggable={false}
                                             onLoad={handleCropImageLoad}

@@ -1,5 +1,8 @@
-
 'use client';
+
+import Image from 'next/image';
+import { getMediaUrl } from '@/lib/api';
+import VerificationBadge from '../Icons';
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -21,6 +24,7 @@ import {
     getProfileUsername,
     normalizeUserId
 } from './commentUtils';
+import MentionText from '../MentionText';
 
 /**
  * Common comment shape used by the shared comment UI.
@@ -34,9 +38,14 @@ export type SharedComment = {
   user: {
     id: string | number;
     username: string;
+    display_name: string | null;
+    profile_image: string | null;
+    is_verified: boolean;
+    is_identity_verified: boolean;
   };
   parent: number | null;
   content: string;
+  mentionedUsernames: string[];
   createdAt: string;
   likesCount: number;
   isLiked: boolean;
@@ -102,6 +111,7 @@ export default function CommentItem({
   isHighlighted = false,
   commentIdPrefix = 'comment',
 }: CommentItemProps) {
+  const [hasProfileImageError, setHasProfileImageError] = useState(false);
   const [isLiked, setIsLiked] = useState(comment.isLiked);
   const [likesCount, setLikesCount] = useState(comment.likesCount);
   const [isLiking, setIsLiking] = useState(false);
@@ -243,6 +253,26 @@ export default function CommentItem({
   const avatarLetter = getAvatarLetter(cleanUsername);
   const avatarColor = getAvatarColor(cleanUsername);
 
+  const displayName =
+    comment.user.display_name?.trim() || cleanUsername || 'VibeNation user';
+
+  const profileImageUrl = comment.user.profile_image
+    ? getMediaUrl(comment.user.profile_image)
+    : null;
+
+  useEffect(() => {
+    setHasProfileImageError(false);
+  }, [profileImageUrl]);
+
+  const hasUsableProfileImage =
+    Boolean(profileImageUrl) && !hasProfileImageError;
+
+  const verificationType = comment.user.is_identity_verified
+    ? 'identity'
+    : comment.user.is_verified
+      ? 'verified'
+      : null;
+
   const replyTargetUsername = replyTo
     ? getProfileUsername(replyTo.user.username)
     : '';
@@ -273,48 +303,98 @@ export default function CommentItem({
       <div className="flex min-w-0 items-start gap-2 p-1 sm:gap-3">
         <Link
           href={`/account/${encodeURIComponent(cleanUsername)}`}
-          aria-label={`View ${cleanUsername}'s profile`}
-          title={`View ${cleanUsername}'s profile`}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg sm:h-9 sm:w-9"
-          style={{
-            backgroundColor: avatarColor.background,
-            color: avatarColor.foreground,
-          }}
+          aria-label={`View ${displayName}'s profile`}
+          title={`View ${displayName}'s profile`}
+          className="relative flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-sm font-bold ring-1 ring-black/5 transition-opacity hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg sm:h-9 sm:w-9"
+          style={
+            hasUsableProfileImage
+              ? undefined
+              : {
+                  backgroundColor: avatarColor.background,
+                  color: avatarColor.foreground,
+                }
+          }
         >
-          {avatarLetter}
+          {hasUsableProfileImage && profileImageUrl ? (
+            <Image
+              src={profileImageUrl}
+              alt=""
+              fill
+              sizes="36px"
+              className="rounded-full object-cover"
+              onError={() => setHasProfileImageError(true)}
+            />
+          ) : (
+            avatarLetter
+          )}
         </Link>
 
         <div className="min-w-0 flex-1">
           <div className="inline-block max-w-full min-w-0 rounded-2xl rounded-tl-md border border-light-border/70 bg-light-surface-soft px-3 py-2 dark:border-dark-border/70 dark:bg-dark-surface-soft sm:px-3.5 sm:py-2.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:gap-x-2">
-              <Link
-                href={`/account/${encodeURIComponent(cleanUsername)}`}
-                className="min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-[13px] font-semibold leading-5 text-light-text transition-colors hover:text-brand-teal focus-visible:outline-none focus-visible:underline dark:text-dark-text sm:text-sm"
-              >
-                {comment.user.username}
-              </Link>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              {/* Name and badges */}
+              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                <Link
+                  href={`/account/${encodeURIComponent(cleanUsername)}`}
+                  className="min-w-0 max-w-full break-words text-[13px] font-semibold leading-5 text-light-text transition-colors hover:text-brand-teal focus-visible:outline-none focus-visible:underline dark:text-dark-text sm:text-sm"
+                >
+                  {displayName}
+                </Link>
 
-              {showCreatorBadge && (
-                <span className="shrink-0 text-[9px] font-semibold leading-4 text-brand-teal sm:text-[10px]">
-                  Creator
-                </span>
-              )}
+                {verificationType === 'identity' && (
+                  <span
+                    role="img"
+                    aria-label="Identity verified"
+                    title="Identity verified"
+                    className="inline-flex shrink-0 items-center text-brand-teal"
+                  >
+                    <VerificationBadge type="identity" size={16} />
+                  </span>
+                )}
 
-              <span
-                className="shrink-0 text-[10px] leading-4 text-light-text-muted dark:text-dark-text-muted sm:text-xs"
-                title={new Date(comment.createdAt).toLocaleString()}
-              >
-                {formatCommentDate(comment.createdAt)}
-              </span>
+                {verificationType === 'verified' && (
+                  <span
+                    role="img"
+                    aria-label="Verified account"
+                    title="Verified account"
+                    className="inline-flex shrink-0 items-center text-blue-500"
+                  >
+                    <VerificationBadge type="verified" size={16} />
+                  </span>
+                )}
 
-              {comment.isEdited && !unavailable && (
+                {showCreatorBadge && (
+                  <span className="inline-flex shrink-0 items-center rounded-full bg-brand-teal/10 px-1.5 py-0.5 text-[9px] font-semibold leading-none text-brand-teal sm:text-[10px]">
+                    Creator
+                  </span>
+                )}
+              </div>
+
+              {/* Username and date */}
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                <Link
+                  href={`/account/${encodeURIComponent(cleanUsername)}`}
+                  className="min-w-0 max-w-full break-words text-[10px] leading-4 text-light-text-muted transition-colors hover:text-brand-teal focus-visible:outline-none focus-visible:underline dark:text-dark-text-muted sm:text-xs"
+                >
+                  @{cleanUsername}
+                </Link>
+
                 <span
                   className="shrink-0 text-[10px] leading-4 text-light-text-muted dark:text-dark-text-muted sm:text-xs"
-                  title="This comment has been edited."
+                  title={new Date(comment.createdAt).toLocaleString()}
                 >
-                  · edited
+                  {formatCommentDate(comment.createdAt)}
                 </span>
-              )}
+
+                {comment.isEdited && !unavailable && (
+                  <span
+                    className="shrink-0 text-[10px] leading-4 text-light-text-muted dark:text-dark-text-muted sm:text-xs"
+                    title="This comment has been edited."
+                  >
+                    · edited
+                  </span>
+                )}
+              </div>
             </div>
 
             {replyTargetUsername &&
@@ -362,9 +442,12 @@ export default function CommentItem({
                     canNavigateToReplyTarget
                       ? (event) => {
                           if (
-                            event.key === 'Enter' ||
-                            event.key === ' '
+                            event.target !== event.currentTarget
                           ) {
+                            return;
+                          }
+
+                          if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             handleNavigateToReplyTarget();
                           }
@@ -386,7 +469,13 @@ export default function CommentItem({
                     overflow: isContentExpanded ? 'visible' : 'hidden',
                   }}
                 >
-                  {comment.content}
+                  <MentionText
+                    content={comment.content}
+                    mentionedUsernames={comment.mentionedUsernames}
+                    onMentionClick={() => {
+                      // A mention link must never trigger reply navigation.
+                    }}
+                  />
                 </p>
 
                 {(canExpandContent || isContentExpanded) && (

@@ -4,6 +4,10 @@ from music.api.views.search import MusicSearchAPIView
 
 from music.api.views.global_search import GlobalSearchAPIView
 
+from music.api.views.mention_suggestions import (
+    MentionSuggestionsAPIView,
+)
+
 # EXTERNAL PROVIDER
 from music.api.views.provider_search import MusicProviderSearchView
 
@@ -108,6 +112,12 @@ urlpatterns = [
         "global-search/",
         GlobalSearchAPIView.as_view(),
         name="global-search",
+    ),
+
+    path(
+        "mentions/suggestions/",
+        MentionSuggestionsAPIView.as_view(),
+        name="mention-suggestions",
     ),
 
     path(

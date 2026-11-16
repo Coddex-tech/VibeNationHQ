@@ -191,7 +191,6 @@ function ConnectionAvatar({
           alt={name}
           fill
           sizes="56px"
-          unoptimized
           className="object-cover"
         />
       ) : (

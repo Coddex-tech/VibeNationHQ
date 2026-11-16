@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 import { getEditorialArticle } from '@/lib/music/EditorialArticles';
-import EditorialArticleDetailClient from '@/components/music/EditorialArticleDetailClient';
+import EditorialArticleDetailClient from '@/components/editorial/EditorialArticleDetailClient';
 
 type EditorialPageProps = {
   params: Promise<{

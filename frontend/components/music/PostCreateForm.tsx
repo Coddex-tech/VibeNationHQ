@@ -36,6 +36,9 @@ import {
   getMediaUrl,
 } from '@/lib/api';
 
+import TextEditor from '../music/TextEditor';
+import { loadMentionSuggestions } from '@/lib/music/mentions';
+
 type EntityType =
   | 'song'
   | 'album'
@@ -1323,7 +1326,7 @@ export default function PostCreateForm() {
       >
         {/* Text composer */}
         <div className="p-5 sm:p-7">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pb-2">
             <div
               className="
                 flex h-9 w-9 shrink-0
@@ -1350,7 +1353,7 @@ export default function PostCreateForm() {
 
               <p
                 className="
-                  text-xs
+                  text-xs 
                   text-light-text-muted
                   dark:text-dark-text-muted
                 "
@@ -1360,32 +1363,13 @@ export default function PostCreateForm() {
             </div>
           </div>
 
-          <textarea
+          <TextEditor
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={setContent}
+            loadSuggestions={loadMentionSuggestions}
             placeholder="Share your thoughts about music..."
-            maxLength={MAX_CONTENT_LENGTH}
             rows={6}
-            className="
-              mt-4 w-full
-              resize-none
-              rounded-2xl
-              border
-              border-light-border
-              bg-light-bg
-              px-4
-              py-4
-              text-sm
-              text-light-text
-              outline-none
-              transition
-              placeholder:text-light-muted
-              focus:border-primary
-              dark:border-dark-border
-              dark:bg-dark-bg
-              dark:text-dark-text
-              dark:placeholder:text-dark-muted
-            "
+            maxLength={5000}
           />
 
           <div

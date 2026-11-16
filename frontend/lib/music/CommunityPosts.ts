@@ -78,6 +78,7 @@ export type CommunityPost = {
   id: number;
   user: CommunityUser;
   content: string;
+  mentioned_usernames: string[];
   slug: string;
   rating: number | null;
   target: CommunityPostTarget | null;
@@ -139,6 +140,7 @@ export type CommunityComment = {
   post_creator_id: number;
   parent: number | null;
   content: string;
+  mentioned_usernames: string[];
   views_count: number;
   likes_count: number;
   replies_count: number;

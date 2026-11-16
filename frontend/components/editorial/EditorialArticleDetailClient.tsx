@@ -18,7 +18,7 @@ import {
 
 import { ApiError } from '@/lib/api';
 
-import EditorialArticleComments from '@/components/music/EditorialArticleComments';
+import EditorialArticleComments from '@/components/editorial/EditorialArticleComments';
 
 import {
   favoriteEditorialArticle,

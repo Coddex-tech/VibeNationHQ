@@ -107,8 +107,11 @@ export type EditorialArticleViewResponse = {
 
 export type EditorialCommentUser = {
   id: number;
-  name: string;
   username: string;
+  display_name: string;
+  profile_image: string | null;
+  is_verified: boolean;
+  is_identity_verified: boolean;
 };
 
 export type EditorialComment = {
@@ -118,6 +121,7 @@ export type EditorialComment = {
   parent: number | null;
   root_comment: number | null;
   content: string;
+  mentioned_usernames: string[];
   views_count: number;
   likes_count: number;
   liked: boolean;

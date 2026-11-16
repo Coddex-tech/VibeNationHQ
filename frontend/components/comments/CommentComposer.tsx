@@ -1,5 +1,7 @@
 'use client';
 
+import TextEditor from '../music/TextEditor';
+import { loadMentionSuggestions } from '@/lib/music/mentions';
 import {
   useEffect,
   useRef,
@@ -255,21 +257,11 @@ export default function CommentComposer({
         ) : (
           <form onSubmit={handleSubmit} className="min-w-0">
             <div className="flex min-w-0 items-end gap-2">
-              <div className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-light-border bg-light-bg transition-colors focus-within:border-brand-teal dark:border-dark-border dark:bg-dark-bg">
-                <textarea
-                  ref={textareaRef}
+              <div className="min-w-0 flex-1 rounded-2xl border border-light-border bg-light-bg transition-colors focus-within:border-brand-teal dark:border-dark-border dark:bg-dark-bg">
+                <TextEditor
                   value={value}
-                  onChange={(event) => onChange(event.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onCompositionStart={() => {
-                    isComposingRef.current = true;
-                  }}
-                  onCompositionEnd={() => {
-                    isComposingRef.current = false;
-                  }}
-                  disabled={isSubmitting}
-                  maxLength={maxLength}
-                  rows={1}
+                  onChange={onChange}
+                  loadSuggestions={loadMentionSuggestions}
                   placeholder={
                     isEditing
                       ? 'Edit your comment...'
@@ -277,15 +269,20 @@ export default function CommentComposer({
                         ? `Reply to @${contextUsername}...`
                         : placeholder
                   }
-                  aria-label={
-                    isEditing
-                      ? 'Edit comment'
-                      : replyingTo
-                        ? `Reply to ${contextUsername}`
-                        : 'Write a comment'
-                  }
-                  aria-invalid={isOverLimit}
-                  className="block max-h-32 min-h-11 w-full resize-none bg-transparent px-3.5 py-3 text-sm leading-6 text-light-text outline-none placeholder:text-light-text-muted disabled:cursor-not-allowed disabled:opacity-60 dark:text-dark-text dark:placeholder:text-dark-text-muted"
+                  maxLength={maxLength}
+                  disabled={isSubmitting}
+                  autoResize
+                  minRows={1}
+                  maxRows={3}
+                  focusRequestKey={focusRequestKey}
+                  onCompositionStart={() => {
+                    isComposingRef.current = true;
+                  }}
+                  onCompositionEnd={() => {
+                    isComposingRef.current = false;
+                  }}
+                  onEditorKeyDown={handleKeyDown}
+                  className="min-h-11 max-h-32 border-0 px-4 py-3 leading-6 text-light-text placeholder:text-light-text-muted focus:border-0 focus:ring-0 dark:text-dark-text dark:placeholder:text-dark-text-muted"
                 />
               </div>
 

@@ -29,7 +29,7 @@ import {
 
 import MusicNavigation from '@/components/music/MusicNavigation';
 import MusicPost from '@/components/music/CommunityPost';
-import MusicEditorialPost from '@/components/music/MusicEditorialPost';
+import MusicEditorialPost from '@/components/editorial/MusicEditorialPost';
 
 import {
   getGlobalSearch,
@@ -1771,7 +1771,6 @@ function UserResultCard({
             src={imageUrl}
             alt=""
             fill
-            unoptimized
             sizes="48px"
             className="object-cover"
           />
@@ -2267,7 +2266,6 @@ function ArtistResultCard({
             src={imageUrl}
             alt=""
             fill
-            unoptimized
             sizes="48px"
             className="object-cover"
           />
@@ -2330,7 +2328,6 @@ function ResultArtwork({
           src={src}
           alt={`${alt} artwork`}
           fill
-          unoptimized
           sizes="56px"
           className="object-cover"
         />

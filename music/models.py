@@ -2,6 +2,11 @@ from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import F, Q
+from django.contrib.contenttypes.fields import (
+    GenericForeignKey,
+    GenericRelation,
+)
+from django.contrib.contenttypes.models import ContentType
 
 
 # ============================================================
@@ -1058,6 +1063,13 @@ class CommunityPost(TimeStampedModel):
         related_name="community_posts",
     )
 
+    mentions = GenericRelation(
+        "music.UserMention",
+        content_type_field="content_type",
+        object_id_field="object_id",
+        related_query_name="community_posts",
+    )
+
     content = models.TextField(
         max_length=10000,
     )
@@ -1555,6 +1567,13 @@ class EditorialComment(TimeStampedModel):
         related_name="editorial_comments",
     )
 
+    mentions = GenericRelation(
+        "music.UserMention",
+        content_type_field="content_type",
+        object_id_field="object_id",
+        related_query_name="editorial_comments",
+    )
+
     article = models.ForeignKey(
         EditorialArticle,
         on_delete=models.CASCADE,
@@ -1676,6 +1695,13 @@ class CommunityPostComment(TimeStampedModel):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="community_post_comments",
+    )
+
+    mentions = GenericRelation(
+        "music.UserMention",
+        content_type_field="content_type",
+        object_id_field="object_id",
+        related_query_name="community_comments",
     )
 
     post = models.ForeignKey(
@@ -2304,8 +2330,6 @@ class UserFollow(TimeStampedModel):
 # ============================================================
 # MUSIC FEED INTERACTION
 # ============================================================
-
-
 class MusicFeedInteraction(TimeStampedModel):
     """
     Behavioral interaction history used by the VibeNationHQ
@@ -2674,3 +2698,100 @@ class ContentDailyView(models.Model):
         )
 
         return f"{content} — {self.date}: {self.views_count} views"
+
+
+# ============================================================
+# USER MENTION
+# ============================================================
+class UserMention(TimeStampedModel):
+    """
+    Records a user mentioning another user in supported
+    community and editorial content.
+
+    Supported targets:
+        - CommunityPost
+        - CommunityPostComment
+        - EditorialComment
+
+    One user can only have one mention relationship per
+    content item, regardless of how many times their
+    username appears in the content.
+
+    Mention relationships are separate from notification
+    events. They remain the source of truth for identifying
+    users mentioned in a particular content item.
+    """
+
+    mentioner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mentions_created",
+    )
+
+    mentioned_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="mentions_received",
+    )
+
+    # --------------------------------------------------------
+    # Generic content target
+    # --------------------------------------------------------
+
+    content_type = models.ForeignKey(
+        ContentType,
+        on_delete=models.CASCADE,
+        related_name="user_mentions",
+    )
+
+    object_id = models.CharField(
+        max_length=64,
+    )
+
+    content_object = GenericForeignKey(
+        "content_type",
+        "object_id",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "content_type",
+                    "object_id",
+                    "mentioned_user",
+                ],
+                name="unique_user_mention_per_content",
+            ),
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "content_type",
+                    "object_id",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "mentioned_user",
+                    "-created_at",
+                ],
+            ),
+            models.Index(
+                fields=[
+                    "mentioner",
+                    "-created_at",
+                ],
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.mentioner_id} mentioned "
+            f"{self.mentioned_user_id} "
+            f"in {self.content_type} "
+            f"{self.object_id}"
+        )

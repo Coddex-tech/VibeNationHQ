@@ -114,13 +114,13 @@ INSTALLED_APPS = [
     'accounts',
     'news',
     'music',
+    'notifications',
     'ads',
 ]
 
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'vibenation.middleware.IpBlockMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     "corsheaders.middleware.CorsMiddleware",

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 
 import MusicPost from '@/components/music/CommunityPost';
-import MusicEditorialPost from '@/components/music/MusicEditorialPost';
+import MusicEditorialPost from '@/components/editorial/MusicEditorialPost';
 
 import type {
   CommunityPost,

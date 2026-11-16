@@ -46,13 +46,35 @@ urlpatterns = [
 
     path('', include(('news.urls', 'news'), namespace='news')),
 
-    path("api/", include("accounts.api.urls")),
-    
-    path('ads/', include('ads.urls')),
+    # ACCOUNT
+    path(
+        "api/",
+        include("accounts.api.urls")
+    ),
 
-    path("api/v1/music/", include("music.api.urls")),
+    # ADVERTISEMENT
+    path(
+        'ads/',
+        include('ads.urls')
+    ),
 
-    path('api/news/', include('news.api_urls')),
+    # MUSIC
+    path(
+        "api/v1/music/",
+        include("music.api.urls")
+    ),
+
+    #NEWS
+    path(
+        "api/news/",
+        include('news.api_urls')
+    ),
+
+    # NOTIFICATION
+    path(
+        "api/v1/notifications/",
+        include("notifications.api.urls"),
+    ),
     
     path("api/ads/", include("ads.api_urls")),
     
@@ -61,16 +83,6 @@ urlpatterns = [
     path('taggit_autosuggest/', include('taggit_autosuggest.urls')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='sitemap'),
     path("robots.txt", TemplateView.as_view(template_name="robots.txt", content_type="text/plain")),
-]
-
-urlpatterns += [
-    path(
-        "robots.txt",
-        TemplateView.as_view(
-            template_name="robots.txt",
-            content_type="text/plain"
-        ),
-    ),
 ]
 
 # Serve media files during development

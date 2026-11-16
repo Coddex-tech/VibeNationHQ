@@ -9,6 +9,9 @@ from music.models import (
     UserFollow,
 )
 
+from notifications.models import NotificationEvent
+from notifications.services.notification import NotificationService
+
 
 User = get_user_model()
 
@@ -115,6 +118,9 @@ class UserFollowService:
 
         A user cannot follow themselves.
         A user can only follow another user once.
+
+        A notification event is created for the followed user
+        after the follow relationship succeeds.
         """
 
         if follower.pk == following.pk:
@@ -140,6 +146,12 @@ class UserFollowService:
                 "You are already following this user."
             )
 
+        NotificationService.create_event(
+            recipient=following,
+            actor=follower,
+            event_type=NotificationEvent.Type.FOLLOW,
+        )
+
         return follow
 
     @staticmethod
@@ -150,8 +162,34 @@ class UserFollowService:
     ) -> None:
         """
         Remove a user follow relationship.
+
+        The corresponding active notification event is
+        deactivated after the relationship is removed.
         """
 
-        UserFollow.objects.filter(
-            pk=follow_instance.pk,
-        ).delete()
+        follow = (
+            UserFollow.objects
+            .select_for_update()
+            .select_related(
+                "follower",
+                "following",
+            )
+            .filter(
+                pk=follow_instance.pk,
+            )
+            .first()
+        )
+
+        if follow is None:
+            return
+
+        follower = follow.follower
+        following = follow.following
+
+        follow.delete()
+
+        NotificationService.deactivate_events(
+            recipient=following,
+            actor=follower,
+            event_type=NotificationEvent.Type.FOLLOW,
+        )

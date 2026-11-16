@@ -8,6 +8,8 @@ from django.db.models import (
     Q,
     F,
     Value,
+    Prefetch,
+    prefetch_related_objects,
 )
 
 from django.db import (
@@ -40,6 +42,7 @@ from music.models import (
     EditorialComment,
     EditorialCommentLike,
     ContentDailyView,
+    UserMention,
 )
 from music.serializers.editorial import (
     EditorialArticleCardSerializer,
@@ -58,6 +61,29 @@ from music.services.editorial import (
     EditorialCommentService,
 )
 
+
+def get_mention_prefetch():
+    """
+    Prefetch resolved mentions and their mentioned users.
+
+    Only active, non-staff accounts are exposed to the
+    frontend as clickable mentions.
+
+    `to_attr` stores the results on each comment, allowing
+    serializers to access them without extra queries.
+    """
+    return Prefetch(
+        "mentions",
+        queryset=(
+            UserMention.objects
+            .filter(
+                mentioned_user__is_active=True,
+                mentioned_user__is_staff=False,
+            )
+            .select_related("mentioned_user")
+        ),
+        to_attr="prefetched_mentions",
+    )
 
 # ============================================================
 # EDITORIAL ARTICLE
@@ -310,6 +336,9 @@ class EditorialCommentListCreateAPIView(
                 "article",
                 "parent",
             )
+            .prefetch_related(
+                get_mention_prefetch(),
+            )
             .annotate(
                 thread_replies_count=Count(
                     "thread_replies",
@@ -406,6 +435,12 @@ class EditorialCommentListCreateAPIView(
 
         self.perform_create(serializer)
 
+        # Load resolved mentions for the newly created comment.
+        prefetch_related_objects(
+            [self._created_comment],
+            get_mention_prefetch(),
+        )
+
         response_serializer = EditorialCommentSerializer(
             self._created_comment,
             context=self.get_serializer_context(),
@@ -465,6 +500,9 @@ class EditorialCommentThreadAPIView(
                 "parent",
                 "root_comment",
             )
+            .prefetch_related(
+                get_mention_prefetch(),
+            )
             .order_by(
                 "created_at",
                 "pk",
@@ -513,6 +551,9 @@ class EditorialCommentDetailAPIView(
                 "user",
                 "article",
                 "parent",
+            )
+            .prefetch_related(
+                get_mention_prefetch(),
             )
         )
 

@@ -34,6 +34,11 @@ from music.models import (
     ContentDailyView,
 )
 
+from music.services.mentions import MentionService
+
+from notifications.models import NotificationEvent
+from notifications.services.notification import NotificationService 
+
 User = get_user_model()
 
 
@@ -131,6 +136,12 @@ class CommunityPostService:
                 post=post,
                 target_data=target_data,
             )
+
+        MentionService.sync_mentions(
+            mentioner=user,
+            content_object=post,
+            content=post.content,
+        )
 
         return post
 
@@ -234,6 +245,12 @@ class CommunityPostService:
                 "updated_at",
             ]
         )
+
+        MentionService.sync_mentions(
+            mentioner=post.user,
+            content_object=post,
+            content=post.content,
+        )
         return post
     
     @staticmethod
@@ -328,6 +345,10 @@ class CommunityPostService:
             update_fields=["status", "updated_at"]
         )
 
+        MentionService.delete_mentions(
+            content_object=post,
+        )
+
 
 class CommunityPostCommentService:
     @staticmethod
@@ -339,9 +360,16 @@ class CommunityPostCommentService:
         Every reply stores a reference to its original root
         comment. Root comments keep root_comment=None.
 
-        This supports efficient, paginated retrieval of an
-        entire conversation without recursively querying
-        every reply's children.
+        Notification behaviour:
+
+        - A top-level comment notifies the post author.
+        - A reply notifies the author of the comment being
+          replied to.
+        - Users do not receive notifications for their own
+          comments or replies.
+
+        Comment creation, counter updates, and notification
+        event creation happen in the same transaction.
         """
 
         locked_post = (
@@ -404,6 +432,12 @@ class CommunityPostCommentService:
             content=content,
         )
 
+        MentionService.sync_mentions(
+            mentioner=user,
+            content_object=comment,
+            content=comment.content,
+        )
+
         CommunityPost.objects.filter(
             pk=locked_post.pk,
         ).update(
@@ -417,6 +451,42 @@ class CommunityPostCommentService:
                 replies_count=models.F("replies_count") + 1,
             )
 
+            # A reply notifies the author of the exact
+            # comment being replied to, not necessarily
+            # the original root comment's author.
+            if locked_parent.user_id != user.pk:
+                NotificationService.create_event(
+                    recipient=locked_parent.user,
+                    actor=user,
+                    event_type=(
+                        NotificationEvent.Type.COMMUNITY_COMMENT_REPLY
+                    ),
+                    target=comment,
+                    metadata={
+                        "comment_id": str(comment.pk),
+                        "parent_comment_id": str(
+                            locked_parent.pk
+                        ),
+                        "root_comment_id": str(
+                            root_comment.pk
+                        ),
+                    },
+                )
+
+        else:
+            # A top-level comment notifies the post author.
+            if locked_post.user_id != user.pk:
+                NotificationService.create_event(
+                    recipient=locked_post.user,
+                    actor=user,
+                    event_type=(
+                        NotificationEvent.Type.COMMUNITY_POST_COMMENT
+                    ),
+                    target=locked_post,
+                    metadata={
+                        "comment_id": str(comment.pk),
+                    },
+                )
         return comment
 
 
@@ -473,6 +543,12 @@ class CommunityPostCommentService:
                 "is_edited",
                 "updated_at",
             ]
+        )
+
+        MentionService.sync_mentions(
+            mentioner=current_comment.user,
+            content_object=current_comment,
+            content=current_comment.content,
         )
 
         return current_comment
@@ -602,6 +678,11 @@ class CommunityPostCommentService:
         ).update(
             status=CommunityPostComment.Status.REMOVED,
             updated_at=timezone.now(),
+        )
+
+        MentionService.delete_mentions_for_objects(
+            target_model=CommunityPostComment,
+            object_ids=subtree_ids,
         )
 
         # Decrease the post's public comment count.

@@ -41,6 +41,7 @@ from music.models import (
     CommunityPostLike,
     CommunityPostTarget,
     UserFollow,
+    UserMention,
 )
 
 from music.serializers.community import (
@@ -72,6 +73,31 @@ from music.api.permissions import IsOwner
 
 
 User = get_user_model()
+
+
+def get_mention_prefetch():
+    """
+    Prefetch resolved mentions and their mentioned users.
+
+    Only active, non-staff accounts are exposed to the
+    frontend as clickable mentions.
+
+    `to_attr` stores the results on each content object,
+    allowing serializers to read them without additional
+    database queries.
+    """
+    return Prefetch(
+        "mentions",
+        queryset=(
+            UserMention.objects
+            .filter(
+                mentioned_user__is_active=True,
+                mentioned_user__is_staff=False,
+            )
+            .select_related("mentioned_user")
+        ),
+        to_attr="prefetched_mentions",
+    )
 
 
 class CommunityPostListCreateAPIView(
@@ -140,6 +166,7 @@ class CommunityPostListCreateAPIView(
                     "user",
                     queryset=author_queryset,
                 ),
+                get_mention_prefetch(),
                 "target__song__artists",
                 "target__song__featured_artists",
                 "target__song__provider_identities",
@@ -750,6 +777,9 @@ class CommunityPostCommentListCreateAPIView(
                 "post",
                 "parent",
             )
+            .prefetch_related(
+                get_mention_prefetch(),
+            )
             .order_by("created_at")
         )
 
@@ -876,6 +906,9 @@ class CommunityPostCommentListCreateAPIView(
                 "post",
                 "parent",
             )
+            .prefetch_related(
+                get_mention_prefetch(),
+            )
             .annotate(
                 is_liked=Exists(
                     liked_comments,
@@ -943,6 +976,9 @@ class CommunityPostCommentThreadAPIView(
                 "parent",
                 "root_comment",
             )
+            .prefetch_related(
+                get_mention_prefetch(),
+            )
             .order_by("created_at", "pk")
         )
 
@@ -987,6 +1023,9 @@ class CommunityPostCommentDetailAPIView(
                 "user",
                 "post",
                 "parent",
+            )
+            .prefetch_related(
+                get_mention_prefetch(),
             )
             .order_by("created_at")
         )

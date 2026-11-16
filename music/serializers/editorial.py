@@ -9,6 +9,8 @@ from music.models import (
     EditorialCommentReport,
 )
 
+from .community import CommunityUserSerializer
+
 from .base import BaseModelSerializer
 from .catalog import (
     AlbumCardSerializer,
@@ -17,6 +19,26 @@ from .catalog import (
     SongCardSerializer,
 )
 
+
+def get_prefetched_mentioned_usernames(obj):
+    """
+    Return usernames resolved for this content object.
+
+    Mention records must be prefetched by the API queryset
+    into `prefetched_mentions`.
+
+    This avoids additional database queries inside serializers.
+    """
+    mentions = getattr(
+        obj,
+        "prefetched_mentions",
+        [],
+    )
+
+    return [
+        mention.mentioned_user.username
+        for mention in mentions
+    ]
 
 # ============================================================
 # EDITORIAL ARTICLE
@@ -196,7 +218,9 @@ class EditorialCommentSerializer(
     and replies.
     """
 
-    user = serializers.SerializerMethodField()
+    user = CommunityUserSerializer(read_only=True)
+
+    mentioned_usernames = serializers.SerializerMethodField()
 
     liked = serializers.BooleanField(
         source="user_has_liked",
@@ -220,6 +244,7 @@ class EditorialCommentSerializer(
             "parent",
             "root_comment",
             "content",
+            "mentioned_usernames",
             "views_count",
             "likes_count",
             "liked",
@@ -231,6 +256,9 @@ class EditorialCommentSerializer(
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_mentioned_usernames(self, obj):
+        return get_prefetched_mentioned_usernames(obj)
 
     def get_user(self, obj):
         return {

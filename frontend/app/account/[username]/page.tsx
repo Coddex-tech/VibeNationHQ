@@ -177,7 +177,6 @@ function ProfileAvatar({
               ? '(max-width: 640px) 96px, 128px'
               : '48px'
           }
-          unoptimized
           className="object-cover"
         />
       ) : (
@@ -249,7 +248,6 @@ function MusicProfileCard({
             alt={title}
             fill
             sizes="64px"
-            unoptimized
             className="object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (
@@ -383,7 +381,6 @@ function ProfilePhotoViewer({
           height={900}
           priority
           draggable={false}
-          unoptimized
           className="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
         />
       </div>

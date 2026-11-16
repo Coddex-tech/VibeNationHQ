@@ -1390,6 +1390,8 @@ class CommunityPostCommentDetailSoftDeleteTests(APITestCase):
             password="testpassword",
             email="commentowner@example.com",
         )
+        cls.user.onboarding_completed = True
+        cls.user.save(update_fields=["onboarding_completed"])
 
         cls.post = CommunityPost.objects.create(
             user=cls.user,
@@ -1582,6 +1584,102 @@ class CommunityPostCommentDetailSoftDeleteTests(APITestCase):
 
         self.assertEqual(self.post.comments_count, 1)
         self.assertEqual(self.comment.replies_count, 0)
+
+    def test_deleting_comment_removes_mentions_from_entire_reply_subtree(self):
+        from django.contrib.contenttypes.models import ContentType
+
+        from music.models import UserMention
+
+        mentioned_user = User.objects.create_user(
+            username="mentioned_user",
+            password="testpassword",
+            email="mentioned@example.com",
+        )
+
+        unrelated_comment = CommunityPostComment.objects.create(
+            user=self.user,
+            post=self.post,
+            content="Unrelated comment",
+            status=CommunityPostComment.Status.PUBLISHED,
+        )
+
+        reply = CommunityPostComment.objects.create(
+            user=self.user,
+            post=self.post,
+            parent=self.comment,
+            content="Nested reply",
+            status=CommunityPostComment.Status.PUBLISHED,
+        )
+
+        nested_reply = CommunityPostComment.objects.create(
+            user=self.user,
+            post=self.post,
+            parent=reply,
+            content="Deeply nested reply",
+            status=CommunityPostComment.Status.PUBLISHED,
+        )
+
+        comment_content_type = ContentType.objects.get_for_model(
+            CommunityPostComment,
+            for_concrete_model=False,
+        )
+
+        comments_to_mention = [
+            self.comment,
+            reply,
+            nested_reply,
+            unrelated_comment,
+        ]
+
+        UserMention.objects.bulk_create([
+            UserMention(
+                mentioner=self.user,
+                mentioned_user=mentioned_user,
+                content_type=comment_content_type,
+                object_id=str(comment.pk),
+            )
+            for comment in comments_to_mention
+        ])
+
+        self.client.force_authenticate(user=self.user)
+
+        url = reverse(
+            "music_api:community-comment-detail",
+            kwargs={"pk": self.comment.pk},
+        )
+
+        response = self.client.delete(url)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+        self.assertFalse(
+            UserMention.objects.filter(
+                content_type=comment_content_type,
+                object_id__in=[
+                    str(self.comment.pk),
+                    str(reply.pk),
+                    str(nested_reply.pk),
+                ],
+            ).exists(),
+        )
+
+        self.assertTrue(
+            UserMention.objects.filter(
+                content_type=comment_content_type,
+                object_id=str(unrelated_comment.pk),
+                mentioned_user=mentioned_user,
+            ).exists(),
+        )
+
+        for comment in [self.comment, reply, nested_reply]:
+            comment.refresh_from_db()
+            self.assertEqual(
+                comment.status,
+                CommunityPostComment.Status.REMOVED,
+            )
 
 
 class CommunityPostCommentListCreateAPITests(APITestCase):

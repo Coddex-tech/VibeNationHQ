@@ -13,6 +13,9 @@ from music.models import (
     CommunityPostCommentLike,
 )
 
+from notifications.models import NotificationEvent
+from notifications.services.notification import NotificationService
+
 
 # ============================================================
 # EDITORIAL ARTICLE LIKES
@@ -21,6 +24,11 @@ from music.models import (
 class EditorialArticleLikeService:
     """
     Business logic for users liking editorial articles.
+
+    Editorial articles are published by staff accounts.
+    No normal platform notification is generated for article
+    likes because staff accounts cannot access the user
+    notification centre.
     """
 
     @staticmethod
@@ -116,6 +124,8 @@ class CommunityPostLikeService:
 
         The post must be published.
         A user can only like a post once.
+
+        The post author receives a notification event.
         """
 
         if post.status != CommunityPost.Status.PUBLISHED:
@@ -147,6 +157,15 @@ class CommunityPostLikeService:
             likes_count=models.F("likes_count") + 1,
         )
 
+        if post.user_id != user.pk:
+            NotificationService.create_event(
+                recipient=post.user,
+                actor=user,
+                event_type=(
+                    NotificationEvent.Type.COMMUNITY_POST_LIKE
+                ),
+                target=post,
+            )
         return like
 
     @staticmethod
@@ -156,7 +175,8 @@ class CommunityPostLikeService:
         like_instance: CommunityPostLike,
     ) -> None:
         """
-        Remove a post like and decrement likes_count.
+        Remove a post like, decrement likes_count,
+        and deactivate its notification event.
         """
 
         post_id = like_instance.post_id
@@ -173,6 +193,22 @@ class CommunityPostLikeService:
             likes_count__gt=0,
         ).update(
             likes_count=models.F("likes_count") - 1,
+        )
+
+        post = CommunityPost.objects.filter(
+            pk=post_id,
+        ).first()
+
+        if post is None:
+            return
+
+        NotificationService.deactivate_events(
+            recipient=post.user,
+            actor=like_instance.user,
+            event_type=(
+                NotificationEvent.Type.COMMUNITY_POST_LIKE
+            ),
+            target=post,
         )
 
 
@@ -197,6 +233,8 @@ class EditorialCommentLikeService:
 
         The comment and its article must both be published.
         A user can only like a comment once.
+
+        The comment author receives a notification event.
         """
 
         if comment.status != EditorialComment.Status.PUBLISHED:
@@ -233,6 +271,16 @@ class EditorialCommentLikeService:
             likes_count=models.F("likes_count") + 1,
         )
 
+        if comment.user_id != user.pk:
+            NotificationService.create_event(
+                recipient=comment.user,
+                actor=user,
+                event_type=(
+                    NotificationEvent.Type.EDITORIAL_COMMENT_LIKE
+                ),
+                target=comment,
+            )
+
         return like
 
     @staticmethod
@@ -242,7 +290,8 @@ class EditorialCommentLikeService:
         like_instance: EditorialCommentLike,
     ) -> None:
         """
-        Remove an editorial comment like.
+        Remove an editorial comment like, decrement
+        likes_count, and deactivate its notification event.
         """
 
         comment_id = like_instance.comment_id
@@ -259,6 +308,22 @@ class EditorialCommentLikeService:
             likes_count__gt=0,
         ).update(
             likes_count=models.F("likes_count") - 1,
+        )
+
+        comment = EditorialComment.objects.filter(
+            pk=comment_id,
+        ).first()
+
+        if comment is None:
+            return
+
+        NotificationService.deactivate_events(
+            recipient=comment.user,
+            actor=like_instance.user,
+            event_type=(
+                NotificationEvent.Type.EDITORIAL_COMMENT_LIKE
+            ),
+            target=comment,
         )
 
 
@@ -283,6 +348,8 @@ class CommunityPostCommentLikeService:
 
         The comment and its post must both be published.
         A user can only like a comment once.
+
+        The comment author receives a notification event.
         """
 
         if comment.status != CommunityPostComment.Status.PUBLISHED:
@@ -319,6 +386,16 @@ class CommunityPostCommentLikeService:
             likes_count=models.F("likes_count") + 1,
         )
 
+        if comment.user_id != user.pk:
+            NotificationService.create_event(
+                recipient=comment.user,
+                actor=user,
+                event_type=(
+                    NotificationEvent.Type.COMMUNITY_COMMENT_LIKE
+                ),
+                target=comment,
+            )
+
         return like
 
     @staticmethod
@@ -328,7 +405,8 @@ class CommunityPostCommentLikeService:
         like_instance: CommunityPostCommentLike,
     ) -> None:
         """
-        Remove a community post comment like.
+        Remove a community comment like, decrement
+        likes_count, and deactivate its notification event.
         """
 
         comment_id = like_instance.comment_id
@@ -345,4 +423,20 @@ class CommunityPostCommentLikeService:
             likes_count__gt=0,
         ).update(
             likes_count=models.F("likes_count") - 1,
+        )
+
+        comment = CommunityPostComment.objects.filter(
+            pk=comment_id,
+        ).first()
+
+        if comment is None:
+            return
+
+        NotificationService.deactivate_events(
+            recipient=comment.user,
+            actor=like_instance.user,
+            event_type=(
+                NotificationEvent.Type.COMMUNITY_COMMENT_LIKE
+            ),
+            target=comment,
         )
